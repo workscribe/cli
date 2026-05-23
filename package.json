@@ -1,0 +1,47 @@
+{
+  "name": "@chronicle/cli",
+  "version": "0.1.0",
+  "description": "Passive developer work journal — automatic terminal activity summaries",
+  "type": "commonjs",
+  "bin": {
+    "chronicle": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsup",
+    "postbuild": "chmod +x dist/index.js && node -e \"const fs=require('fs'),p='dist/index.js';fs.writeFileSync(p,fs.readFileSync(p,'utf8').replace('require(\\\"sqlite\\\")', 'require(\\\"node:sqlite\\\")'))\"",
+    "dev": "tsx src/index.ts",
+    "watch": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "files": [
+    "dist",
+    "shell"
+  ],
+  "keywords": [
+    "developer-tools",
+    "journal",
+    "terminal",
+    "productivity",
+    "standup"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "chalk": "^4.1.2",
+    "commander": "^12.1.0",
+    "prompts": "^2.4.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/prompts": "^2.4.9",
+    "tsup": "^8.1.0",
+    "tsx": "^4.15.0",
+    "typescript": "^5.4.0",
+    "vitest": "^4.1.7"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
