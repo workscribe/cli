@@ -61,7 +61,7 @@ export function registerInit(program: Command): void {
           log.info(`Shell hook already installed in ${shell.rcFile}`)
         } else {
           // Load hook template from package
-          const hookFile = path.join(__dirname, '..', '..', 'shell', `hook.${shell.name}`)
+          const hookFile = path.join(__dirname, '..', 'shell', `hook.${shell.name}`)
           if (!fs.existsSync(hookFile)) {
             log.warn(`Hook template not found at ${hookFile}`)
           } else {
