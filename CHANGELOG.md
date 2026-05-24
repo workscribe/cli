@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.0.0](https://github.com/eldrego/chronicle/compare/v0.2.1...v1.0.0) (2026-05-24)
+
+### ⚠ BREAKING CHANGES
+
+* rename application from Chronicle to Workscribe
+
+### Features
+
+* rename application from Chronicle to Workscribe ([71646db](https://github.com/eldrego/chronicle/commit/71646db95553467ff9b3c79e870f012abf582dd5))
+
 ## [0.2.1](https://github.com/eldrego/workscribe/compare/v0.2.0...v0.2.1) (2026-05-24)
 
 ## 0.2.0 (2026-05-24)
