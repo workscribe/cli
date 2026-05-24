@@ -1,4 +1,4 @@
-# Releasing Chronicle
+# Releasing Workscribe
 
 ## Prerequisites
 

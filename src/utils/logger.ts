@@ -2,7 +2,7 @@ import chalk from 'chalk'
 import fs from 'fs'
 import { DEBUG_LOG_PATH } from './paths'
 
-const isDebug = process.env.CHRONICLE_DEBUG === '1'
+const isDebug = process.env.WORKSCRIBE_DEBUG === '1'
 
 export const log = {
   info: (msg: string) => console.log(chalk.cyan('→'), msg),

@@ -11,9 +11,9 @@ import { registerConfig } from './cli/config'
 const program = new Command()
 
 program
-  .name('chronicle')
+  .name('workscribe')
   .description('Automatic developer work journal')
-  .version('0.1.0')
+  .version('0.2.1')
 
 registerCapture(program)
 registerInit(program)

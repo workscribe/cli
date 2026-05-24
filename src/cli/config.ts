@@ -6,11 +6,11 @@ import { log } from '../utils/logger'
 export function registerConfig(program: Command): void {
   const configCmd = program
     .command('config')
-    .description('View or update Chronicle configuration')
+    .description('View or update Workscribe configuration')
     .action(() => {
       const config = readConfig()
       log.plain('')
-      log.plain(chalk.bold('  Chronicle Config'))
+      log.plain(chalk.bold('  Workscribe Config'))
       log.plain('')
       printConfig(config, '  ')
       log.plain('')
@@ -18,7 +18,7 @@ export function registerConfig(program: Command): void {
 
   configCmd
     .command('set <key> <value>')
-    .description('Set a config value (e.g. chronicle config set ai.provider anthropic)')
+    .description('Set a config value (e.g. workscribe config set ai.provider anthropic)')
     .action((key: string, value: string) => {
       const config = readConfig()
       const updated = setConfigValue(config, key, value)

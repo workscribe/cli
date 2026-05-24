@@ -17,7 +17,7 @@ export function registerStatus(program: Command): void {
       const last = getLastEvent()
 
       log.plain('')
-      log.plain(chalk.bold('  Chronicle Status'))
+      log.plain(chalk.bold('  Workscribe Status'))
       log.plain('')
       log.plain(`  Capture      ${chalk.green('active')}`)
       log.plain(`  Events today ${chalk.cyan(String(todayEvents.length))}`)

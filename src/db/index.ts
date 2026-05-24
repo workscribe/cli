@@ -1,6 +1,6 @@
 import { DatabaseSync } from 'node:sqlite'
 import fs from 'fs'
-import { CHRONICLE_DIR, DB_PATH } from '../utils/paths'
+import { WORKSCRIBE_DIR, DB_PATH } from '../utils/paths'
 export type { EventRow, SessionRow } from './types'
 
 let _db: DatabaseSync | null = null
@@ -9,8 +9,8 @@ export function getDb(): DatabaseSync {
   if (_db) return _db
 
   // Ensure ~/.chronicle/ exists
-  if (!fs.existsSync(CHRONICLE_DIR)) {
-    fs.mkdirSync(CHRONICLE_DIR, { recursive: true })
+  if (!fs.existsSync(WORKSCRIBE_DIR)) {
+    fs.mkdirSync(WORKSCRIBE_DIR, { recursive: true })
   }
 
   _db = new DatabaseSync(DB_PATH)

@@ -4,7 +4,7 @@
   "description": "Passive developer work journal — automatic terminal activity summaries",
   "type": "commonjs",
   "bin": {
-    "chronicle": "dist/index.js"
+    "workscribe": "dist/index.js"
   },
   "scripts": {
     "build": "tsup",

@@ -4,13 +4,13 @@ import path from 'path'
 import os from 'os'
 import prompts from 'prompts'
 import chalk from 'chalk'
-import { CHRONICLE_DIR, CONFIG_PATH } from '../utils/paths'
+import { WORKSCRIBE_DIR, CONFIG_PATH } from '../utils/paths'
 import { readConfig, writeConfig } from '../config'
 import { getDb } from '../db'
 import { log } from '../utils/logger'
 
-const HOOK_START = '# chronicle:hook:start'
-const HOOK_END = '# chronicle:hook:end'
+const HOOK_START = '# workscribe:hook:start'
+const HOOK_END = '# workscribe:hook:end'
 
 function detectShell(): { name: string; rcFile: string } | null {
   const shell = process.env.SHELL ?? ''
@@ -26,7 +26,7 @@ function isHookInstalled(rcFile: string): boolean {
 
 function installHook(rcFile: string, hookContent: string): void {
   // Back up the rc file
-  const backup = `${rcFile}.chronicle-backup-${Date.now()}`
+  const backup = `${rcFile}.workscribe-backup-${Date.now()}`
   fs.copyFileSync(rcFile, backup)
   log.info(`Backed up ${rcFile} → ${path.basename(backup)}`)
 
@@ -37,14 +37,14 @@ function installHook(rcFile: string, hookContent: string): void {
 export function registerInit(program: Command): void {
   program
     .command('init')
-    .description('Install shell hooks and set up Chronicle')
+    .description('Install shell hooks and set up Workscribe')
     .action(async () => {
-      log.plain(chalk.bold('\n  Chronicle — Developer Work Journal\n'))
+      log.plain(chalk.bold('\n  Workscribe — Developer Work Journal\n'))
 
-      // 1. Create ~/.chronicle/
-      if (!fs.existsSync(CHRONICLE_DIR)) {
-        fs.mkdirSync(CHRONICLE_DIR, { recursive: true })
-        log.success(`Created ${CHRONICLE_DIR}`)
+      // 1. Create ~/.workscribe/
+      if (!fs.existsSync(WORKSCRIBE_DIR)) {
+        fs.mkdirSync(WORKSCRIBE_DIR, { recursive: true })
+        log.success(`Created ${WORKSCRIBE_DIR}`)
       }
 
       // 2. Initialize database (runs migrations)
@@ -98,7 +98,7 @@ export function registerInit(program: Command): void {
 
           if (provider === 'ollama') {
             log.plain(`\n  ${chalk.dim('Make sure Ollama is running: ollama serve')}`)
-            log.plain(`  ${chalk.dim('Default model: llama3  (change with: chronicle config set ai.model <model>)')}\n`)
+            log.plain(`  ${chalk.dim('Default model: llama3  (change with: workscribe config set ai.model <model>)')}\n`)
           } else {
             const { apiKey } = await prompts({
               type: 'password',
@@ -120,7 +120,7 @@ export function registerInit(program: Command): void {
           writeConfig(config)
           log.success(`AI provider set to ${chalk.cyan(provider)}`)
         } else if (provider === 'skip' || !provider) {
-          log.info('Skipped — run later: chronicle config set ai.provider <provider>')
+          log.info('Skipped — run later: workscribe config set ai.provider <provider>')
         }
       }
 
@@ -138,8 +138,8 @@ export function registerInit(program: Command): void {
         log.plain(`  Or restart your terminal.`)
       }
       log.plain('')
-      log.plain(`  ${chalk.dim('chronicle summary')}   — generate today\'s work summary`)
-      log.plain(`  ${chalk.dim('chronicle status')}    — check capture is working`)
+      log.plain(`  ${chalk.dim('workscribe summary')}   — generate today\'s work summary`)
+      log.plain(`  ${chalk.dim('workscribe status')}    — check capture is working`)
       log.plain('')
     })
 }
