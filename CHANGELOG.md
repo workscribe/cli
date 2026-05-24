@@ -1,5 +1,7 @@
 # Changelog
 
+## [0.2.1](https://github.com/eldrego/chronicle/compare/v0.2.0...v0.2.1) (2026-05-24)
+
 ## 0.2.0 (2026-05-24)
 
 ### Features
