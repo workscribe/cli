@@ -30,7 +30,7 @@ shell hook → capture → SQLite → session grouper → AI provider → markdo
 ## Install
 
 ```bash
-npm install -g @kroniql/cli
+npm install -g @workscribe/cli
 chronicle init
 source ~/.zshrc   # or restart your terminal
 ```

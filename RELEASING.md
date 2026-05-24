@@ -29,7 +29,7 @@ release-it will:
 4. Commit both files with `chore: release vX.Y.Z`
 5. Create and push a git tag `vX.Y.Z`
 6. Create a GitHub release with the changelog as the body
-7. Publish to npm under `@kroniql/cli`
+7. Publish to npm under `@workscribe/cli`
 
 You'll be prompted to confirm before each step.
 
@@ -63,6 +63,6 @@ Commits drive automatic versioning — use conventional commits:
 
 Before the first release, ensure:
 
-1. You are a member of the `@kroniql` npm org
+1. You are a member of the `@workscribe` npm org
 2. Run `npm login` and authenticate
-3. Verify access: `npm org ls kroniql`
+3. Verify access: `npm org ls workscribe`

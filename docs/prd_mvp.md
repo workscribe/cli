@@ -391,7 +391,7 @@ PROMPT_COMMAND="_chronicle_precmd;${PROMPT_COMMAND}"
 ## 11. Installation Flow
 
 ```
-npm install -g @kroniql/cli
+npm install -g @workscribe/cli
 
 chronicle init
 → Detects shell (zsh/bash)
