@@ -72,10 +72,11 @@ workscribe config set ai.apiKey <your-key>
 
 ## Privacy
 
-- All captured data is stored locally in `~/.workscribe/`
+- All captured data is stored locally in `~/.workscribe/` — nothing is written anywhere else
 - Credentials are redacted before any event is written to disk (tokens, API keys, passwords, JWTs)
-- Nothing is sent to any remote server except your configured AI provider at summary time
-- Use Ollama to keep everything fully on-device
+- Nothing is sent to any remote server except your configured AI provider, only when you run `workscribe summary`
+- The AI provider receives structured event categories (e.g. `test_run`, `code_commit`) — never raw commands, file contents, or file paths
+- Use Ollama to keep everything fully on-device with zero external data transmission
 
 ## Configuration
 
