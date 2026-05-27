@@ -17,7 +17,7 @@
     "test:watch": "vitest",
     "release": "release-it",
     "release:dry": "release-it --dry-run",
-    "sync-docs": "node scripts/sync-docs.js"
+    "sync-docs": "node scripts/sync-docs.js ../workscribe-landing-page user-docs"
   },
   "files": [
     "dist",
