@@ -31,7 +31,7 @@ shell hook → capture → SQLite → session grouper → AI provider → markdo
 |---|---|---|
 | Node.js | **22 or later** | Uses the built-in `node:sqlite` module — not available in Node 20 or earlier |
 | Shell | zsh or bash | Hook is appended to `~/.zshrc` or `~/.bashrc` by `workscribe init` |
-| OS | macOS or Linux | Windows is not supported |
+| OS | macOS or Linux | Windows is not supported — the shell hook requires zsh or bash. WSL2 works. |
 
 > Check your version: `node --version`
 
