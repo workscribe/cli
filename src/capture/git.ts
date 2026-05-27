@@ -1,12 +1,38 @@
 import { execSync } from 'child_process'
 import path from 'path'
+import fs from 'fs'
 
 export interface GitContext {
   repoName: string | null
   branch: string | null
 }
 
-export function getGitContext(cwd: string): GitContext {
+function nameFromRemote(root: string): string | null {
+  try {
+    const url = execSync('git remote get-url origin', {
+      cwd: root,
+      timeout: 2000,
+      stdio: 'pipe',
+    }).toString().trim()
+    const match = url.match(/\/([^/]+?)(?:\.git)?$/)
+    return match ? match[1] : null
+  } catch {
+    return null
+  }
+}
+
+function nameFromPackageJson(root: string): string | null {
+  try {
+    const raw = fs.readFileSync(path.join(root, 'package.json'), 'utf-8')
+    const pkg = JSON.parse(raw) as { name?: string }
+    if (!pkg.name) return null
+    return pkg.name.replace(/^@[^/]+\//, '')
+  } catch {
+    return null
+  }
+}
+
+export function getGitContext(cwd: string, nameOverride?: string | null): GitContext {
   try {
     const root = execSync('git rev-parse --show-toplevel', {
       cwd,
@@ -16,7 +42,11 @@ export function getGitContext(cwd: string): GitContext {
       .toString()
       .trim()
 
-    const repoName = path.basename(root)
+    const repoName =
+      nameOverride ??
+      nameFromRemote(root) ??
+      nameFromPackageJson(root) ??
+      path.basename(root)
 
     let branch: string | null = null
     try {

@@ -148,6 +148,35 @@ export function updateSessionSummary(sessionId: number, summary: string): void {
   stmt.run({ summary, id: sessionId })
 }
 
+export function getLastEventIds(n: number): number[] {
+  const db = getDb()
+  const rows = db.prepare('SELECT id FROM events ORDER BY id DESC LIMIT $n').all({ n }) as { id: number }[]
+  return rows.map((r) => r.id)
+}
+
+export function getEventsByIds(ids: number[]): EventRow[] {
+  if (ids.length === 0) return []
+  const db = getDb()
+  const placeholders = ids.map(() => '?').join(', ')
+  return db.prepare(`SELECT * FROM events WHERE id IN (${placeholders}) ORDER BY id DESC`).all(...ids) as unknown as EventRow[]
+}
+
+export function deleteEventsByIds(ids: number[]): void {
+  if (ids.length === 0) return
+  const db = getDb()
+  const placeholders = ids.map(() => '?').join(', ')
+
+  const affectedDates = db
+    .prepare(`SELECT DISTINCT date(captured_at) as date FROM events WHERE id IN (${placeholders})`)
+    .all(...ids) as { date: string }[]
+
+  db.prepare(`DELETE FROM events WHERE id IN (${placeholders})`).run(...ids)
+
+  for (const { date } of affectedDates) {
+    clearSessionsForDate(date)
+  }
+}
+
 export function clearSessionsForDate(date: string): void {
   const db = getDb()
   // Remove session_events first due to FK constraint

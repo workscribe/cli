@@ -10,6 +10,7 @@ import { registerSummary } from './cli/summary'
 import { registerExport } from './cli/export'
 import { registerConfig } from './cli/config'
 import { registerPause } from './cli/pause'
+import { registerUndo } from './cli/undo'
 
 const program = new Command()
 
@@ -27,5 +28,6 @@ registerSummary(program)
 registerExport(program)
 registerConfig(program)
 registerPause(program)
+registerUndo(program)
 
 program.parse()

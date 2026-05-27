@@ -29,8 +29,9 @@ export function captureCommand(opts: {
   // 3. Redact sensitive patterns
   const safeCommand = redact(command, config.redact.extra)
 
-  // 4. Extract git context
-  const { repoName, branch } = getGitContext(cwd)
+  // 4. Extract git context (with optional per-project name override)
+  const nameOverride = config.projects?.[cwd] ?? null
+  const { repoName, branch } = getGitContext(cwd, nameOverride)
 
   // 5. Normalize to typed event
   const { category, metadata } = normalizeCommand(safeCommand)

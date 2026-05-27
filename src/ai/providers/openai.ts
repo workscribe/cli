@@ -1,5 +1,5 @@
-import type { AIProvider, DaySummaryPayload } from '../types'
-import { SYSTEM_PROMPT, buildUserMessage } from '../prompt'
+import type { AIProvider, DaySummaryPayload, WeekSummaryPayload } from '../types'
+import { SYSTEM_PROMPT, buildUserMessage, WEEKLY_SYSTEM_PROMPT, buildWeeklyMessage } from '../prompt'
 import { fetchWithTimeout } from '../fetch'
 
 export class OpenAIProvider implements AIProvider {
@@ -25,6 +25,34 @@ export class OpenAIProvider implements AIProvider {
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
           { role: 'user', content: buildUserMessage(payload) },
+        ],
+        max_tokens: 1024,
+      }),
+    })
+
+    if (!response.ok) {
+      const body = await response.text()
+      throw new Error(`OpenAI API error ${response.status}: ${body}`)
+    }
+
+    const data = (await response.json()) as {
+      choices: Array<{ message: { content: string } }>
+    }
+    return data.choices[0]?.message?.content ?? ''
+  }
+
+  async summarizeWeek(payload: WeekSummaryPayload): Promise<string> {
+    const response = await fetchWithTimeout(`${this.baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${this.apiKey}`,
+      },
+      body: JSON.stringify({
+        model: this.model,
+        messages: [
+          { role: 'system', content: WEEKLY_SYSTEM_PROMPT },
+          { role: 'user', content: buildWeeklyMessage(payload) },
         ],
         max_tokens: 1024,
       }),

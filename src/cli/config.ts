@@ -42,7 +42,7 @@ export function registerConfig(program: Command): void {
     })
 }
 
-const SENSITIVE_KEYS = new Set(['apiKey', 'api_key', 'secret', 'token', 'password', 'passwd'])
+const SENSITIVE_KEYS = new Set(['apiKey', 'api_key', 'secret', 'token', 'password', 'passwd', 'webhook', 'slackWebhook'])
 
 function maskValue(key: string, value: unknown): string {
   if (SENSITIVE_KEYS.has(key) && typeof value === 'string' && value.length > 0) {

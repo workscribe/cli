@@ -20,6 +20,16 @@ export interface DaySummaryPayload {
   sessions: SessionPayload[]
 }
 
+export interface WeekSummaryPayload {
+  weekStart: string
+  weekEnd: string
+  days: {
+    date: string
+    sessions: SessionPayload[]
+  }[]
+}
+
 export interface AIProvider {
   summarize(payload: DaySummaryPayload): Promise<string>
+  summarizeWeek?(payload: WeekSummaryPayload): Promise<string>
 }

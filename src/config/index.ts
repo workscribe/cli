@@ -20,6 +20,11 @@ export interface WorkscribeConfig {
   summary: {
     format: 'markdown' | 'json'
   }
+  projects?: Record<string, string>  // absolute path → display name override
+  integrations?: {
+    slackWebhook?: string
+    webhook?: string
+  }
 }
 
 const DEFAULTS: WorkscribeConfig = {

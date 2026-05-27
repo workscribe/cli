@@ -78,4 +78,9 @@ All runtime data lives in `~/.workscribe/`:
 - `workscribe.db` — SQLite database (WAL mode, foreign keys on)
 - `config.json` — user config
 - `exports/` — markdown files from `workscribe export`
+- `weekly-cache/` — cached weekly summary markdown files (`<YYYY-WW>.md`)
 - `debug.log` — errors when `WORKSCRIBE_DEBUG=1`
+
+## Git commit style
+
+Do not add `Co-Authored-By` trailers to commits.
