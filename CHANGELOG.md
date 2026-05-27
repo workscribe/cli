@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.1.1](https://github.com/workscribe/cli/compare/v1.1.0...v1.1.1) (2026-05-27)
+
+### Bug Fixes
+
+* read version from package.json at build time via tsup define ([7e0e130](https://github.com/workscribe/cli/commit/7e0e130c21a7e0912e2c9c85f46eee4ea245ad65))
+
 ## [1.1.0](https://github.com/workscribe/cli/compare/v1.0.2...v1.1.0) (2026-05-27)
 
 ### Features
