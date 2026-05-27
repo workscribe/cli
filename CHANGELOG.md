@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.1.3](https://github.com/workscribe/cli/compare/v1.1.2...v1.1.3) (2026-05-27)
+
+### Bug Fixes
+
+* improve summary quality for local models ([1c1d477](https://github.com/workscribe/cli/commit/1c1d477c260f03745930446586c4fdd9ed30a095))
+
 ## [1.1.2](https://github.com/workscribe/cli/compare/v1.1.1...v1.1.2) (2026-05-27)
 
 ### Bug Fixes
