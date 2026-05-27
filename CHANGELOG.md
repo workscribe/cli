@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.1.0](https://github.com/workscribe/cli/compare/v1.0.2...v1.1.0) (2026-05-27)
+
+### Features
+
+* add workscribe pause and resume commands ([9e7a9aa](https://github.com/workscribe/cli/commit/9e7a9aa1f3abc71ad618e6475329cea2d880167b))
+
 ## [1.0.2](https://github.com/workscribe/cli/compare/v1.0.1...v1.0.2) (2026-05-27)
 
 ## [1.0.1](https://github.com/eldrego/workscribe/compare/v1.0.0...v1.0.1) (2026-05-27)
