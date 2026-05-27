@@ -1,5 +1,7 @@
 import { Command } from 'commander'
 import { registerCapture } from './cli/capture'
+
+declare const __WORKSCRIBE_VERSION__: string
 import { registerInit } from './cli/init'
 import { registerStatus } from './cli/status'
 import { registerEvents } from './cli/events'
@@ -14,7 +16,7 @@ const program = new Command()
 program
   .name('workscribe')
   .description('Automatic developer work journal')
-  .version('0.2.1')
+  .version(__WORKSCRIBE_VERSION__)
 
 registerCapture(program)
 registerInit(program)
