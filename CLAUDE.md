@@ -84,3 +84,20 @@ All runtime data lives in `~/.workscribe/`:
 ## Git commit style
 
 Do not add `Co-Authored-By` trailers to commits.
+
+## Documentation
+
+Documentation lives in the landing page repo at `workscribe.co/docs`. Source files are in `docs/site/` in this repo (gitignored — not pushed to GitHub).
+
+**When to update docs:**
+
+| Change type | Doc file to update |
+|---|---|
+| New command added | `docs/site/commands.md` |
+| Command option added or changed | `docs/site/commands.md` |
+| New config key | `docs/site/configuration.md` |
+| New AI provider | `docs/site/providers.md` |
+| Privacy or data handling change | `docs/site/privacy.md` |
+| New error or common failure mode | `docs/site/troubleshooting.md` |
+
+When a PR adds or changes a command, update the relevant doc file in the same commit.
