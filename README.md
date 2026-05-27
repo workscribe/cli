@@ -27,6 +27,16 @@ A shell hook captures every command you run. At the end of the day, `workscribe 
 shell hook → capture → SQLite → session grouper → AI provider → markdown
 ```
 
+## Requirements
+
+| Dependency | Version | Notes |
+|---|---|---|
+| Node.js | **22 or later** | Uses the built-in `node:sqlite` module — not available in Node 20 or earlier |
+| Shell | zsh or bash | Hook is appended to `~/.zshrc` or `~/.bashrc` by `workscribe init` |
+| OS | macOS or Linux | Windows is not supported |
+
+> Check your version: `node --version`
+
 ## Install
 
 ```bash
@@ -36,8 +46,6 @@ source ~/.zshrc   # or restart your terminal
 ```
 
 `workscribe init` walks you through choosing an AI provider and installs the shell hook. From that point, capture is automatic.
-
-**Requirements:** Node.js 22+, macOS or Linux (zsh or bash)
 
 ## AI providers
 
@@ -67,6 +75,9 @@ workscribe config set ai.apiKey <your-key>
 | `workscribe events` | List captured events |
 | `workscribe export` | Save today's summary as a markdown file |
 | `workscribe status` | Check capture is active and show event counts |
+| `workscribe undo` | Remove the last captured event |
+| `workscribe undo -n 5` | Remove the last 5 captured events |
+| `workscribe undo --dry-run` | Preview what would be removed without deleting |
 | `workscribe pause` | Pause capture temporarily |
 | `workscribe resume` | Resume capture after a pause |
 | `workscribe config` | View current configuration |
@@ -86,6 +97,14 @@ workscribe config set ai.apiKey <your-key>
 workscribe config set session.idleTimeout 20       # minutes before a new session starts (default: 30)
 workscribe config set ai.model gpt-4o              # override the default model for your provider
 workscribe config set redact.extra "MY_PATTERN"    # add a custom redaction regex
+
+# Override the display name for a local clone whose folder name differs from the repo
+workscribe config set projects./Users/me/sandbox/myrepo actual-repo-name
+
+# Post summaries to Slack or a custom webhook
+workscribe config set integrations.slackWebhook https://hooks.slack.com/services/...
+workscribe summary --slack
+workscribe summary --webhook https://custom.endpoint/hook
 ```
 
 Config is stored at `~/.workscribe/config.json`.
