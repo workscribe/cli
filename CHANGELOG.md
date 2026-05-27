@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.0.1](https://github.com/eldrego/workscribe/compare/v1.0.0...v1.0.1) (2026-05-27)
+
+### Bug Fixes
+
+* security hardening across capture, storage, and AI providers ([4a5b55e](https://github.com/eldrego/workscribe/commit/4a5b55e64e302102e364556b64d93cbd5afd12a9))
+
 ## [1.0.0](https://github.com/eldrego/chronicle/compare/v0.2.1...v1.0.0) (2026-05-24)
 
 ### ⚠ BREAKING CHANGES
