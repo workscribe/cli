@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.1.2](https://github.com/workscribe/cli/compare/v1.1.1...v1.1.2) (2026-05-27)
+
+### Bug Fixes
+
+* ensure version is always fresh at build time ([4b8dc63](https://github.com/workscribe/cli/commit/4b8dc63b977353895be370c9ecb44e349b11a256))
+
 ## [1.1.1](https://github.com/workscribe/cli/compare/v1.1.0...v1.1.1) (2026-05-27)
 
 ### Bug Fixes
