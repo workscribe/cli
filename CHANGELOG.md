@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.2.1](https://github.com/workscribe/cli/compare/v1.2.0...v1.2.1) (2026-05-27)
+
+### Bug Fixes
+
+* always render session heading from data, not from AI output ([a5d6321](https://github.com/workscribe/cli/commit/a5d6321baed3ba3a6902f6f848bf09a20627f425))
+
 ## [1.2.0](https://github.com/workscribe/cli/compare/v1.1.3...v1.2.0) (2026-05-27)
 
 ### Features
