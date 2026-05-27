@@ -1,5 +1,6 @@
 import { defineConfig } from 'tsup'
-import { version } from './package.json'
+import { readFileSync } from 'fs'
+const { version } = JSON.parse(readFileSync('./package.json', 'utf-8')) as { version: string }
 
 export default defineConfig({
   define: {

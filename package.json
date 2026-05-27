@@ -8,6 +8,7 @@
   },
   "scripts": {
     "build": "tsup",
+    "prepack": "npm run build",
     "postbuild": "chmod +x dist/index.js && node -e \"const fs=require('fs'),p='dist/index.js';fs.writeFileSync(p,fs.readFileSync(p,'utf8').replace('require(\\\"sqlite\\\")', 'require(\\\"node:sqlite\\\")'))\"",
     "dev": "tsx src/index.ts",
     "watch": "tsup --watch",
