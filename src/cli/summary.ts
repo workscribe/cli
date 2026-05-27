@@ -7,7 +7,7 @@ import { getProvider } from '../ai/router'
 import { readConfig } from '../config'
 import { updateSessionSummary } from '../db'
 import { log } from '../utils/logger'
-import { todayDate, parseDate, formatDate, startOfWeek, eachDayOfRange, isoWeekKey } from '../utils/format'
+import { todayDate, parseDate, formatDate, formatDuration, startOfWeek, eachDayOfRange, isoWeekKey } from '../utils/format'
 import { postToWebhook } from '../integrations/webhook'
 import { WEEKLY_CACHE_DIR } from '../utils/paths'
 import type { DaySummaryPayload, SessionPayload, EventPayload, WeekSummaryPayload } from '../ai/types'
@@ -167,26 +167,32 @@ export function registerSummary(program: Command): void {
         }
       }
 
-      const sessionPayloads = sessions.map((s) => sessionToPayload(s, date))
-      const payload: DaySummaryPayload = { date, sessions: sessionPayloads }
-
       log.plain('')
       log.info(`Generating summary via ${chalk.cyan(config.ai.provider)}…`)
 
-      try {
-        const summary = await provider.summarize(payload)
-        log.plain('')
-        log.plain(summary)
-        log.plain('')
-
-        if (sessions[0]) {
-          updateSessionSummary(sessions[0].id, summary)
+      const allSummaries: string[] = []
+      for (const session of sessions) {
+        const sessionPayload: DaySummaryPayload = { date, sessions: [sessionToPayload(session, date)] }
+        try {
+          const bullets = await provider.summarize(sessionPayload)
+          const project = session.repoName ?? 'unknown'
+          const branch = session.events[0]?.branch ? ` (${session.events[0].branch})` : ''
+          const duration = formatDuration(session.durationMinutes)
+          const heading = `## ${project}${branch} — ${duration}`
+          const summary = `${heading}\n${bullets.trim()}`
+          allSummaries.push(summary)
+          updateSessionSummary(session.id, summary)
+        } catch (e) {
+          log.error(`Summary failed [${config.ai.provider}]: ${(e as Error).message}`)
+          process.exit(1)
         }
-
-        await handleWebhook(opts, config, summary)
-      } catch (e) {
-        log.error(`Summary failed [${config.ai.provider}]: ${(e as Error).message}`)
-        process.exit(1)
       }
+
+      const fullSummary = allSummaries.join('\n\n')
+      log.plain('')
+      log.plain(fullSummary)
+      log.plain('')
+
+      await handleWebhook(opts, config, fullSummary)
     })
 }

@@ -8,13 +8,11 @@ Workscribe is a CLI tool that passively captures your terminal activity and tran
 $ workscribe summary
 
 ## api-service (feature/auth) — 2h 15m
-
 - Set up authentication feature branch and installed JWT dependencies
 - Resolved failing test suite for token validation logic
 - Committed authentication middleware fixes
 
 ## infrastructure — 45m
-
 - Restarted staging environment and verified deployment stability
 - Investigated and resolved Docker networking issue in compose setup
 ```

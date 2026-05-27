@@ -15,13 +15,12 @@ Events:
   - code_commit {"message":"fix: auth token validation"}
 
 OUTPUT:
-## api-service (feature/auth) — 1h 30m
 - Switched to the authentication feature branch
 - Added JWT and bcrypt dependencies
 - Resolved failing auth tests
 - Committed authentication fixes
 
-Now summarise the following. Output ONLY the summary, nothing else. Maximum 5 bullets.`
+Now summarise the following. Output ONLY the bullet points, nothing else. Maximum 5 bullets.`
 
 export function buildUserMessage(payload: DaySummaryPayload): string {
   const lines: string[] = [`Date: ${payload.date}`, '']
