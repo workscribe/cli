@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.2.0](https://github.com/workscribe/cli/compare/v1.1.3...v1.2.0) (2026-05-27)
+
+### Features
+
+* pre-IDE integration work items ([7542d0f](https://github.com/workscribe/cli/commit/7542d0f9f075f0ba462e065e9f3b5a90cf4e8684))
+
 ## [1.1.3](https://github.com/workscribe/cli/compare/v1.1.2...v1.1.3) (2026-05-27)
 
 ### Bug Fixes
