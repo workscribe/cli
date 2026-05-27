@@ -1,5 +1,6 @@
 import type { AIProvider, DaySummaryPayload } from '../types'
 import { SYSTEM_PROMPT, buildUserMessage } from '../prompt'
+import { fetchWithTimeout } from '../fetch'
 
 export class OllamaProvider implements AIProvider {
   private model: string
@@ -11,7 +12,7 @@ export class OllamaProvider implements AIProvider {
   }
 
   async summarize(payload: DaySummaryPayload): Promise<string> {
-    const response = await fetch(`${this.baseUrl}/api/chat`, {
+    const response = await fetchWithTimeout(`${this.baseUrl}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

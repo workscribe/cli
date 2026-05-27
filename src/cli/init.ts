@@ -41,10 +41,13 @@ export function registerInit(program: Command): void {
     .action(async () => {
       log.plain(chalk.bold('\n  Workscribe — Developer Work Journal\n'))
 
-      // 1. Create ~/.workscribe/
+      // 1. Create ~/.workscribe/ with owner-only permissions
       if (!fs.existsSync(WORKSCRIBE_DIR)) {
-        fs.mkdirSync(WORKSCRIBE_DIR, { recursive: true })
+        fs.mkdirSync(WORKSCRIBE_DIR, { recursive: true, mode: 0o700 })
         log.success(`Created ${WORKSCRIBE_DIR}`)
+      } else {
+        // Secure the directory for existing installs
+        try { fs.chmodSync(WORKSCRIBE_DIR, 0o700) } catch { /* ignore */ }
       }
 
       // 2. Initialize database (runs migrations)

@@ -1,5 +1,6 @@
 import type { AIProvider, DaySummaryPayload } from '../types'
 import { SYSTEM_PROMPT, buildUserMessage } from '../prompt'
+import { fetchWithTimeout } from '../fetch'
 
 export class AnthropicProvider implements AIProvider {
   private apiKey: string
@@ -11,7 +12,7 @@ export class AnthropicProvider implements AIProvider {
   }
 
   async summarize(payload: DaySummaryPayload): Promise<string> {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    const response = await fetchWithTimeout('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

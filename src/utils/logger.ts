@@ -16,7 +16,7 @@ export function debugLog(context: string, error: unknown): void {
   if (!isDebug) return
   const entry = `[${new Date().toISOString()}] [${context}] ${error instanceof Error ? error.stack : String(error)}\n`
   try {
-    fs.appendFileSync(DEBUG_LOG_PATH, entry)
+    fs.appendFileSync(DEBUG_LOG_PATH, entry, { mode: 0o600 })
   } catch {
     // If we can't write to the debug log, silently ignore
   }

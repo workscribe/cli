@@ -1,6 +1,7 @@
 import { DatabaseSync } from 'node:sqlite'
 import fs from 'fs'
 import { WORKSCRIBE_DIR, DB_PATH } from '../utils/paths'
+import type { EventRow, SessionRow } from './types'
 export type { EventRow, SessionRow } from './types'
 
 let _db: DatabaseSync | null = null
@@ -14,6 +15,8 @@ export function getDb(): DatabaseSync {
   }
 
   _db = new DatabaseSync(DB_PATH)
+  // Restrict DB file to owner-only after creation
+  try { fs.chmodSync(DB_PATH, 0o600) } catch { /* ignore if already correct */ }
   _db.exec('PRAGMA journal_mode = WAL')
   _db.exec('PRAGMA foreign_keys = ON')
   runMigrations(_db)
@@ -92,13 +95,13 @@ export function getEventsForDate(date: string): EventRow[] {
     WHERE date(captured_at) = $date
     ORDER BY captured_at ASC
   `)
-  return stmt.all({ date }) as EventRow[]
+  return stmt.all({ date }) as unknown as EventRow[]
 }
 
 export function getRecentEvents(limit = 20): EventRow[] {
   const db = getDb()
   const stmt = db.prepare('SELECT * FROM events ORDER BY captured_at DESC LIMIT $limit')
-  return stmt.all({ limit }) as EventRow[]
+  return stmt.all({ limit }) as unknown as EventRow[]
 }
 
 export function getEventCount(): number {
@@ -136,7 +139,7 @@ export function insertSessionEvent(sessionId: number, eventId: number): void {
 export function getSessionsForDate(date: string): SessionRow[] {
   const db = getDb()
   const stmt = db.prepare('SELECT * FROM sessions WHERE date = $date ORDER BY started_at ASC')
-  return stmt.all({ date }) as SessionRow[]
+  return stmt.all({ date }) as unknown as SessionRow[]
 }
 
 export function updateSessionSummary(sessionId: number, summary: string): void {
@@ -148,10 +151,10 @@ export function updateSessionSummary(sessionId: number, summary: string): void {
 export function clearSessionsForDate(date: string): void {
   const db = getDb()
   // Remove session_events first due to FK constraint
-  db.exec(`
+  db.prepare(`
     DELETE FROM session_events WHERE session_id IN (
-      SELECT id FROM sessions WHERE date = '${date.replace(/'/g, "''")}'
+      SELECT id FROM sessions WHERE date = $date
     )
-  `)
-  db.exec(`DELETE FROM sessions WHERE date = '${date.replace(/'/g, "''")}'`)
+  `).run({ date })
+  db.prepare('DELETE FROM sessions WHERE date = $date').run({ date })
 }

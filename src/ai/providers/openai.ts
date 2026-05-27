@@ -1,5 +1,6 @@
 import type { AIProvider, DaySummaryPayload } from '../types'
 import { SYSTEM_PROMPT, buildUserMessage } from '../prompt'
+import { fetchWithTimeout } from '../fetch'
 
 export class OpenAIProvider implements AIProvider {
   private apiKey: string
@@ -13,7 +14,7 @@ export class OpenAIProvider implements AIProvider {
   }
 
   async summarize(payload: DaySummaryPayload): Promise<string> {
-    const response = await fetch(`${this.baseUrl}/chat/completions`, {
+    const response = await fetchWithTimeout(`${this.baseUrl}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

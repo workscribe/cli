@@ -67,9 +67,9 @@ export function registerExport(program: Command): void {
 
       const outputPath = opts.output ?? path.join(EXPORTS_DIR, `chronicle-${date}.md`)
 
-      if (!fs.existsSync(EXPORTS_DIR)) fs.mkdirSync(EXPORTS_DIR, { recursive: true })
+      if (!fs.existsSync(EXPORTS_DIR)) fs.mkdirSync(EXPORTS_DIR, { recursive: true, mode: 0o700 })
 
-      fs.writeFileSync(outputPath, `# Work Summary — ${date}\n\n${summary}\n`, 'utf-8')
+      fs.writeFileSync(outputPath, `# Work Summary — ${date}\n\n${summary}\n`, { encoding: 'utf-8', mode: 0o600 })
       log.success(`Saved: ${outputPath}`)
     })
 }

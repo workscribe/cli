@@ -22,7 +22,7 @@ export function captureCommand(opts: {
   if (isDuplicate(command, cwd, last ?? undefined)) return
 
   // 3. Redact sensitive patterns
-  const safeCommand = redact(normalized, config.redact.extra)
+  const safeCommand = redact(command, config.redact.extra)
 
   // 4. Extract git context
   const { repoName, branch } = getGitContext(cwd)

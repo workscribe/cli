@@ -23,7 +23,9 @@ export function registerConfig(program: Command): void {
       const config = readConfig()
       const updated = setConfigValue(config, key, value)
       writeConfig(updated)
-      log.success(`Set ${chalk.cyan(key)} = ${chalk.yellow(value)}`)
+      const isSensitive = key === 'ai.apiKey' || key.toLowerCase().includes('key') || key.toLowerCase().includes('secret') || key.toLowerCase().includes('token')
+      const displayValue = isSensitive ? '[set]' : chalk.yellow(value)
+      log.success(`Set ${chalk.cyan(key)} = ${displayValue}`)
     })
 
   configCmd
@@ -40,6 +42,16 @@ export function registerConfig(program: Command): void {
     })
 }
 
+const SENSITIVE_KEYS = new Set(['apiKey', 'api_key', 'secret', 'token', 'password', 'passwd'])
+
+function maskValue(key: string, value: unknown): string {
+  if (SENSITIVE_KEYS.has(key) && typeof value === 'string' && value.length > 0) {
+    return chalk.dim(`${value.slice(0, 4)}${'*'.repeat(8)} (${value.length} chars)`)
+  }
+  if (Array.isArray(value)) return `[${(value as unknown[]).join(', ')}]`
+  return String(value) || chalk.dim('(not set)')
+}
+
 function printConfig(obj: unknown, indent: string): void {
   if (typeof obj !== 'object' || obj === null) return
   for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
@@ -47,10 +59,7 @@ function printConfig(obj: unknown, indent: string): void {
       log.plain(`${indent}${chalk.bold(key)}:`)
       printConfig(value, indent + '  ')
     } else {
-      const display = Array.isArray(value)
-        ? `[${(value as unknown[]).join(', ')}]`
-        : String(value) || chalk.dim('(not set)')
-      log.plain(`${indent}${chalk.dim(key)}: ${chalk.yellow(display)}`)
+      log.plain(`${indent}${chalk.dim(key)}: ${chalk.yellow(maskValue(key, value))}`)
     }
   }
 }

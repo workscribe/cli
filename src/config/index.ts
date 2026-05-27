@@ -55,7 +55,9 @@ export function readConfig(): ChronicleConfig {
 }
 
 export function writeConfig(config: ChronicleConfig): void {
-  fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), 'utf-8')
+  fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), { encoding: 'utf-8', mode: 0o600 })
+  // Enforce permissions on existing files (mode only applies on creation above)
+  try { fs.chmodSync(CONFIG_PATH, 0o600) } catch { /* ignore */ }
 }
 
 export function getConfigValue(config: ChronicleConfig, key: string): unknown {
@@ -71,7 +73,7 @@ export function getConfigValue(config: ChronicleConfig, key: string): unknown {
 export function setConfigValue(config: ChronicleConfig, key: string, value: string): ChronicleConfig {
   const parts = key.split('.')
   const result = JSON.parse(JSON.stringify(config)) as ChronicleConfig
-  let cur = result as Record<string, unknown>
+  let cur = result as unknown as Record<string, unknown>
   for (let i = 0; i < parts.length - 1; i++) {
     const part = parts[i]
     if (cur[part] == null || typeof cur[part] !== 'object') {
