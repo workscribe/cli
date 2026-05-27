@@ -22,6 +22,10 @@ export class OllamaProvider implements AIProvider {
           { role: 'system', content: SYSTEM_PROMPT },
           { role: 'user', content: buildUserMessage(payload) },
         ],
+        options: {
+          num_predict: 300,   // hard cap on output tokens — forces conciseness
+          temperature: 0.3,   // lower temperature = more focused, less wandering
+        },
       }),
     })
 

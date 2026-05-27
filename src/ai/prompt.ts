@@ -1,26 +1,27 @@
 import type { DaySummaryPayload } from './types'
 import { formatDuration } from '../utils/format'
 
-export const SYSTEM_PROMPT = `You are a technical writer generating a work summary for a software developer.
+export const SYSTEM_PROMPT = `You write short developer work summaries. Here is an example:
 
-Rules:
-- Write in past tense, professional tone
-- Describe what was ACCOMPLISHED, not what commands were run
-- Never write literal command names (e.g. do not write "ran npm install" — write "added HTTP client dependency")
-- Never list commands literally
-- Each bullet point should describe a meaningful unit of work
-- Group related events into single bullet points
-- If tests failed then passed, describe it as "resolved failing tests" not two separate events
-- Return 3-6 bullet points per project section
-- Do not pad or add filler sentences
-- Output only the bullet points grouped under project headers using this exact format:
+INPUT:
+Project: api-service
+Branch: feature/auth
+Duration: 1h 30m
+Events:
+  - branch_switch {"branch":"feature/auth"}
+  - 2x dependency_install {"tool":"npm","packages":["bcrypt","jsonwebtoken"]}
+  - 2x test_run {"tool":"jest"} [failed]
+  - test_run {"tool":"jest"}
+  - code_commit {"message":"fix: auth token validation"}
 
-## <project-name> (<branch>) — <duration>
+OUTPUT:
+## api-service (feature/auth) — 1h 30m
+- Switched to the authentication feature branch
+- Added JWT and bcrypt dependencies
+- Resolved failing auth tests
+- Committed authentication fixes
 
-- bullet point one
-- bullet point two
-
-If there is no branch, omit the branch. If there are multiple projects, repeat the section for each.`
+Now summarise the following. Output ONLY the summary, nothing else. Maximum 5 bullets.`
 
 export function buildUserMessage(payload: DaySummaryPayload): string {
   const lines: string[] = [`Date: ${payload.date}`, '']
@@ -28,13 +29,22 @@ export function buildUserMessage(payload: DaySummaryPayload): string {
   for (const session of payload.sessions) {
     lines.push(`Project: ${session.project ?? 'unknown'}`)
     if (session.branch) lines.push(`Branch: ${session.branch}`)
-    lines.push(`Time: ${session.startTime} – ${session.endTime} (${formatDuration(session.durationMinutes)})`)
+    lines.push(`Duration: ${formatDuration(session.durationMinutes)}`)
     lines.push('Events:')
+
+    // Aggregate repeated events so the model sees "3x build" not 3 separate build lines
+    const counts = new Map<string, number>()
     for (const event of session.events) {
       const meta = Object.keys(event.metadata).length > 0 ? ` ${JSON.stringify(event.metadata)}` : ''
-      const exitNote = event.exitCode !== null && event.exitCode !== 0 ? ` [exit ${event.exitCode}]` : ''
-      lines.push(`  - ${event.category}${meta}${exitNote}`)
+      const failed = event.exitCode !== null && event.exitCode !== 0 ? ' [failed]' : ''
+      const key = `${event.category}${meta}${failed}`
+      counts.set(key, (counts.get(key) ?? 0) + 1)
     }
+
+    for (const [key, count] of counts) {
+      lines.push(`  - ${count > 1 ? `${count}x ` : ''}${key}`)
+    }
+
     lines.push('')
   }
 
