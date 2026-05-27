@@ -9,7 +9,7 @@ let _db: DatabaseSync | null = null
 export function getDb(): DatabaseSync {
   if (_db) return _db
 
-  // Ensure ~/.chronicle/ exists
+  // Ensure ~/.workscribe/ exists
   if (!fs.existsSync(WORKSCRIBE_DIR)) {
     fs.mkdirSync(WORKSCRIBE_DIR, { recursive: true })
   }

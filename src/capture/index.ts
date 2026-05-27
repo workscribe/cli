@@ -1,9 +1,11 @@
+import fs from 'fs'
 import { insertEvent, getLastEvent } from '../db'
 import { redact } from './redact'
 import { getGitContext } from './git'
 import { normalizeCommand } from '../normalize/patterns'
 import { readConfig } from '../config'
 import { shouldFilter, isDuplicate } from './filter'
+import { PAUSE_FLAG_PATH } from '../utils/paths'
 
 export function captureCommand(opts: {
   command: string
@@ -11,6 +13,9 @@ export function captureCommand(opts: {
   exitCode: number | null
   durationMs: number | null
 }): void {
+  // Check pause flag before any I/O
+  if (fs.existsSync(PAUSE_FLAG_PATH)) return
+
   const config = readConfig()
   const { command, cwd, exitCode, durationMs } = opts
 

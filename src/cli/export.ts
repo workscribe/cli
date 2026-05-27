@@ -23,7 +23,7 @@ export function registerExport(program: Command): void {
     .command('export')
     .description('Export work summary as a markdown file')
     .option('--date <YYYY-MM-DD>', 'date to export (default: today)')
-    .option('--output <path>', 'output file path (default: ~/.chronicle/exports/)')
+    .option('--output <path>', 'output file path (default: ~/.workscribe/exports/)')
     .action(async (opts) => {
       let date = todayDate()
       if (opts.date) {
@@ -65,7 +65,7 @@ export function registerExport(program: Command): void {
       log.info(`Generating summary via ${config.ai.provider}…`)
       const summary = await provider.summarize(payload)
 
-      const outputPath = opts.output ?? path.join(EXPORTS_DIR, `chronicle-${date}.md`)
+      const outputPath = opts.output ?? path.join(EXPORTS_DIR, `workscribe-${date}.md`)
 
       if (!fs.existsSync(EXPORTS_DIR)) fs.mkdirSync(EXPORTS_DIR, { recursive: true, mode: 0o700 })
 

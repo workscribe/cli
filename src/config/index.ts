@@ -1,7 +1,7 @@
 import fs from 'fs'
 import { CONFIG_PATH } from '../utils/paths'
 
-export interface ChronicleConfig {
+export interface WorkscribeConfig {
   ai: {
     provider: string   // 'anthropic' | 'openai' | 'ollama' | 'openai-compatible'
     apiKey: string
@@ -22,7 +22,7 @@ export interface ChronicleConfig {
   }
 }
 
-const DEFAULTS: ChronicleConfig = {
+const DEFAULTS: WorkscribeConfig = {
   ai: {
     provider: '',
     apiKey: '',
@@ -43,7 +43,7 @@ const DEFAULTS: ChronicleConfig = {
   },
 }
 
-export function readConfig(): ChronicleConfig {
+export function readConfig(): WorkscribeConfig {
   if (!fs.existsSync(CONFIG_PATH)) return { ...DEFAULTS }
   try {
     const raw = fs.readFileSync(CONFIG_PATH, 'utf-8')
@@ -54,13 +54,13 @@ export function readConfig(): ChronicleConfig {
   }
 }
 
-export function writeConfig(config: ChronicleConfig): void {
+export function writeConfig(config: WorkscribeConfig): void {
   fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), { encoding: 'utf-8', mode: 0o600 })
   // Enforce permissions on existing files (mode only applies on creation above)
   try { fs.chmodSync(CONFIG_PATH, 0o600) } catch { /* ignore */ }
 }
 
-export function getConfigValue(config: ChronicleConfig, key: string): unknown {
+export function getConfigValue(config: WorkscribeConfig, key: string): unknown {
   const parts = key.split('.')
   let cur: unknown = config
   for (const part of parts) {
@@ -70,9 +70,9 @@ export function getConfigValue(config: ChronicleConfig, key: string): unknown {
   return cur
 }
 
-export function setConfigValue(config: ChronicleConfig, key: string, value: string): ChronicleConfig {
+export function setConfigValue(config: WorkscribeConfig, key: string, value: string): WorkscribeConfig {
   const parts = key.split('.')
-  const result = JSON.parse(JSON.stringify(config)) as ChronicleConfig
+  const result = JSON.parse(JSON.stringify(config)) as WorkscribeConfig
   let cur = result as unknown as Record<string, unknown>
   for (let i = 0; i < parts.length - 1; i++) {
     const part = parts[i]

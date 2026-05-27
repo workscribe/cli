@@ -67,6 +67,8 @@ workscribe config set ai.apiKey <your-key>
 | `workscribe events` | List captured events |
 | `workscribe export` | Save today's summary as a markdown file |
 | `workscribe status` | Check capture is active and show event counts |
+| `workscribe pause` | Pause capture temporarily |
+| `workscribe resume` | Resume capture after a pause |
 | `workscribe config` | View current configuration |
 | `workscribe config set KEY VALUE` | Update a config value |
 

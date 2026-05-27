@@ -7,6 +7,7 @@ import { registerSessions } from './cli/sessions'
 import { registerSummary } from './cli/summary'
 import { registerExport } from './cli/export'
 import { registerConfig } from './cli/config'
+import { registerPause } from './cli/pause'
 
 const program = new Command()
 
@@ -23,5 +24,6 @@ registerSessions(program)
 registerSummary(program)
 registerExport(program)
 registerConfig(program)
+registerPause(program)
 
 program.parse()

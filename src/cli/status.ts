@@ -1,10 +1,12 @@
 import { Command } from 'commander'
+import fs from 'fs'
 import chalk from 'chalk'
 import { getEventCount, getLastEvent } from '../db'
 import { readConfig } from '../config'
 import { log } from '../utils/logger'
 import { formatDate, todayDate } from '../utils/format'
 import { getEventsForDate } from '../db'
+import { PAUSE_FLAG_PATH } from '../utils/paths'
 
 export function registerStatus(program: Command): void {
   program
@@ -15,11 +17,18 @@ export function registerStatus(program: Command): void {
       const total = getEventCount()
       const todayEvents = getEventsForDate(todayDate())
       const last = getLastEvent()
+      const isPaused = fs.existsSync(PAUSE_FLAG_PATH)
 
       log.plain('')
       log.plain(chalk.bold('  Workscribe Status'))
       log.plain('')
-      log.plain(`  Capture      ${chalk.green('active')}`)
+
+      if (isPaused) {
+        log.plain(`  Capture      ${chalk.yellow('paused')}  ${chalk.dim('(run: workscribe resume)')}`)
+      } else {
+        log.plain(`  Capture      ${chalk.green('active')}`)
+      }
+
       log.plain(`  Events today ${chalk.cyan(String(todayEvents.length))}`)
       log.plain(`  Events total ${chalk.cyan(String(total))}`)
 
