@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { shouldFilter, isDuplicate } from '../src/capture/filter'
+import { shouldFilter, isDuplicate } from '../../src/capture/filter'
 
 const DEFAULT_IGNORE = ['cd', 'ls', 'll', 'la', 'ls -la', 'ls -l', 'ls -a', 'pwd', 'clear', 'exit', 'history', 'man']
 

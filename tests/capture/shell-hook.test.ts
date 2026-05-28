@@ -10,7 +10,7 @@ vi.mock('fs', () => ({
   },
 }))
 
-vi.mock('../src/utils/logger', () => ({
+vi.mock('../../src/utils/logger', () => ({
   log: { info: vi.fn(), success: vi.fn(), warn: vi.fn(), error: vi.fn(), plain: vi.fn() },
 }))
 
@@ -21,7 +21,7 @@ import {
   isHookOutdated,
   installHook,
   updateHook,
-} from '../src/capture/shell-hook'
+} from '../../src/capture/shell-hook'
 
 const mockFs = fs as unknown as Record<string, ReturnType<typeof vi.fn>>
 
@@ -116,17 +116,14 @@ describe('installHook', () => {
     installHook('/home/user/.zshrc', HOOK_BLOCK)
     expect(mockFs.copyFileSync).toHaveBeenCalledWith(
       '/home/user/.zshrc',
-      expect.stringContaining('.zshrc.workscribe-backup-'),
+      expect.stringContaining('.zshrc.workscribe-backup-')
     )
   })
 
   it('appends hook content to the rc file', () => {
     mockFs.readFileSync.mockReturnValue(RC_WITHOUT_HOOK)
     installHook('/home/user/.zshrc', HOOK_BLOCK)
-    expect(mockFs.appendFileSync).toHaveBeenCalledWith(
-      '/home/user/.zshrc',
-      expect.stringContaining(HOOK_BLOCK),
-    )
+    expect(mockFs.appendFileSync).toHaveBeenCalledWith('/home/user/.zshrc', expect.stringContaining(HOOK_BLOCK))
   })
 })
 
@@ -137,7 +134,7 @@ describe('updateHook', () => {
     updateHook('/home/user/.zshrc', HOOK_BLOCK)
     expect(mockFs.copyFileSync).toHaveBeenCalledWith(
       '/home/user/.zshrc',
-      expect.stringContaining('.zshrc.workscribe-backup-'),
+      expect.stringContaining('.zshrc.workscribe-backup-')
     )
   })
 

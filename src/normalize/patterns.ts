@@ -230,9 +230,7 @@ export const RULES: Rule[] = [
   makeRule(/^(chmod|chown|chgrp)\b/, 'file_ops', (m) => ({ tool: m[1] })),
 
   // ─── AI terminal tools (registry-driven) ─────────────────────────────────
-  ...AI_TOOLS.map((entry) =>
-    makeRule(new RegExp(entry.pattern), 'ai_session', () => ({ tool: entry.tool }))
-  ),
+  ...AI_TOOLS.map((entry) => makeRule(new RegExp(entry.pattern), 'ai_session', () => ({ tool: entry.tool }))),
 ]
 
 export function normalizeCommand(command: string): NormalizedEvent {

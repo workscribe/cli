@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { redact } from '../src/capture/redact'
+import { redact } from '../../src/capture/redact'
 
 describe('redact', () => {
   describe('AWS keys', () => {

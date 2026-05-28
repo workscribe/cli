@@ -14,7 +14,9 @@ function eventRowToPayload(row: EventRow): EventPayload {
   let metadata: Record<string, unknown> = {}
   try {
     if (row.metadata) metadata = JSON.parse(row.metadata)
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   return { category: row.category, metadata, exitCode: row.exit_code, durationMs: row.duration_ms }
 }
 

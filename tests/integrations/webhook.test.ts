@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-vi.mock('../src/ai/fetch', () => ({
+vi.mock('../../src/ai/fetch', () => ({
   fetchWithTimeout: vi.fn(),
 }))
 
-import { fetchWithTimeout } from '../src/ai/fetch'
-import { postToWebhook } from '../src/integrations/webhook'
+import { fetchWithTimeout } from '../../src/ai/fetch'
+import { postToWebhook } from '../../src/integrations/webhook'
 
 const mockFetch = fetchWithTimeout as ReturnType<typeof vi.fn>
 
@@ -33,7 +33,7 @@ describe('postToWebhook', () => {
     })
 
     await expect(postToWebhook('https://hooks.example.com/abc', 'hi')).rejects.toThrow(
-      'Webhook POST failed 403: Forbidden',
+      'Webhook POST failed 403: Forbidden'
     )
   })
 })

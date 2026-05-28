@@ -3,13 +3,13 @@ import { CONFIG_PATH } from '../utils/paths'
 
 export interface WorkscribeConfig {
   ai: {
-    provider: string   // 'anthropic' | 'openai' | 'ollama' | 'openai-compatible'
+    provider: string // 'anthropic' | 'openai' | 'ollama' | 'openai-compatible'
     apiKey: string
     model: string
     baseUrl: string
   }
   session: {
-    idleTimeout: number  // minutes
+    idleTimeout: number // minutes
   }
   capture: {
     ignore: string[]
@@ -20,7 +20,7 @@ export interface WorkscribeConfig {
   summary: {
     format: 'markdown' | 'json'
   }
-  projects?: Record<string, string>  // absolute path → display name override
+  projects?: Record<string, string> // absolute path → display name override
   integrations?: {
     slackWebhook?: string
     webhook?: string
@@ -62,7 +62,11 @@ export function readConfig(): WorkscribeConfig {
 export function writeConfig(config: WorkscribeConfig): void {
   fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), { encoding: 'utf-8', mode: 0o600 })
   // Enforce permissions on existing files (mode only applies on creation above)
-  try { fs.chmodSync(CONFIG_PATH, 0o600) } catch { /* ignore */ }
+  try {
+    fs.chmodSync(CONFIG_PATH, 0o600)
+  } catch {
+    /* ignore */
+  }
 }
 
 export function getConfigValue(config: WorkscribeConfig, key: string): unknown {

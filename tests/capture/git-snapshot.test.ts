@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 vi.mock('child_process', () => ({ execSync: vi.fn() }))
 
 import { execSync } from 'child_process'
-import { getCommitsSince } from '../src/capture/git-snapshot'
+import { getCommitsSince } from '../../src/capture/git-snapshot'
 
 const mockExecSync = execSync as ReturnType<typeof vi.fn>
 
@@ -37,7 +37,9 @@ describe('getCommitsSince', () => {
   })
 
   it('returns empty array when git command fails', () => {
-    mockExecSync.mockImplementation(() => { throw new Error('not a git repo') })
+    mockExecSync.mockImplementation(() => {
+      throw new Error('not a git repo')
+    })
     expect(getCommitsSince('abc123', '/some/path')).toEqual([])
   })
 
@@ -46,16 +48,13 @@ describe('getCommitsSince', () => {
     getCommitsSince('abc123', '/my/project')
     expect(mockExecSync).toHaveBeenCalledWith(
       expect.stringContaining('git log abc123..HEAD'),
-      expect.objectContaining({ cwd: '/my/project' }),
+      expect.objectContaining({ cwd: '/my/project' })
     )
   })
 
   it('uses a timeout to prevent hanging', () => {
     mockExecSync.mockReturnValue(Buffer.from(''))
     getCommitsSince('abc123', '/my/project')
-    expect(mockExecSync).toHaveBeenCalledWith(
-      expect.any(String),
-      expect.objectContaining({ timeout: 3000 }),
-    )
+    expect(mockExecSync).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ timeout: 3000 }))
   })
 })

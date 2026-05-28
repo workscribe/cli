@@ -37,7 +37,9 @@ export function registerStatus(program: Command): void {
       }
 
       log.plain('')
-      log.plain(`  AI provider  ${config.ai.provider ? chalk.cyan(config.ai.provider) : chalk.yellow('not configured')}`)
+      log.plain(
+        `  AI provider  ${config.ai.provider ? chalk.cyan(config.ai.provider) : chalk.yellow('not configured')}`
+      )
       if (config.ai.model) log.plain(`  Model        ${chalk.dim(config.ai.model)}`)
       log.plain('')
     })

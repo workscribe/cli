@@ -17,9 +17,11 @@ Events:
   - code_push {"remote":"origin","branch":"feature/auth"}
 
 OUTPUT:
-- Switched to the authentication feature branch and installed JWT and bcrypt dependencies
+- Switched to the authentication feature branch and added authentication dependencies (bcrypt, JWT)
 - Resolved failing auth tests
 - Committed and pushed authentication fixes
+
+For dependency_install events: infer the purpose of packages from their names and describe the domain, not just the packages. Examples: bcrypt/jsonwebtoken → authentication, prisma/mongoose/pg → database, jest/vitest/mocha → testing, axios/got/node-fetch → HTTP client, stripe/paypal → payments, socket.io/ws → real-time. Use your knowledge of common packages. For unfamiliar packages, name them directly without guessing their domain.
 
 Events like code_push, build, file_ops, and code_stash provide context — fold them into the surrounding narrative rather than listing them as separate bullets. Only surface them directly when they are the main activity (e.g. a standalone build fix, or a significant restructure with no accompanying commits).
 
@@ -114,9 +116,7 @@ export function buildWeeklyMessage(payload: WeekSummaryPayload): string {
         const key = `${e.category}${meta}${failed}`
         counts.set(key, (counts.get(key) ?? 0) + 1)
       }
-      const eventLine = [...counts.entries()]
-        .map(([k, n]) => `${n > 1 ? `${n}x ` : ''}${k}`)
-        .join(', ')
+      const eventLine = [...counts.entries()].map(([k, n]) => `${n > 1 ? `${n}x ` : ''}${k}`).join(', ')
       lines.push(`  Events: ${eventLine}`)
     }
 

@@ -6,7 +6,7 @@ vi.mock('fs', () => ({ default: { readFileSync: vi.fn() } }))
 
 import { execSync } from 'child_process'
 import fs from 'fs'
-import { getGitContext } from '../src/capture/git'
+import { getGitContext } from '../../src/capture/git'
 
 const mockExecSync = execSync as ReturnType<typeof vi.fn>
 const mockReadFileSync = fs.readFileSync as ReturnType<typeof vi.fn>
@@ -22,7 +22,9 @@ function setupGitRoot(root = '/home/user/sandbox/chronicle') {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  mockReadFileSync.mockImplementation(() => { throw new Error('no package.json') })
+  mockReadFileSync.mockImplementation(() => {
+    throw new Error('no package.json')
+  })
 })
 
 describe('getGitContext — nameOverride', () => {

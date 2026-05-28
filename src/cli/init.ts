@@ -31,7 +31,11 @@ export function registerInit(program: Command): void {
         fs.mkdirSync(WORKSCRIBE_DIR, { recursive: true, mode: 0o700 })
         log.success(`Created ${WORKSCRIBE_DIR}`)
       } else {
-        try { fs.chmodSync(WORKSCRIBE_DIR, 0o700) } catch { /* ignore */ }
+        try {
+          fs.chmodSync(WORKSCRIBE_DIR, 0o700)
+        } catch {
+          /* ignore */
+        }
       }
 
       // 2. Initialize database (runs migrations)
@@ -119,7 +123,9 @@ export function registerInit(program: Command): void {
 
           if (provider === 'ollama') {
             log.plain(`\n  ${chalk.dim('Make sure Ollama is running: ollama serve')}`)
-            log.plain(`  ${chalk.dim('Default model: llama3  (change with: workscribe config set ai.model <model>)')}\n`)
+            log.plain(
+              `  ${chalk.dim('Default model: llama3  (change with: workscribe config set ai.model <model>)')}\n`
+            )
           } else {
             const { apiKey } = await prompts({
               type: 'password',

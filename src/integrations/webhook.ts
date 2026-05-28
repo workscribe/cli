@@ -8,7 +8,7 @@ export async function postToWebhook(url: string, text: string): Promise<void> {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text }),
     },
-    10_000,
+    10_000
   )
 
   if (!response.ok) {

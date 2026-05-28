@@ -28,9 +28,7 @@ const CATEGORY_COLORS: Record<string, (s: string) => string> = {
   other: chalk.gray,
 }
 
-const AI_TOOL_DISPLAY_NAMES: Record<string, string> = Object.fromEntries(
-  AI_TOOLS.map((t) => [t.tool, t.displayName])
-)
+const AI_TOOL_DISPLAY_NAMES: Record<string, string> = Object.fromEntries(AI_TOOLS.map((t) => [t.tool, t.displayName]))
 
 export function registerEvents(program: Command): void {
   program
@@ -71,7 +69,11 @@ export function registerEvents(program: Command): void {
         let cmdDisplay: string
         if (event.category === 'ai_session') {
           let meta: Record<string, unknown> = {}
-          try { meta = event.metadata ? (JSON.parse(event.metadata) as Record<string, unknown>) : {} } catch { /* ignore */ }
+          try {
+            meta = event.metadata ? (JSON.parse(event.metadata) as Record<string, unknown>) : {}
+          } catch {
+            /* ignore */
+          }
           const toolKey = typeof meta.tool === 'string' ? meta.tool : ''
           const toolName = AI_TOOL_DISPLAY_NAMES[toolKey] ?? toolKey
           cmdDisplay = chalk.white(toolName.padEnd(20)) + chalk.magenta(' ✦')

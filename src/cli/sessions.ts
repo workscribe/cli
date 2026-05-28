@@ -36,7 +36,9 @@ export function registerSessions(program: Command): void {
         const end = formatDate(session.endedAt)
         const duration = formatDuration(session.durationMinutes)
         const repo = session.repoName ? chalk.cyan(session.repoName) : chalk.gray('no repo')
-        log.plain(`  ${chalk.dim(start)} – ${chalk.dim(end)}  ${repo}  ${chalk.dim(duration)}  ${chalk.dim(session.eventCount + ' events')}`)
+        log.plain(
+          `  ${chalk.dim(start)} – ${chalk.dim(end)}  ${repo}  ${chalk.dim(duration)}  ${chalk.dim(session.eventCount + ' events')}`
+        )
       }
 
       log.plain('')

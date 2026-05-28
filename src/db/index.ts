@@ -16,7 +16,11 @@ export function getDb(): DatabaseSync {
 
   _db = new DatabaseSync(DB_PATH)
   // Restrict DB file to owner-only after creation
-  try { fs.chmodSync(DB_PATH, 0o600) } catch { /* ignore if already correct */ }
+  try {
+    fs.chmodSync(DB_PATH, 0o600)
+  } catch {
+    /* ignore if already correct */
+  }
   _db.exec('PRAGMA journal_mode = WAL')
   _db.exec('PRAGMA foreign_keys = ON')
   runMigrations(_db)
@@ -158,7 +162,9 @@ export function getEventsByIds(ids: number[]): EventRow[] {
   if (ids.length === 0) return []
   const db = getDb()
   const placeholders = ids.map(() => '?').join(', ')
-  return db.prepare(`SELECT * FROM events WHERE id IN (${placeholders}) ORDER BY id DESC`).all(...ids) as unknown as EventRow[]
+  return db
+    .prepare(`SELECT * FROM events WHERE id IN (${placeholders}) ORDER BY id DESC`)
+    .all(...ids) as unknown as EventRow[]
 }
 
 export function deleteEventsByIds(ids: number[]): void {
@@ -181,17 +187,21 @@ export function deleteEventsForDate(date: string): number {
   const db = getDb()
   // Clear sessions (and session_events) before deleting events — FK constraint order
   clearSessionsForDate(date)
-  const result = db.prepare(`DELETE FROM events WHERE date(captured_at, 'localtime') = $date`).run({ date }) as { changes: number }
+  const result = db.prepare(`DELETE FROM events WHERE date(captured_at, 'localtime') = $date`).run({ date }) as {
+    changes: number
+  }
   return result.changes
 }
 
 export function clearSessionsForDate(date: string): void {
   const db = getDb()
   // Remove session_events first due to FK constraint
-  db.prepare(`
+  db.prepare(
+    `
     DELETE FROM session_events WHERE session_id IN (
       SELECT id FROM sessions WHERE date = $date
     )
-  `).run({ date })
+  `
+  ).run({ date })
   db.prepare('DELETE FROM sessions WHERE date = $date').run({ date })
 }

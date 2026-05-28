@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-vi.mock('../src/db', () => ({
+vi.mock('../../src/db', () => ({
   getEventsForDate: vi.fn(),
   deleteEventsForDate: vi.fn(),
 }))
@@ -8,14 +8,14 @@ vi.mock('../src/db', () => ({
 vi.mock('prompts', () => ({ default: vi.fn() }))
 
 // Suppress output during tests
-vi.mock('../src/utils/logger', () => ({
+vi.mock('../../src/utils/logger', () => ({
   log: { plain: vi.fn(), error: vi.fn(), success: vi.fn() },
 }))
 
 import { Command } from 'commander'
 import prompts from 'prompts'
-import { getEventsForDate, deleteEventsForDate } from '../src/db'
-import { registerClear } from '../src/cli/clear'
+import { getEventsForDate, deleteEventsForDate } from '../../src/db'
+import { registerClear } from '../../src/cli/clear'
 
 const mockGetEvents = getEventsForDate as ReturnType<typeof vi.fn>
 const mockDelete = deleteEventsForDate as ReturnType<typeof vi.fn>
@@ -29,9 +29,42 @@ function makeProgram() {
 }
 
 const SAMPLE_EVENTS = [
-  { id: 1, category: 'code_commit', captured_at: '2026-05-28T10:00:00Z', command: 'git commit', cwd: '/repo', exit_code: 0, duration_ms: 100, repo_name: 'myapp', branch: 'main', metadata: null },
-  { id: 2, category: 'test_run',   captured_at: '2026-05-28T10:05:00Z', command: 'npm test',   cwd: '/repo', exit_code: 0, duration_ms: 200, repo_name: 'myapp', branch: 'main', metadata: null },
-  { id: 3, category: 'test_run',   captured_at: '2026-05-28T10:10:00Z', command: 'npm test',   cwd: '/repo', exit_code: 0, duration_ms: 180, repo_name: 'myapp', branch: 'main', metadata: null },
+  {
+    id: 1,
+    category: 'code_commit',
+    captured_at: '2026-05-28T10:00:00Z',
+    command: 'git commit',
+    cwd: '/repo',
+    exit_code: 0,
+    duration_ms: 100,
+    repo_name: 'myapp',
+    branch: 'main',
+    metadata: null,
+  },
+  {
+    id: 2,
+    category: 'test_run',
+    captured_at: '2026-05-28T10:05:00Z',
+    command: 'npm test',
+    cwd: '/repo',
+    exit_code: 0,
+    duration_ms: 200,
+    repo_name: 'myapp',
+    branch: 'main',
+    metadata: null,
+  },
+  {
+    id: 3,
+    category: 'test_run',
+    captured_at: '2026-05-28T10:10:00Z',
+    command: 'npm test',
+    cwd: '/repo',
+    exit_code: 0,
+    duration_ms: 180,
+    repo_name: 'myapp',
+    branch: 'main',
+    metadata: null,
+  },
 ]
 
 beforeEach(() => vi.clearAllMocks())

@@ -7,18 +7,43 @@ import { getProvider } from '../ai/router'
 import { readConfig } from '../config'
 import { updateSessionSummary } from '../db'
 import { log } from '../utils/logger'
-import { todayDate, parseDate, formatDate, formatDuration, startOfWeek, eachDayOfRange, isoWeekKey } from '../utils/format'
+import {
+  todayDate,
+  parseDate,
+  formatDate,
+  formatDuration,
+  startOfWeek,
+  eachDayOfRange,
+  isoWeekKey,
+} from '../utils/format'
 import { postToWebhook } from '../integrations/webhook'
 import { formatForSlack, isSlackWebhookUrl } from '../integrations/slack'
 import { WEEKLY_CACHE_DIR } from '../utils/paths'
 import type { DaySummaryPayload, SessionPayload, EventPayload, WeekSummaryPayload } from '../ai/types'
 import type { EventRow } from '../db'
 
+interface SessionSummaryJson {
+  project: string | null
+  branch: string | null
+  durationMinutes: number
+  bullets: string[]
+}
+
+/** Parse AI bullet output into a clean string array. Handles both - and • prefixes. */
+export function parseBullets(text: string): string[] {
+  return text
+    .split('\n')
+    .map((l) => l.replace(/^[•\-]\s*/, '').trim())
+    .filter(Boolean)
+}
+
 function eventRowToPayload(row: EventRow): EventPayload {
   let metadata: Record<string, unknown> = {}
   try {
     if (row.metadata) metadata = JSON.parse(row.metadata)
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   return {
     category: row.category,
     metadata,
@@ -42,11 +67,9 @@ function sessionToPayload(s: ReturnType<typeof getOrBuildSessions>[number], date
 async function handleWebhook(
   opts: { slack?: boolean; webhook?: string },
   config: ReturnType<typeof readConfig>,
-  summary: string,
+  summary: string
 ): Promise<void> {
-  const webhookUrl =
-    opts.webhook ??
-    (opts.slack ? config.integrations?.slackWebhook : undefined)
+  const webhookUrl = opts.webhook ?? (opts.slack ? config.integrations?.slackWebhook : undefined)
 
   if (webhookUrl) {
     try {
@@ -156,12 +179,24 @@ export function registerSummary(program: Command): void {
         return
       }
 
+      const jsonMode = config.summary?.format === 'json'
+
       if (!opts.fresh) {
         const allCached = sessions.every((s) => s.summary)
         if (allCached) {
           const fullSummary = sessions.map((s) => s.summary!).join('\n\n')
           log.plain('')
-          log.plain(fullSummary)
+          if (jsonMode) {
+            const jsonOut: SessionSummaryJson[] = sessions.map((s) => ({
+              project: s.repoName,
+              branch: s.events[0]?.branch ?? null,
+              durationMinutes: s.durationMinutes,
+              bullets: parseBullets(s.summary!.replace(/^## .+\n/, '')),
+            }))
+            log.plain(JSON.stringify({ date, sessions: jsonOut }, null, 2))
+          } else {
+            log.plain(fullSummary)
+          }
           log.plain('')
           log.plain(chalk.dim('  (cached — use --fresh to regenerate)'))
           await handleWebhook(opts, config, fullSummary)
@@ -173,6 +208,8 @@ export function registerSummary(program: Command): void {
       log.info(`Generating summary via ${chalk.cyan(config.ai.provider)}…`)
 
       const allSummaries: string[] = []
+      const jsonSessions: SessionSummaryJson[] = []
+
       for (const session of sessions) {
         const sessionPayload: DaySummaryPayload = { date, sessions: [sessionToPayload(session, date)] }
         try {
@@ -184,6 +221,14 @@ export function registerSummary(program: Command): void {
           const summary = `${heading}\n${bullets.trim()}`
           allSummaries.push(summary)
           updateSessionSummary(session.id, summary)
+          if (jsonMode) {
+            jsonSessions.push({
+              project: session.repoName,
+              branch: session.events[0]?.branch ?? null,
+              durationMinutes: session.durationMinutes,
+              bullets: parseBullets(bullets),
+            })
+          }
         } catch (e) {
           log.error(`Summary failed [${config.ai.provider}]: ${(e as Error).message}`)
           process.exit(1)
@@ -192,7 +237,11 @@ export function registerSummary(program: Command): void {
 
       const fullSummary = allSummaries.join('\n\n')
       log.plain('')
-      log.plain(fullSummary)
+      if (jsonMode) {
+        log.plain(JSON.stringify({ date, sessions: jsonSessions }, null, 2))
+      } else {
+        log.plain(fullSummary)
+      }
       log.plain('')
 
       await handleWebhook(opts, config, fullSummary)

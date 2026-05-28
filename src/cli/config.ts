@@ -23,7 +23,11 @@ export function registerConfig(program: Command): void {
       const config = readConfig()
       const updated = setConfigValue(config, key, value)
       writeConfig(updated)
-      const isSensitive = key === 'ai.apiKey' || key.toLowerCase().includes('key') || key.toLowerCase().includes('secret') || key.toLowerCase().includes('token')
+      const isSensitive =
+        key === 'ai.apiKey' ||
+        key.toLowerCase().includes('key') ||
+        key.toLowerCase().includes('secret') ||
+        key.toLowerCase().includes('token')
       const displayValue = isSensitive ? '[set]' : chalk.yellow(value)
       log.success(`Set ${chalk.cyan(key)} = ${displayValue}`)
     })
@@ -42,7 +46,16 @@ export function registerConfig(program: Command): void {
     })
 }
 
-const SENSITIVE_KEYS = new Set(['apiKey', 'api_key', 'secret', 'token', 'password', 'passwd', 'webhook', 'slackWebhook'])
+const SENSITIVE_KEYS = new Set([
+  'apiKey',
+  'api_key',
+  'secret',
+  'token',
+  'password',
+  'passwd',
+  'webhook',
+  'slackWebhook',
+])
 
 function maskValue(key: string, value: unknown): string {
   if (SENSITIVE_KEYS.has(key) && typeof value === 'string' && value.length > 0) {

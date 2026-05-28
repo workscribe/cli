@@ -1,11 +1,5 @@
 import type { EventRow } from '../db/types'
-import {
-  insertSession,
-  insertSessionEvent,
-  clearSessionsForDate,
-  getSessionsForDate,
-  getEventsForDate,
-} from '../db'
+import { insertSession, insertSessionEvent, clearSessionsForDate, getSessionsForDate, getEventsForDate } from '../db'
 import { readConfig } from '../config'
 import { splitByIdleGap, splitByRepo, minutesBetween } from './grouper'
 
@@ -101,4 +95,3 @@ function buildSessions(date: string, events: EventRow[]): Session[] {
 
   return sessions
 }
-

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { getConfigValue, setConfigValue } from '../src/config'
-import type { WorkscribeConfig } from '../src/config'
+import { getConfigValue, setConfigValue } from '../../src/config'
+import type { WorkscribeConfig } from '../../src/config'
 
 // A clean config object to use as a base in tests
 const BASE_CONFIG: WorkscribeConfig = {

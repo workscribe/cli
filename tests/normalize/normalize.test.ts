@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { normalizeCommand } from '../src/normalize/patterns'
+import { normalizeCommand } from '../../src/normalize/patterns'
 
 // Helper to get just the category
 function category(cmd: string) {

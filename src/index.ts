@@ -16,10 +16,7 @@ import { registerClear } from './cli/clear'
 
 const program = new Command()
 
-program
-  .name('workscribe')
-  .description('Automatic developer work journal')
-  .version(__WORKSCRIBE_VERSION__)
+program.name('workscribe').description('Automatic developer work journal').version(__WORKSCRIBE_VERSION__)
 
 registerCapture(program)
 registerHook(program)

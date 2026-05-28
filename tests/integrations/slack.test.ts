@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { formatForSlack, isSlackWebhookUrl } from '../src/integrations/slack'
+import { formatForSlack, isSlackWebhookUrl } from '../../src/integrations/slack'
 
 describe('formatForSlack', () => {
   it('converts ## headings to bold', () => {

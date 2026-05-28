@@ -12,7 +12,7 @@ vi.mock('fs', () => ({
 vi.mock('child_process', () => ({ execSync: vi.fn() }))
 
 import fs from 'fs'
-import { claudeCodeIntegration } from '../src/capture/hooks/claude-code'
+import { claudeCodeIntegration } from '../../src/capture/hooks/claude-code'
 
 const mockFs = fs as unknown as Record<string, ReturnType<typeof vi.fn>>
 
@@ -87,8 +87,8 @@ describe('claudeCodeIntegration.install', () => {
     claudeCodeIntegration.install()
     const written = JSON.parse(mockFs.writeFileSync.mock.calls[0][1] as string)
     expect(written.hooks.PostToolUse).toHaveLength(2)
-    const commands = written.hooks.PostToolUse.flatMap(
-      (e: { hooks: { command: string }[] }) => e.hooks.map((h) => h.command)
+    const commands = written.hooks.PostToolUse.flatMap((e: { hooks: { command: string }[] }) =>
+      e.hooks.map((h) => h.command)
     )
     expect(commands).toContain('some-other-tool')
     expect(commands).toContain('workscribe _hook --source claude-code')

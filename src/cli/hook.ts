@@ -22,7 +22,9 @@ export function registerHook(program: Command): void {
     .action(() => {
       let raw = ''
       process.stdin.setEncoding('utf-8')
-      process.stdin.on('data', (chunk: string) => { raw += chunk })
+      process.stdin.on('data', (chunk: string) => {
+        raw += chunk
+      })
       process.stdin.on('end', () => {
         try {
           const parsed = parseHookPayload(raw)

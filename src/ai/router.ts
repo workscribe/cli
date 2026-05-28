@@ -25,8 +25,10 @@ export function getProvider(config: WorkscribeConfig): AIProvider {
     }
 
     case 'openai-compatible': {
-      if (!apiKey) throw new Error('This provider requires an API key.\nRun: workscribe config set ai.apiKey <your-key>')
-      if (!baseUrl) throw new Error('openai-compatible requires a base URL.\nRun: workscribe config set ai.baseUrl <url>')
+      if (!apiKey)
+        throw new Error('This provider requires an API key.\nRun: workscribe config set ai.apiKey <your-key>')
+      if (!baseUrl)
+        throw new Error('openai-compatible requires a base URL.\nRun: workscribe config set ai.baseUrl <url>')
       return new OpenAIProvider(apiKey, model || undefined, baseUrl)
     }
 

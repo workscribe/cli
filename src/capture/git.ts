@@ -13,7 +13,9 @@ function nameFromRemote(root: string): string | null {
       cwd: root,
       timeout: 2000,
       stdio: 'pipe',
-    }).toString().trim()
+    })
+      .toString()
+      .trim()
     const match = url.match(/\/([^/]+?)(?:\.git)?$/)
     return match ? match[1] : null
   } catch {
@@ -42,21 +44,18 @@ export function getGitContext(cwd: string, nameOverride?: string | null): GitCon
       .toString()
       .trim()
 
-    const repoName =
-      nameOverride ??
-      nameFromRemote(root) ??
-      nameFromPackageJson(root) ??
-      path.basename(root)
+    const repoName = nameOverride ?? nameFromRemote(root) ?? nameFromPackageJson(root) ?? path.basename(root)
 
     let branch: string | null = null
     try {
-      branch = execSync('git branch --show-current', {
-        cwd,
-        timeout: 2000,
-        stdio: 'pipe',
-      })
-        .toString()
-        .trim() || null
+      branch =
+        execSync('git branch --show-current', {
+          cwd,
+          timeout: 2000,
+          stdio: 'pipe',
+        })
+          .toString()
+          .trim() || null
     } catch {
       // Detached HEAD or not a git repo
     }

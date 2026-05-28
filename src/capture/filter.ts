@@ -40,9 +40,5 @@ export function isDuplicate(
 ): boolean {
   if (!lastEvent) return false
   const lastTime = new Date(lastEvent.captured_at).getTime()
-  return (
-    lastEvent.command === normalizeForFilter(command) &&
-    lastEvent.cwd === cwd &&
-    now - lastTime < dedupWindowMs
-  )
+  return lastEvent.command === normalizeForFilter(command) && lastEvent.cwd === cwd && now - lastTime < dedupWindowMs
 }

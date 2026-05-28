@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { startOfWeek, eachDayOfRange } from '../src/utils/format'
+import { startOfWeek, eachDayOfRange } from '../../src/utils/format'
 
 describe('startOfWeek', () => {
   it('returns Monday when given a Monday', () => {
@@ -29,11 +29,7 @@ describe('eachDayOfRange', () => {
   })
 
   it('returns all days inclusive of both endpoints', () => {
-    expect(eachDayOfRange('2026-05-25', '2026-05-27')).toEqual([
-      '2026-05-25',
-      '2026-05-26',
-      '2026-05-27',
-    ])
+    expect(eachDayOfRange('2026-05-25', '2026-05-27')).toEqual(['2026-05-25', '2026-05-26', '2026-05-27'])
   })
 
   it('returns correct count for a full week', () => {

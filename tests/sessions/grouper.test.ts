@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { splitByIdleGap, splitByRepo, minutesBetween } from '../src/sessions/grouper'
-import type { EventRow } from '../src/db/types'
+import { splitByIdleGap, splitByRepo, minutesBetween } from '../../src/sessions/grouper'
+import type { EventRow } from '../../src/db/types'
 
 // Factory: build a minimal EventRow for testing
 function makeEvent(overrides: Partial<EventRow> & { captured_at: string }): EventRow {
