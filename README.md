@@ -71,6 +71,8 @@ workscribe config set ai.apiKey <your-key>
 | `workscribe summary` | Generate today's work summary |
 | `workscribe summary --date 2026-05-20` | Summary for a specific date |
 | `workscribe summary --week` | Summary for the current week |
+| `workscribe summary --fresh` | Bypass cache and regenerate |
+| `workscribe summary --slack` | Post summary to configured Slack channel |
 | `workscribe sessions` | List detected work sessions |
 | `workscribe events` | List captured events |
 | `workscribe export` | Save today's summary as a markdown file |
@@ -121,16 +123,20 @@ workscribe summary --week --slack
 
 **Setup:**
 
-1. Go to [api.slack.com/apps](https://api.slack.com/apps) → Create New App → From scratch
-2. Enable **Incoming Webhooks** and add it to your workspace
-3. Choose a channel and copy the webhook URL
-4. Run:
+1. Go to [api.slack.com/apps](https://api.slack.com/apps) → **Create New App** → **From scratch**
+2. Name your app, select your workspace, and click **Create App**
+3. In the left sidebar under **Features**, click **Incoming Webhooks**
+4. Toggle **Activate Incoming Webhooks** to On
+5. Click **Add New Webhook to Workspace**, choose a channel, and click **Allow**
+6. Copy the webhook URL and run:
 
 ```bash
 workscribe config set integrations.slackWebhook https://hooks.slack.com/services/...
 ```
 
-Summaries posted to Slack are automatically formatted — headings are bolded and bullets converted to `•`. Custom `--webhook` URLs receive the raw markdown output unchanged.
+Works on all Slack plans including free. No admin role required.
+
+Summaries posted to Slack are automatically formatted — headings are bolded, bullets converted to `•`, and your OS username is prepended so recipients know who sent it in shared channels. Custom `--webhook` URLs receive the raw markdown output unchanged.
 
 Config is stored at `~/.workscribe/config.json`.
 
