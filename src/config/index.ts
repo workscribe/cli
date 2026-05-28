@@ -38,7 +38,7 @@ const DEFAULTS: WorkscribeConfig = {
     idleTimeout: 30,
   },
   capture: {
-    ignore: ['cd', 'ls', 'll', 'la', 'ls -la', 'ls -l', 'ls -a', 'pwd', 'clear', 'exit', 'history', 'man'],
+    ignore: ['cd', 'ls', 'll', 'la', 'ls -la', 'ls -l', 'ls -a', 'pwd', 'clear', 'exit', 'history', 'man', 'workscribe'],
   },
   redact: {
     extra: [],
