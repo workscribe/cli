@@ -9,6 +9,7 @@ import { updateSessionSummary } from '../db'
 import { log } from '../utils/logger'
 import { todayDate, parseDate, formatDate, formatDuration, startOfWeek, eachDayOfRange, isoWeekKey } from '../utils/format'
 import { postToWebhook } from '../integrations/webhook'
+import { formatForSlack, isSlackWebhookUrl } from '../integrations/slack'
 import { WEEKLY_CACHE_DIR } from '../utils/paths'
 import type { DaySummaryPayload, SessionPayload, EventPayload, WeekSummaryPayload } from '../ai/types'
 import type { EventRow } from '../db'
@@ -50,7 +51,8 @@ async function handleWebhook(
   if (webhookUrl) {
     try {
       log.info('Posting to webhook…')
-      await postToWebhook(webhookUrl, summary)
+      const body = isSlackWebhookUrl(webhookUrl) ? formatForSlack(summary) : summary
+      await postToWebhook(webhookUrl, body)
       log.success('Posted.')
     } catch (e) {
       log.error(`Webhook failed: ${(e as Error).message}`)
@@ -157,12 +159,12 @@ export function registerSummary(program: Command): void {
       if (!opts.fresh) {
         const allCached = sessions.every((s) => s.summary)
         if (allCached) {
+          const fullSummary = sessions.map((s) => s.summary!).join('\n\n')
           log.plain('')
-          for (const s of sessions) {
-            log.plain(s.summary!)
-          }
+          log.plain(fullSummary)
           log.plain('')
           log.plain(chalk.dim('  (cached — use --fresh to regenerate)'))
+          await handleWebhook(opts, config, fullSummary)
           return
         }
       }

@@ -45,6 +45,18 @@ describe('redact', () => {
     it('redacts xoxp- user tokens', () => {
       expect(redact('echo xoxp-111-222-333-secret')).toContain('[REDACTED]')
     })
+
+    it('redacts Slack incoming webhook URLs', () => {
+      const url = 'https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXX'
+      const result = redact(`curl -X POST ${url} -d '{"text":"test"}'`)
+      expect(result).toContain('[REDACTED]')
+      expect(result).not.toContain('hooks.slack.com')
+    })
+
+    it('leaves non-Slack URLs untouched', () => {
+      const cmd = 'curl https://api.example.com/webhook'
+      expect(redact(cmd)).toBe(cmd)
+    })
   })
 
   describe('Stripe keys', () => {

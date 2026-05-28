@@ -110,6 +110,28 @@ workscribe summary --slack
 workscribe summary --webhook https://custom.endpoint/hook
 ```
 
+## Slack integration
+
+Post your daily or weekly summary directly to a Slack channel:
+
+```bash
+workscribe summary --slack
+workscribe summary --week --slack
+```
+
+**Setup:**
+
+1. Go to [api.slack.com/apps](https://api.slack.com/apps) → Create New App → From scratch
+2. Enable **Incoming Webhooks** and add it to your workspace
+3. Choose a channel and copy the webhook URL
+4. Run:
+
+```bash
+workscribe config set integrations.slackWebhook https://hooks.slack.com/services/...
+```
+
+Summaries posted to Slack are automatically formatted — headings are bolded and bullets converted to `•`. Custom `--webhook` URLs receive the raw markdown output unchanged.
+
 Config is stored at `~/.workscribe/config.json`.
 
 ## Debug mode

@@ -11,8 +11,9 @@ const BUILTIN_PATTERNS: RegExp[] = [
   /glpat-[a-zA-Z0-9\-]{20}/g,
   // Generic JWTs (three base64url segments)
   /eyJ[a-zA-Z0-9_-]+\.eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+/g,
-  // Slack tokens
+  // Slack tokens and incoming webhook URLs
   /xox[baprs]-[a-zA-Z0-9\-]+/g,
+  /https:\/\/hooks\.slack\.com\/services\/[A-Z0-9]+\/[A-Z0-9]+\/[a-zA-Z0-9]+/g,
   // Stripe keys
   /sk_(live|test)_[a-zA-Z0-9]{24,}/g,
   // Values after long-form secret flags (single-char flags like -t/-p/-k are too ambiguous)
