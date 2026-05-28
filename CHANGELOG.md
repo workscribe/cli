@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.5.0](https://github.com/workscribe/cli/compare/v1.4.0...v1.5.0) (2026-05-28)
+
+### Features
+
+* add bun support and fix yarn/pnpm test_run metadata ([2cd7689](https://github.com/workscribe/cli/commit/2cd76896bd776b900d874cf84a0d6bbad9c8514b))
+* add code_search, code_read, file_ops categories ([582be71](https://github.com/workscribe/cli/commit/582be71c7c40642c7c935682bc5ed9b562066e09))
+* add workscribe clear command to delete events for a date ([ff16c2c](https://github.com/workscribe/cli/commit/ff16c2c4b7baea4a1d489ec40d92bafc889ad1b7))
+* refine AI summary payload and system prompt ([42ea030](https://github.com/workscribe/cli/commit/42ea030b22ee4ad045f037a143b86a4b5fe88fa4))
+
 ## [1.4.0](https://github.com/workscribe/cli/compare/v1.3.0...v1.4.0) (2026-05-28)
 
 ### Features
