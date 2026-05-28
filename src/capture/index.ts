@@ -1,21 +1,12 @@
 import fs from 'fs'
-import { execSync } from 'child_process'
 import { insertEvent, getLastEvent } from '../db'
 import { redact } from './redact'
 import { getGitContext } from './git'
+import { getCommitsSince } from './git-snapshot'
 import { normalizeCommand } from '../normalize/patterns'
 import { readConfig } from '../config'
 import { shouldFilter, isDuplicate } from './filter'
 import { PAUSE_FLAG_PATH } from '../utils/paths'
-
-function getCommitsSince(sha: string, cwd: string): string[] {
-  try {
-    const out = execSync(`git log ${sha}..HEAD --format=%s`, { cwd, timeout: 3000 }).toString().trim()
-    return out ? out.split('\n').filter(Boolean) : []
-  } catch {
-    return []
-  }
-}
 
 export function captureCommand(opts: {
   command: string

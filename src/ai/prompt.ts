@@ -34,8 +34,10 @@ export function buildUserMessage(payload: DaySummaryPayload): string {
     lines.push('Events:')
 
     // Aggregate repeated events so the model sees "3x build" not 3 separate build lines
+    // environment events (source, export) are excluded — they are shell noise, not developer work
     const counts = new Map<string, number>()
     for (const event of session.events) {
+      if (event.category === 'environment') continue
       const meta = Object.keys(event.metadata).length > 0 ? ` ${JSON.stringify(event.metadata)}` : ''
       const failed = event.exitCode !== null && event.exitCode !== 0 ? ' [failed]' : ''
       const key = `${event.category}${meta}${failed}`
@@ -101,6 +103,7 @@ export function buildWeeklyMessage(payload: WeekSummaryPayload): string {
 
       const counts = new Map<string, number>()
       for (const e of s.events) {
+        if (e.category === 'environment') continue
         const meta = Object.keys(e.metadata).length > 0 ? ` ${JSON.stringify(e.metadata)}` : ''
         const failed = e.exitCode !== null && e.exitCode !== 0 ? ' [failed]' : ''
         const key = `${e.category}${meta}${failed}`

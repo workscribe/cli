@@ -397,6 +397,33 @@ describe('normalizeCommand', () => {
     })
   })
 
+  describe('git -C flag handling', () => {
+    it('classifies git -C <path> commit as code_commit', () => {
+      expect(category('git -C /Users/mark/sandbox/project commit -m "fix: auth"')).toBe('code_commit')
+    })
+
+    it('extracts commit message from git -C commit', () => {
+      const result = normalize('git -C /home/user/project commit -m "feat: add login"')
+      expect(result.metadata.message).toBe('feat: add login')
+    })
+
+    it('classifies git -C push as code_push', () => {
+      expect(category('git -C /home/user/project push origin main')).toBe('code_push')
+    })
+
+    it('classifies git -C pull as code_pull', () => {
+      expect(category('git -C /home/user/project pull')).toBe('code_pull')
+    })
+
+    it('classifies git -C status as git_other', () => {
+      expect(category('git -C /home/user/project status')).toBe('git_other')
+    })
+
+    it('classifies git -C add as git_other', () => {
+      expect(category('git -C /home/user/project add src/')).toBe('git_other')
+    })
+  })
+
   describe('whitespace handling', () => {
     it('handles extra leading/trailing whitespace', () => {
       expect(category('  git commit -m "fix"  ')).toBe('code_commit')

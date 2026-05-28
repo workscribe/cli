@@ -4,6 +4,9 @@ function normalizeForFilter(cmd: string): string {
   return cmd.trim().replace(/\s+/g, ' ')
 }
 
+// Always filtered regardless of user config — internal tool noise
+const BUILTIN_IGNORE = new Set(['workscribe'])
+
 /**
  * Returns true if the command should be dropped (noise / ignore list).
  */
@@ -11,11 +14,14 @@ export function shouldFilter(command: string, ignoreList: string[]): boolean {
   const normalized = normalizeForFilter(command)
   if (!normalized) return true
 
+  const baseCmd = normalized.split(' ')[0]
+
+  // Built-in filter: always excluded, not user-configurable
+  if (BUILTIN_IGNORE.has(baseCmd)) return true
+
+  // User-configurable ignore list
   const normalizedIgnore = ignoreList.map(normalizeForFilter)
   if (normalizedIgnore.includes(normalized)) return true
-
-  // Also drop if just the base command (no args) is in the ignore list
-  const baseCmd = normalized.split(' ')[0]
   if (normalizedIgnore.includes(baseCmd)) return true
 
   return false

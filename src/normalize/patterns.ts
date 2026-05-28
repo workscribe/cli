@@ -197,7 +197,10 @@ export const RULES: Rule[] = [
 ]
 
 export function normalizeCommand(command: string): NormalizedEvent {
-  const trimmed = command.trim().replace(/\s+/g, ' ')
+  let trimmed = command.trim().replace(/\s+/g, ' ')
+
+  // Strip `git -C <path>` prefix so rules match regardless of working directory flag
+  trimmed = trimmed.replace(/^(git)\s+-C\s+\S+\s+/, '$1 ')
 
   for (const rule of RULES) {
     const result = rule.match(trimmed)

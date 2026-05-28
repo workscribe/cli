@@ -78,6 +78,22 @@ describe('shouldFilter', () => {
     })
   })
 
+  describe('built-in ignore (workscribe)', () => {
+    it('filters workscribe regardless of ignore list', () => {
+      expect(shouldFilter('workscribe', [])).toBe(true)
+    })
+
+    it('filters workscribe with subcommands', () => {
+      expect(shouldFilter('workscribe events', [])).toBe(true)
+      expect(shouldFilter('workscribe summary --week', [])).toBe(true)
+      expect(shouldFilter('workscribe _capture --cmd "git status"', [])).toBe(true)
+    })
+
+    it('filters workscribe even when not in user ignore list', () => {
+      expect(shouldFilter('workscribe init', DEFAULT_IGNORE)).toBe(true)
+    })
+  })
+
   describe('custom ignore list', () => {
     it('filters commands in a custom list', () => {
       expect(shouldFilter('htop', ['htop', 'top'])).toBe(true)
