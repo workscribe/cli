@@ -38,10 +38,12 @@ shell hook → capture → SQLite → session grouper → AI provider → markdo
 ## Install
 
 ```bash
-npm install -g @workscribe/cli
+<package-manager> install -g @workscribe/cli
 workscribe init
 source ~/.zshrc   # or restart your terminal
 ```
+
+> Use the global install flag for your package manager — e.g. `npm install -g`, `yarn global add`, `pnpm add -g`, or `bun add -g`.
 
 `workscribe init` walks you through choosing an AI provider, installs the shell hook, and offers to install a Claude Code session capture hook if Claude Code is detected. Safe to re-run — updates outdated hooks and skips steps already complete.
 

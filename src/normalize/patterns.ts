@@ -84,6 +84,11 @@ export const RULES: Rule[] = [
     packages: extractPackages(cmd, 'add'),
   })),
 
+  makeRule(/^bun\s+(install|add)\b/, 'dependency_install', (_m, cmd) => ({
+    tool: 'bun',
+    packages: extractPackages(cmd, 'add'),
+  })),
+
   makeRule(/^pip\s+(install)\b/, 'dependency_install', (_m, cmd) => ({
     tool: 'pip',
     packages: extractPackages(cmd, 'install'),
@@ -115,13 +120,21 @@ export const RULES: Rule[] = [
     packages: extractPackages(cmd, 'remove'),
   })),
 
+  makeRule(/^bun\s+remove\b/, 'dependency_remove', (_m, cmd) => ({
+    tool: 'bun',
+    packages: extractPackages(cmd, 'remove'),
+  })),
+
   makeRule(/^pip\s+uninstall\b/, 'dependency_remove', (_m, cmd) => ({
     tool: 'pip',
     packages: extractPackages(cmd, 'uninstall'),
   })),
 
   // ─── Tests ────────────────────────────────────────────────────────────────
-  makeRule(/^(npm\s+(test|run\s+test)|yarn\s+test|pnpm\s+test)\b/, 'test_run', () => ({ tool: 'npm' })),
+  makeRule(/^npm\s+(test|run\s+test)\b/, 'test_run', () => ({ tool: 'npm' })),
+  makeRule(/^yarn\s+test\b/, 'test_run', () => ({ tool: 'yarn' })),
+  makeRule(/^pnpm\s+test\b/, 'test_run', () => ({ tool: 'pnpm' })),
+  makeRule(/^bun\s+test\b/, 'test_run', () => ({ tool: 'bun' })),
   makeRule(/^(jest|vitest)\b/, 'test_run', (m) => ({ tool: m[1] })),
   makeRule(/^pytest\b/, 'test_run', () => ({ tool: 'pytest' })),
   makeRule(/^go\s+test\b/, 'test_run', () => ({ tool: 'go' })),
@@ -132,6 +145,7 @@ export const RULES: Rule[] = [
   // ─── Build ────────────────────────────────────────────────────────────────
   makeRule(/^npm\s+run\s+build\b/, 'build', () => ({ tool: 'npm' })),
   makeRule(/^(yarn|pnpm)\s+build\b/, 'build', (m) => ({ tool: m[1] })),
+  makeRule(/^bun\s+run\s+build\b/, 'build', () => ({ tool: 'bun' })),
   makeRule(/^(make|gmake)\b/, 'build', (m) => ({ tool: m[1] })),
   makeRule(/^cargo\s+build\b/, 'build', () => ({ tool: 'cargo' })),
   makeRule(/^go\s+build\b/, 'build', () => ({ tool: 'go' })),
@@ -144,6 +158,10 @@ export const RULES: Rule[] = [
     script: cmd.split(/\s+/)[2],
   })),
   makeRule(/^(yarn|pnpm)\s+(dev|start)\b/, 'server_run', (m) => ({ tool: m[1], script: m[2] })),
+  makeRule(/^bun\s+run\s+(dev|start|serve)\b/, 'server_run', (_m, cmd) => ({
+    tool: 'bun',
+    script: cmd.split(/\s+/)[2],
+  })),
   makeRule(/^python\s+.*manage\.py\s+runserver\b/, 'server_run', () => ({ tool: 'django' })),
 
   // ─── Infrastructure ───────────────────────────────────────────────────────
@@ -184,9 +202,14 @@ export const RULES: Rule[] = [
   }),
   makeRule(/^source\s+/, 'environment', () => ({})),
 
-  // ─── npm scripts (generic) ────────────────────────────────────────────────
+  // ─── generic run scripts ──────────────────────────────────────────────────
   makeRule(/^npm\s+run\s+\S+/, 'script_run', (_m, cmd) => ({
     tool: 'npm',
+    script: cmd.split(/\s+/)[2],
+  })),
+
+  makeRule(/^bun\s+run\s+\S+/, 'script_run', (_m, cmd) => ({
+    tool: 'bun',
     script: cmd.split(/\s+/)[2],
   })),
 

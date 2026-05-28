@@ -105,6 +105,17 @@ describe('normalizeCommand', () => {
       expect(category('pnpm add typescript')).toBe('dependency_install')
     })
 
+    it('classifies bun add', () => {
+      const result = normalize('bun add react react-dom')
+      expect(result.category).toBe('dependency_install')
+      expect(result.metadata.tool).toBe('bun')
+      expect(result.metadata.packages).toEqual(['react', 'react-dom'])
+    })
+
+    it('classifies bun install', () => {
+      expect(category('bun install')).toBe('dependency_install')
+    })
+
     it('classifies pip install', () => {
       const result = normalize('pip install requests flask')
       expect(result.category).toBe('dependency_install')
@@ -140,6 +151,13 @@ describe('normalizeCommand', () => {
       expect(category('yarn remove express')).toBe('dependency_remove')
     })
 
+    it('classifies bun remove', () => {
+      const result = normalize('bun remove lodash')
+      expect(result.category).toBe('dependency_remove')
+      expect(result.metadata.tool).toBe('bun')
+      expect(result.metadata.packages).toEqual(['lodash'])
+    })
+
     it('classifies pip uninstall', () => {
       expect(category('pip uninstall requests')).toBe('dependency_remove')
     })
@@ -152,7 +170,21 @@ describe('normalizeCommand', () => {
     })
 
     it('classifies yarn test', () => {
-      expect(category('yarn test')).toBe('test_run')
+      const result = normalize('yarn test')
+      expect(result.category).toBe('test_run')
+      expect(result.metadata.tool).toBe('yarn')
+    })
+
+    it('classifies pnpm test', () => {
+      const result = normalize('pnpm test')
+      expect(result.category).toBe('test_run')
+      expect(result.metadata.tool).toBe('pnpm')
+    })
+
+    it('classifies bun test', () => {
+      const result = normalize('bun test')
+      expect(result.category).toBe('test_run')
+      expect(result.metadata.tool).toBe('bun')
     })
 
     it('classifies jest', () => {
@@ -193,6 +225,16 @@ describe('normalizeCommand', () => {
       expect(category('yarn build')).toBe('build')
     })
 
+    it('classifies pnpm build', () => {
+      expect(category('pnpm build')).toBe('build')
+    })
+
+    it('classifies bun run build', () => {
+      const result = normalize('bun run build')
+      expect(result.category).toBe('build')
+      expect(result.metadata.tool).toBe('bun')
+    })
+
     it('classifies make', () => {
       expect(category('make')).toBe('build')
       expect(category('make install')).toBe('build')
@@ -224,6 +266,21 @@ describe('normalizeCommand', () => {
 
     it('classifies yarn dev', () => {
       expect(category('yarn dev')).toBe('server_run')
+    })
+
+    it('classifies pnpm dev', () => {
+      expect(category('pnpm dev')).toBe('server_run')
+    })
+
+    it('classifies bun run dev', () => {
+      const result = normalize('bun run dev')
+      expect(result.category).toBe('server_run')
+      expect(result.metadata.tool).toBe('bun')
+      expect(result.metadata.script).toBe('dev')
+    })
+
+    it('classifies bun run start', () => {
+      expect(category('bun run start')).toBe('server_run')
     })
 
     it('classifies Django runserver', () => {
@@ -299,6 +356,13 @@ describe('normalizeCommand', () => {
 
     it('classifies npm run format', () => {
       expect(category('npm run format')).toBe('script_run')
+    })
+
+    it('classifies bun run lint', () => {
+      const result = normalize('bun run lint')
+      expect(result.category).toBe('script_run')
+      expect(result.metadata.tool).toBe('bun')
+      expect(result.metadata.script).toBe('lint')
     })
   })
 
