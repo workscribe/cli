@@ -366,6 +366,85 @@ describe('normalizeCommand', () => {
     })
   })
 
+  describe('code_search', () => {
+    it('classifies grep', () => {
+      const result = normalize('grep -r "something" src/')
+      expect(result.category).toBe('code_search')
+      expect(result.metadata.tool).toBe('grep')
+    })
+
+    it('classifies grep variants', () => {
+      expect(category('egrep "pattern" file.txt')).toBe('code_search')
+      expect(category('fgrep "string" file.txt')).toBe('code_search')
+    })
+
+    it('classifies rg', () => {
+      const result = normalize('rg "TODO" src/')
+      expect(result.category).toBe('code_search')
+      expect(result.metadata.tool).toBe('rg')
+    })
+
+    it('classifies ag', () => {
+      expect(category('ag "pattern"')).toBe('code_search')
+    })
+
+    it('classifies find', () => {
+      const result = normalize('find . -name "*.ts"')
+      expect(result.category).toBe('code_search')
+      expect(result.metadata.tool).toBe('find')
+    })
+  })
+
+  describe('code_read', () => {
+    it('classifies cat', () => {
+      const result = normalize('cat src/index.ts')
+      expect(result.category).toBe('code_read')
+      expect(result.metadata.tool).toBe('cat')
+    })
+
+    it('classifies head and tail', () => {
+      expect(category('head -n 20 README.md')).toBe('code_read')
+      expect(category('tail -f app.log')).toBe('code_read')
+    })
+
+    it('classifies less and more', () => {
+      expect(category('less package.json')).toBe('code_read')
+      expect(category('more README.md')).toBe('code_read')
+    })
+
+    it('classifies bat', () => {
+      expect(category('bat src/index.ts')).toBe('code_read')
+    })
+  })
+
+  describe('file_ops', () => {
+    it('classifies cp', () => {
+      const result = normalize('cp src/foo.ts src/bar.ts')
+      expect(result.category).toBe('file_ops')
+      expect(result.metadata.tool).toBe('cp')
+    })
+
+    it('classifies mv', () => {
+      expect(category('mv old-name.ts new-name.ts')).toBe('file_ops')
+    })
+
+    it('classifies rm', () => {
+      expect(category('rm -rf dist/')).toBe('file_ops')
+    })
+
+    it('classifies mkdir', () => {
+      expect(category('mkdir -p src/components')).toBe('file_ops')
+    })
+
+    it('classifies touch', () => {
+      expect(category('touch .env.local')).toBe('file_ops')
+    })
+
+    it('classifies chmod', () => {
+      expect(category('chmod +x scripts/deploy.sh')).toBe('file_ops')
+    })
+  })
+
   describe('environment', () => {
     it('classifies export', () => {
       const result = normalize('export NODE_ENV=production')

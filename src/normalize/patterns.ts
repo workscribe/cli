@@ -213,6 +213,22 @@ export const RULES: Rule[] = [
     script: cmd.split(/\s+/)[2],
   })),
 
+  // ─── Code search ─────────────────────────────────────────────────────────
+  makeRule(/^(grep|egrep|fgrep)\b/, 'code_search', (m) => ({ tool: m[1] })),
+  makeRule(/^(rg|ag|ack|ripgrep)\b/, 'code_search', (m) => ({ tool: m[1] })),
+  makeRule(/^find\s/, 'code_search', () => ({ tool: 'find' })),
+
+  // ─── Code read ────────────────────────────────────────────────────────────
+  makeRule(/^(cat|bat|less|more)\s+\S+/, 'code_read', (m) => ({ tool: m[1] })),
+  makeRule(/^(head|tail)\b/, 'code_read', (m) => ({ tool: m[1] })),
+
+  // ─── File operations ──────────────────────────────────────────────────────
+  makeRule(/^(cp|rsync)\b/, 'file_ops', (m) => ({ tool: m[1] })),
+  makeRule(/^(mv)\b/, 'file_ops', () => ({ tool: 'mv' })),
+  makeRule(/^(rm|rmdir)\b/, 'file_ops', (m) => ({ tool: m[1] })),
+  makeRule(/^(mkdir|touch|ln)\b/, 'file_ops', (m) => ({ tool: m[1] })),
+  makeRule(/^(chmod|chown|chgrp)\b/, 'file_ops', (m) => ({ tool: m[1] })),
+
   // ─── AI terminal tools (registry-driven) ─────────────────────────────────
   ...AI_TOOLS.map((entry) =>
     makeRule(new RegExp(entry.pattern), 'ai_session', () => ({ tool: entry.tool }))
