@@ -177,6 +177,14 @@ export function deleteEventsByIds(ids: number[]): void {
   }
 }
 
+export function deleteEventsForDate(date: string): number {
+  const db = getDb()
+  // Clear sessions (and session_events) before deleting events — FK constraint order
+  clearSessionsForDate(date)
+  const result = db.prepare(`DELETE FROM events WHERE date(captured_at, 'localtime') = $date`).run({ date }) as { changes: number }
+  return result.changes
+}
+
 export function clearSessionsForDate(date: string): void {
   const db = getDb()
   // Remove session_events first due to FK constraint

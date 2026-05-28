@@ -12,6 +12,7 @@ import { registerExport } from './cli/export'
 import { registerConfig } from './cli/config'
 import { registerPause } from './cli/pause'
 import { registerUndo } from './cli/undo'
+import { registerClear } from './cli/clear'
 
 const program = new Command()
 
@@ -31,5 +32,6 @@ registerExport(program)
 registerConfig(program)
 registerPause(program)
 registerUndo(program)
+registerClear(program)
 
 program.parse()
