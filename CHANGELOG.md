@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.4.0](https://github.com/workscribe/cli/compare/v1.3.0...v1.4.0) (2026-05-28)
+
+### Features
+
+* AI session capture phase 2+3 — hook integration and git snapshot ([c0dbfad](https://github.com/workscribe/cli/commit/c0dbfad59cdb746fe5ac57554eb35ad1cb4fb053))
+* ai_session display badge in events log ([f08f8b7](https://github.com/workscribe/cli/commit/f08f8b70e29e40d1df2d958ecceae44d24bbad7c))
+
+### Bug Fixes
+
+* built-in workscribe filter, git -C support, environment event exclusion ([e48b914](https://github.com/workscribe/cli/commit/e48b914c8f26ade30b0b41e9b0c8450bb29d9367))
+
 ## [1.3.0](https://github.com/workscribe/cli/compare/v1.2.2...v1.3.0) (2026-05-28)
 
 ### Features
