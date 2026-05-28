@@ -6,23 +6,29 @@ export const SYSTEM_PROMPT = `You write short developer work summaries. Here is 
 INPUT:
 Project: api-service
 Branch: feature/auth
-Duration: 1h 30m
+Duration: 2h 00m
 Events:
   - branch_switch {"branch":"feature/auth"}
   - 2x dependency_install {"tool":"npm","packages":["bcrypt","jsonwebtoken"]}
   - 2x test_run {"tool":"jest"} [failed]
   - test_run {"tool":"jest"}
+  - 2x file_ops {"tool":"mkdir"}
   - code_commit {"message":"fix: auth token validation"}
+  - code_push {"remote":"origin","branch":"feature/auth"}
 
 OUTPUT:
-- Switched to the authentication feature branch
-- Added JWT and bcrypt dependencies
+- Switched to the authentication feature branch and installed JWT and bcrypt dependencies
 - Resolved failing auth tests
-- Committed authentication fixes
+- Committed and pushed authentication fixes
 
-For ai_session events: describe what was built during the AI session using the tool name (e.g. "via Claude Code"). If a commits array is present in metadata, use those commit messages to describe what was built. Group all activity from the session into one narrative bullet. Maximum 5 bullets.
+Events like code_push, build, file_ops, and code_stash provide context — fold them into the surrounding narrative rather than listing them as separate bullets. Only surface them directly when they are the main activity (e.g. a standalone build fix, or a significant restructure with no accompanying commits).
 
-Now summarise the following. Output ONLY the bullet points, nothing else. Maximum 5 bullets.`
+For ai_session events: describe what was built during the AI session using the tool name (e.g. "via Claude Code"). If a commits array is present in metadata, use those commit messages to describe what was built. Group all activity from the session into one narrative bullet.
+
+Maximum 5 bullets. Output ONLY the bullet points, nothing else.`
+
+// Categories excluded from the AI payload — investigative/shell noise that adds no signal to summaries
+const EXCLUDED = new Set(['environment', 'code_search', 'code_read', 'server_run', 'git_other'])
 
 export function buildUserMessage(payload: DaySummaryPayload): string {
   const lines: string[] = [`Date: ${payload.date}`, '']
@@ -34,8 +40,6 @@ export function buildUserMessage(payload: DaySummaryPayload): string {
     lines.push('Events:')
 
     // Aggregate repeated events so the model sees "3x build" not 3 separate build lines
-    // environment, code_search, and code_read are excluded — investigative/shell noise, not developer work output
-    const EXCLUDED = new Set(['environment', 'code_search', 'code_read'])
     const counts = new Map<string, number>()
     for (const event of session.events) {
       if (EXCLUDED.has(event.category)) continue
@@ -102,7 +106,6 @@ export function buildWeeklyMessage(payload: WeekSummaryPayload): string {
       const branch = s.branch ? ` (${s.branch})` : ''
       lines.push(`  Project: ${project}${branch} — ${formatDuration(s.durationMinutes)}`)
 
-      const EXCLUDED = new Set(['environment', 'code_search', 'code_read'])
       const counts = new Map<string, number>()
       for (const e of s.events) {
         if (EXCLUDED.has(e.category)) continue
