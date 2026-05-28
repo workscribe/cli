@@ -458,6 +458,44 @@ describe('normalizeCommand', () => {
     })
   })
 
+  describe('npx commands', () => {
+    it('classifies npx vitest as test_run', () => {
+      const result = normalize('npx vitest run tests/foo.test.ts')
+      expect(result.category).toBe('test_run')
+      expect(result.metadata.tool).toBe('vitest')
+    })
+
+    it('classifies npx jest as test_run', () => {
+      expect(category('npx jest --watch')).toBe('test_run')
+    })
+
+    it('classifies npx tsc as build', () => {
+      expect(category('npx tsc --noEmit')).toBe('build')
+    })
+
+    it('classifies npx eslint as lint_run', () => {
+      const result = normalize('npx eslint src tests')
+      expect(result.category).toBe('lint_run')
+      expect(result.metadata.tool).toBe('eslint')
+    })
+
+    it('classifies npx prettier as lint_run', () => {
+      const result = normalize('npx prettier --write src')
+      expect(result.category).toBe('lint_run')
+      expect(result.metadata.tool).toBe('prettier')
+    })
+
+    it('classifies generic npx as script_run', () => {
+      const result = normalize('npx husky init')
+      expect(result.category).toBe('script_run')
+      expect(result.metadata.tool).toBe('husky')
+    })
+
+    it('classifies npx create-* as script_run', () => {
+      expect(category('npx create-react-app my-app')).toBe('script_run')
+    })
+  })
+
   describe('unknown commands', () => {
     it('returns other for unknown commands', () => {
       expect(category('mkcert localhost')).toBe('other')

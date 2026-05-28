@@ -22,6 +22,7 @@ const CATEGORY_COLORS: Record<string, (s: string) => string> = {
   code_merge: chalk.green,
   code_stash: chalk.blue,
   ai_session: chalk.bold.magenta,
+  lint_run: chalk.yellow,
   code_search: chalk.dim.cyan,
   code_read: chalk.dim.white,
   file_ops: chalk.yellow,

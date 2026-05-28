@@ -190,6 +190,21 @@ export const RULES: Rule[] = [
     return { tool: m[1], subcommand: parts[1] ?? null }
   }),
 
+  // ─── npx ─────────────────────────────────────────────────────────────────
+  makeRule(/^npx\s+(jest|vitest|mocha|ava|tap)\b/, 'test_run', (_m, cmd) => ({
+    tool: cmd.split(/\s+/)[1],
+  })),
+  makeRule(/^npx\s+tsc\b/, 'build', () => ({ tool: 'tsc' })),
+  makeRule(/^npx\s+(eslint|tslint|biome)\b/, 'lint_run', (_m, cmd) => ({
+    tool: cmd.split(/\s+/)[1],
+  })),
+  makeRule(/^npx\s+(prettier|dprint)\b/, 'lint_run', (_m, cmd) => ({
+    tool: cmd.split(/\s+/)[1],
+  })),
+  makeRule(/^npx\s+\S+/, 'script_run', (_m, cmd) => ({
+    tool: cmd.split(/\s+/)[1],
+  })),
+
   // ─── Scripts ──────────────────────────────────────────────────────────────
   makeRule(/^(bash|sh|zsh|fish)\s+\S+/, 'script_run', (m) => ({ shell: m[1] })),
   makeRule(/^node\s+\S+\.(?:js|mjs|cjs)\b/, 'script_run', () => ({ runtime: 'node' })),
