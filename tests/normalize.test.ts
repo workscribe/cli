@@ -329,6 +329,74 @@ describe('normalizeCommand', () => {
     })
   })
 
+  describe('ai_session', () => {
+    it('classifies claude as ai_session', () => {
+      const result = normalize('claude')
+      expect(result.category).toBe('ai_session')
+      expect(result.metadata.tool).toBe('claude')
+    })
+
+    it('classifies claude with args as ai_session', () => {
+      expect(category('claude --continue')).toBe('ai_session')
+    })
+
+    it('classifies aider as ai_session', () => {
+      const result = normalize('aider')
+      expect(result.category).toBe('ai_session')
+      expect(result.metadata.tool).toBe('aider')
+    })
+
+    it('classifies aider with flags as ai_session', () => {
+      expect(category('aider --model gpt-4')).toBe('ai_session')
+    })
+
+    it('classifies gemini as ai_session', () => {
+      const result = normalize('gemini')
+      expect(result.category).toBe('ai_session')
+      expect(result.metadata.tool).toBe('gemini')
+    })
+
+    it('classifies gh copilot as ai_session', () => {
+      const result = normalize('gh copilot suggest "write a test"')
+      expect(result.category).toBe('ai_session')
+      expect(result.metadata.tool).toBe('gh copilot')
+    })
+
+    it('classifies cody as ai_session', () => {
+      const result = normalize('cody chat')
+      expect(result.category).toBe('ai_session')
+      expect(result.metadata.tool).toBe('cody')
+    })
+
+    it('classifies amazon-q chat as ai_session', () => {
+      const result = normalize('q chat')
+      expect(result.category).toBe('ai_session')
+      expect(result.metadata.tool).toBe('amazon-q')
+    })
+
+    it('classifies amazon-q dev as ai_session', () => {
+      const result = normalize('q dev')
+      expect(result.category).toBe('ai_session')
+      expect(result.metadata.tool).toBe('amazon-q')
+    })
+
+    it('classifies continue as ai_session', () => {
+      const result = normalize('continue')
+      expect(result.category).toBe('ai_session')
+      expect(result.metadata.tool).toBe('continue')
+    })
+
+    it('classifies cursor as ai_session', () => {
+      const result = normalize('cursor .')
+      expect(result.category).toBe('ai_session')
+      expect(result.metadata.tool).toBe('cursor')
+    })
+
+    it('does not classify bare q as ai_session', () => {
+      expect(category('q something')).toBe('other')
+    })
+  })
+
   describe('whitespace handling', () => {
     it('handles extra leading/trailing whitespace', () => {
       expect(category('  git commit -m "fix"  ')).toBe('code_commit')

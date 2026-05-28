@@ -1,0 +1,50 @@
+[
+  {
+    "tool": "claude",
+    "pattern": "^claude\\b",
+    "hook": "claude-code",
+    "contextSource": "hook"
+  },
+  {
+    "tool": "aider",
+    "pattern": "^aider\\b",
+    "hook": null,
+    "contextSource": "history-file"
+  },
+  {
+    "tool": "gemini",
+    "pattern": "^gemini\\b",
+    "hook": null,
+    "contextSource": null
+  },
+  {
+    "tool": "gh copilot",
+    "pattern": "^gh\\s+copilot\\b",
+    "hook": null,
+    "contextSource": null
+  },
+  {
+    "tool": "cody",
+    "pattern": "^cody\\b",
+    "hook": null,
+    "contextSource": null
+  },
+  {
+    "tool": "amazon-q",
+    "pattern": "^q\\s+(chat|dev)\\b",
+    "hook": null,
+    "contextSource": null
+  },
+  {
+    "tool": "continue",
+    "pattern": "^continue\\b",
+    "hook": null,
+    "contextSource": null
+  },
+  {
+    "tool": "cursor",
+    "pattern": "^cursor\\b",
+    "hook": null,
+    "contextSource": null
+  }
+]

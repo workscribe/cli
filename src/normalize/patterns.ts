@@ -1,3 +1,5 @@
+import AI_TOOLS from '../capture/ai-tools.json'
+
 export interface NormalizedEvent {
   category: string
   metadata: Record<string, unknown>
@@ -187,6 +189,11 @@ export const RULES: Rule[] = [
     tool: 'npm',
     script: cmd.split(/\s+/)[2],
   })),
+
+  // ─── AI terminal tools (registry-driven) ─────────────────────────────────
+  ...AI_TOOLS.map((entry) =>
+    makeRule(new RegExp(entry.pattern), 'ai_session', () => ({ tool: entry.tool }))
+  ),
 ]
 
 export function normalizeCommand(command: string): NormalizedEvent {

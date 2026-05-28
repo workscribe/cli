@@ -20,6 +20,7 @@ const CATEGORY_COLORS: Record<string, (s: string) => string> = {
   git_other: chalk.blue,
   code_merge: chalk.green,
   code_stash: chalk.blue,
+  ai_session: chalk.magenta,
   other: chalk.gray,
 }
 
