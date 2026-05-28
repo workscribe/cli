@@ -3,6 +3,7 @@ import chalk from 'chalk'
 import { getEventsForDate } from '../db'
 import { log } from '../utils/logger'
 import { todayDate, parseDate, formatDate } from '../utils/format'
+import AI_TOOLS from '../capture/ai-tools.json'
 
 const CATEGORY_COLORS: Record<string, (s: string) => string> = {
   code_commit: chalk.green,
@@ -20,9 +21,13 @@ const CATEGORY_COLORS: Record<string, (s: string) => string> = {
   git_other: chalk.blue,
   code_merge: chalk.green,
   code_stash: chalk.blue,
-  ai_session: chalk.magenta,
+  ai_session: chalk.bold.magenta,
   other: chalk.gray,
 }
+
+const AI_TOOL_DISPLAY_NAMES: Record<string, string> = Object.fromEntries(
+  AI_TOOLS.map((t) => [t.tool, t.displayName])
+)
 
 export function registerEvents(program: Command): void {
   program
@@ -57,10 +62,21 @@ export function registerEvents(program: Command): void {
         const colorFn = CATEGORY_COLORS[event.category] ?? chalk.gray
         const time = formatDate(event.captured_at)
         const category = colorFn(event.category.padEnd(20))
-        const cmd = chalk.dim(event.command.slice(0, 55))
         const repo = event.repo_name ? chalk.dim(` [${event.repo_name}]`) : ''
         const exitBadge = event.exit_code && event.exit_code !== 0 ? chalk.red(` ✗${event.exit_code}`) : ''
-        log.plain(`  ${chalk.dim(time)}  ${category}  ${cmd}${repo}${exitBadge}`)
+
+        let cmdDisplay: string
+        if (event.category === 'ai_session') {
+          let meta: Record<string, unknown> = {}
+          try { meta = event.metadata ? (JSON.parse(event.metadata) as Record<string, unknown>) : {} } catch { /* ignore */ }
+          const toolKey = typeof meta.tool === 'string' ? meta.tool : ''
+          const toolName = AI_TOOL_DISPLAY_NAMES[toolKey] ?? toolKey
+          cmdDisplay = chalk.white(toolName.padEnd(20)) + chalk.magenta(' ✦')
+        } else {
+          cmdDisplay = chalk.dim(event.command.slice(0, 55))
+        }
+
+        log.plain(`  ${chalk.dim(time)}  ${category}  ${cmdDisplay}${repo}${exitBadge}`)
       }
 
       if (limit < events.length) {
