@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.6.0](https://github.com/workscribe/cli/compare/v1.5.0...v1.6.0) (2026-05-28)
+
+### Features
+
+* classify npx commands and add lint_run category ([3e28886](https://github.com/workscribe/cli/commit/3e2888602fc0f245ff215bdb0457cf50adc1c102))
+* complete Slack integration ([9933f52](https://github.com/workscribe/cli/commit/9933f52360a1a145348636a14715d729f8891699))
+* dependency inference, JSON summary output, and new event categories ([025dc48](https://github.com/workscribe/cli/commit/025dc4866c1c9d48efdc372a9af71d128a8f6ef8))
+
 ## [1.5.0](https://github.com/workscribe/cli/compare/v1.4.0...v1.5.0) (2026-05-28)
 
 ### Features
