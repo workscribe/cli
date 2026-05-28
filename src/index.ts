@@ -1,5 +1,6 @@
 import { Command } from 'commander'
 import { registerCapture } from './cli/capture'
+import { registerHook } from './cli/hook'
 
 declare const __WORKSCRIBE_VERSION__: string
 import { registerInit } from './cli/init'
@@ -20,6 +21,7 @@ program
   .version(__WORKSCRIBE_VERSION__)
 
 registerCapture(program)
+registerHook(program)
 registerInit(program)
 registerStatus(program)
 registerEvents(program)

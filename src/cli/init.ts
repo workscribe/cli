@@ -8,9 +8,9 @@ import { WORKSCRIBE_DIR, CONFIG_PATH } from '../utils/paths'
 import { readConfig, writeConfig } from '../config'
 import { getDb } from '../db'
 import { log } from '../utils/logger'
-
-const HOOK_START = '# workscribe:hook:start'
-const HOOK_END = '# workscribe:hook:end'
+import AI_TOOLS from '../config/ai-tools.json'
+import { isHookInstalled, isHookOutdated, installHook, updateHook } from '../capture/shell-hook'
+import { AI_HOOK_INTEGRATIONS } from '../capture/hooks'
 
 function detectShell(): { name: string; rcFile: string } | null {
   const shell = process.env.SHELL ?? ''
@@ -19,25 +19,10 @@ function detectShell(): { name: string; rcFile: string } | null {
   return null
 }
 
-function isHookInstalled(rcFile: string): boolean {
-  if (!fs.existsSync(rcFile)) return false
-  return fs.readFileSync(rcFile, 'utf-8').includes(HOOK_START)
-}
-
-function installHook(rcFile: string, hookContent: string): void {
-  // Back up the rc file
-  const backup = `${rcFile}.workscribe-backup-${Date.now()}`
-  fs.copyFileSync(rcFile, backup)
-  log.info(`Backed up ${rcFile} → ${path.basename(backup)}`)
-
-  // Append hook
-  fs.appendFileSync(rcFile, `\n${hookContent}\n`)
-}
-
 export function registerInit(program: Command): void {
   program
     .command('init')
-    .description('Install shell hooks and set up Workscribe')
+    .description('Set up Workscribe and install or update shell hooks')
     .action(async () => {
       log.plain(chalk.bold('\n  Workscribe — Developer Work Journal\n'))
 
@@ -46,7 +31,6 @@ export function registerInit(program: Command): void {
         fs.mkdirSync(WORKSCRIBE_DIR, { recursive: true, mode: 0o700 })
         log.success(`Created ${WORKSCRIBE_DIR}`)
       } else {
-        // Secure the directory for existing installs
         try { fs.chmodSync(WORKSCRIBE_DIR, 0o700) } catch { /* ignore */ }
       }
 
@@ -54,29 +38,63 @@ export function registerInit(program: Command): void {
       getDb()
       log.success('Database initialized')
 
-      // 3. Detect shell
+      // 3. Detect shell and install or update hook
       const shell = detectShell()
       if (!shell) {
         log.warn('Could not detect shell. Supported: zsh, bash')
         log.plain(`Manually add the hook from: ${chalk.cyan('shell/hook.zsh')} or ${chalk.cyan('shell/hook.bash')}`)
       } else {
-        if (isHookInstalled(shell.rcFile)) {
-          log.info(`Shell hook already installed in ${shell.rcFile}`)
+        const hookFile = path.join(__dirname, '..', 'shell', `hook.${shell.name}`)
+        if (!fs.existsSync(hookFile)) {
+          log.warn(`Hook template not found at ${hookFile}`)
         } else {
-          // Load hook template from package
-          const hookFile = path.join(__dirname, '..', 'shell', `hook.${shell.name}`)
-          if (!fs.existsSync(hookFile)) {
-            log.warn(`Hook template not found at ${hookFile}`)
-          } else {
-            const hookContent = fs.readFileSync(hookFile, 'utf-8')
-            if (!fs.existsSync(shell.rcFile)) fs.writeFileSync(shell.rcFile, '')
+          const hookContent = fs.readFileSync(hookFile, 'utf-8')
+          if (!fs.existsSync(shell.rcFile)) fs.writeFileSync(shell.rcFile, '')
+
+          if (!isHookInstalled(shell.rcFile)) {
             installHook(shell.rcFile, hookContent)
             log.success(`Shell hook installed in ${shell.rcFile}`)
+          } else if (isHookOutdated(shell.rcFile, hookContent)) {
+            const { update } = await prompts({
+              type: 'confirm',
+              name: 'update',
+              message: `Shell hook in ${shell.rcFile} is outdated. Update?`,
+              initial: true,
+            })
+            if (update) {
+              updateHook(shell.rcFile, hookContent)
+              log.success(`Shell hook updated in ${shell.rcFile}`)
+            } else {
+              log.info('Shell hook update skipped')
+            }
+          } else {
+            log.info(`Shell hook up to date in ${shell.rcFile}`)
           }
         }
       }
 
-      // 4. AI provider setup
+      // 4. AI tool hook integrations (registry-driven — add new tools in src/capture/hooks/)
+      for (const tool of AI_TOOLS.filter((t) => t.hook !== null)) {
+        const integration = AI_HOOK_INTEGRATIONS[tool.hook!]
+        if (!integration?.isInstalled()) continue
+
+        if (integration.isHookInstalled()) {
+          log.info(`${integration.displayName} session hook already installed`)
+        } else {
+          const { install } = await prompts({
+            type: 'confirm',
+            name: 'install',
+            message: `${integration.displayName} detected. Install session capture hook?`,
+            initial: true,
+          })
+          if (install) {
+            integration.install()
+            log.success(`${integration.displayName} session hook installed`)
+          }
+        }
+      }
+
+      // 5. AI provider setup
       const config = readConfig()
 
       if (config.ai.provider) {
@@ -127,7 +145,7 @@ export function registerInit(program: Command): void {
         }
       }
 
-      // 5. Write config if not exists
+      // 6. Write config if not exists
       if (!fs.existsSync(CONFIG_PATH)) {
         writeConfig(config)
         log.success('Config file created')

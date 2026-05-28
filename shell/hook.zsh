@@ -4,6 +4,7 @@
 _workscribe_preexec() {
   _workscribe_cmd_start=$EPOCHREALTIME
   _workscribe_cmd="$1"
+  _workscribe_git_before=$(git rev-parse HEAD 2>/dev/null || echo "")
 }
 
 _workscribe_precmd() {
@@ -15,8 +16,10 @@ _workscribe_precmd() {
       --cwd "$PWD" \
       --exit "$exit_code" \
       --duration "$duration_ms" \
+      ${_workscribe_git_before:+--git-before "$_workscribe_git_before"} \
       2>/dev/null &!
     _workscribe_cmd=""
+    _workscribe_git_before=""
   fi
 }
 

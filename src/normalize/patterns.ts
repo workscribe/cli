@@ -1,4 +1,4 @@
-import AI_TOOLS from '../capture/ai-tools.json'
+import AI_TOOLS from '../config/ai-tools.json'
 
 export interface NormalizedEvent {
   category: string

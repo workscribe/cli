@@ -20,7 +20,7 @@ OUTPUT:
 - Resolved failing auth tests
 - Committed authentication fixes
 
-For ai_session events: describe what was built during the AI session using the tool name (e.g. "via Claude Code"). If commits followed the session, group them into the same bullet. Maximum 5 bullets.
+For ai_session events: describe what was built during the AI session using the tool name (e.g. "via Claude Code"). If a commits array is present in metadata, use those commit messages to describe what was built. Group all activity from the session into one narrative bullet. Maximum 5 bullets.
 
 Now summarise the following. Output ONLY the bullet points, nothing else. Maximum 5 bullets.`
 

@@ -11,6 +11,7 @@ export function registerCapture(program: Command): void {
     .option('--cwd <path>', 'working directory')
     .option('--exit <code>', 'exit code', parseInt)
     .option('--duration <ms>', 'duration in milliseconds', parseInt)
+    .option('--git-before <sha>', 'git HEAD SHA before this command ran')
     .action((opts) => {
       // Never surface errors to the terminal — this runs silently in the background
       try {
@@ -20,6 +21,7 @@ export function registerCapture(program: Command): void {
           cwd: opts.cwd,
           exitCode: opts.exit ?? null,
           durationMs: opts.duration ?? null,
+          gitBefore: opts.gitBefore ?? undefined,
         })
       } catch (err) {
         debugLog('_capture', err)

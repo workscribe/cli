@@ -3,7 +3,7 @@ import chalk from 'chalk'
 import { getEventsForDate } from '../db'
 import { log } from '../utils/logger'
 import { todayDate, parseDate, formatDate } from '../utils/format'
-import AI_TOOLS from '../capture/ai-tools.json'
+import AI_TOOLS from '../config/ai-tools.json'
 
 const CATEGORY_COLORS: Record<string, (s: string) => string> = {
   code_commit: chalk.green,
