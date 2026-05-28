@@ -1,6 +1,7 @@
 import { Command } from 'commander'
 import chalk from 'chalk'
 import fs from 'fs'
+import os from 'os'
 import path from 'path'
 import { getOrBuildSessions } from '../sessions/detector'
 import { getProvider } from '../ai/router'
@@ -75,7 +76,8 @@ async function handleWebhook(
     try {
       log.info('Posting to webhook…')
       const body = isSlackWebhookUrl(webhookUrl) ? formatForSlack(summary) : summary
-      await postToWebhook(webhookUrl, body)
+      const username = isSlackWebhookUrl(webhookUrl) ? `workscribe (${os.userInfo().username})` : undefined
+      await postToWebhook(webhookUrl, body, username)
       log.success('Posted.')
     } catch (e) {
       log.error(`Webhook failed: ${(e as Error).message}`)
