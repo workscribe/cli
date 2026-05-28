@@ -43,7 +43,7 @@ workscribe init
 source ~/.zshrc   # or restart your terminal
 ```
 
-`workscribe init` walks you through choosing an AI provider and installs the shell hook. From that point, capture is automatic.
+`workscribe init` walks you through choosing an AI provider, installs the shell hook, and offers to install a Claude Code session capture hook if Claude Code is detected. Safe to re-run — updates outdated hooks and skips steps already complete.
 
 ## AI providers
 
@@ -76,6 +76,9 @@ workscribe config set ai.apiKey <your-key>
 | `workscribe undo` | Remove the last captured event |
 | `workscribe undo -n 5` | Remove the last 5 captured events |
 | `workscribe undo --dry-run` | Preview what would be removed without deleting |
+| `workscribe clear` | Delete all captured events for today |
+| `workscribe clear --date 2026-05-20` | Delete all events for a specific date |
+| `workscribe clear --dry-run` | Preview what would be cleared without deleting |
 | `workscribe pause` | Pause capture temporarily |
 | `workscribe resume` | Resume capture after a pause |
 | `workscribe config` | View current configuration |
