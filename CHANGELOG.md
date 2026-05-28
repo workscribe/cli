@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.3.0](https://github.com/workscribe/cli/compare/v1.2.2...v1.3.0) (2026-05-28)
+
+### Features
+
+* AI session capture phase 1 — registry-driven normalize rules ([dfbf0a1](https://github.com/workscribe/cli/commit/dfbf0a1e241893cd917167daec0b461b6f0baf51))
+
 ## [1.2.2](https://github.com/workscribe/cli/compare/v1.2.1...v1.2.2) (2026-05-27)
 
 ## [1.2.1](https://github.com/workscribe/cli/compare/v1.2.0...v1.2.1) (2026-05-27)
