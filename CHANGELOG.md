@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.6.1](https://github.com/workscribe/cli/compare/v1.6.0...v1.6.1) (2026-05-28)
+
+### Features
+
+* include OS username in Slack webhook sender name ([2605978](https://github.com/workscribe/cli/commit/2605978a36e6728a68e19caccbfefaa4a0bd5c7a))
+
+### Bug Fixes
+
+* embed OS username in Slack message body ([8184c3a](https://github.com/workscribe/cli/commit/8184c3aa493f58ef76e6e1406cb115605c0ac23f))
+
 ## [1.6.0](https://github.com/workscribe/cli/compare/v1.5.0...v1.6.0) (2026-05-28)
 
 ### Features
