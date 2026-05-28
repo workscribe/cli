@@ -37,6 +37,17 @@ describe('formatForSlack', () => {
     expect(result).toContain('• Work B')
   })
 
+  it('prepends username as italic line when provided', () => {
+    const result = formatForSlack('## api-service — 1h\n- Did work', 'mark')
+    expect(result).toBe('_mark_\n*api-service — 1h*\n• Did work')
+  })
+
+  it('omits username line when not provided', () => {
+    const result = formatForSlack('## api-service — 1h\n- Did work')
+    expect(result).not.toContain('_')
+    expect(result).toBe('*api-service — 1h*\n• Did work')
+  })
+
   it('leaves plain text lines unchanged', () => {
     expect(formatForSlack('No activity captured for today')).toBe('No activity captured for today')
   })

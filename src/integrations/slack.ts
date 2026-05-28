@@ -5,10 +5,12 @@
  *   ## heading  →  *heading*  (bold)
  *   - bullet    →  • bullet
  *
- * All other content is passed through unchanged.
+ * An optional username is prepended as a dim header line so recipients
+ * can tell who sent the summary in shared channels.
  */
-export function formatForSlack(markdown: string): string {
-  return markdown.replace(/^## (.+)$/gm, '*$1*').replace(/^- /gm, '• ')
+export function formatForSlack(markdown: string, username?: string): string {
+  const body = markdown.replace(/^## (.+)$/gm, '*$1*').replace(/^- /gm, '• ')
+  return username ? `_${username}_\n${body}` : body
 }
 
 export function isSlackWebhookUrl(url: string): boolean {

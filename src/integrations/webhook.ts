@@ -1,15 +1,12 @@
 import { fetchWithTimeout } from '../ai/fetch'
 
-export async function postToWebhook(url: string, text: string, username?: string): Promise<void> {
-  const payload: Record<string, string> = { text }
-  if (username) payload.username = username
-
+export async function postToWebhook(url: string, text: string): Promise<void> {
   const response = await fetchWithTimeout(
     url,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ text }),
     },
     10_000
   )

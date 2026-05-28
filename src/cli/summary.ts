@@ -75,9 +75,9 @@ async function handleWebhook(
   if (webhookUrl) {
     try {
       log.info('Posting to webhook…')
-      const body = isSlackWebhookUrl(webhookUrl) ? formatForSlack(summary) : summary
-      const username = isSlackWebhookUrl(webhookUrl) ? `workscribe (${os.userInfo().username})` : undefined
-      await postToWebhook(webhookUrl, body, username)
+      const username = os.userInfo().username
+      const body = isSlackWebhookUrl(webhookUrl) ? formatForSlack(summary, username) : summary
+      await postToWebhook(webhookUrl, body)
       log.success('Posted.')
     } catch (e) {
       log.error(`Webhook failed: ${(e as Error).message}`)
