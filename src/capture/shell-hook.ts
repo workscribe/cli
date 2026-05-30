@@ -40,3 +40,16 @@ export function updateHook(rcFile: string, hookContent: string): void {
   const endIdx = content.indexOf(HOOK_END) + HOOK_END.length
   fs.writeFileSync(rcFile, content.slice(0, startIdx) + hookContent + content.slice(endIdx))
 }
+
+export function removeHook(rcFile: string): void {
+  const backup = `${rcFile}.workscribe-backup-${Date.now()}`
+  fs.copyFileSync(rcFile, backup)
+  log.info(`Backed up ${rcFile} → ${path.basename(backup)}`)
+  const content = fs.readFileSync(rcFile, 'utf-8')
+  const startIdx = content.indexOf(HOOK_START)
+  const endIdx = content.indexOf(HOOK_END) + HOOK_END.length
+  // Strip the block plus any blank line that preceded it
+  const before = content.slice(0, startIdx).replace(/\n+$/, '\n')
+  const after = content.slice(endIdx).replace(/^\n/, '')
+  fs.writeFileSync(rcFile, before + after)
+}

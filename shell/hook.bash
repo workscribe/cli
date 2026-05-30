@@ -11,6 +11,7 @@ _workscribe_preexec() {
 
 _workscribe_precmd() {
   local exit_code=$?
+  command -v workscribe &>/dev/null || return 0
   if [[ -n "$_workscribe_last_cmd" ]]; then
     local now
     now=$(date +%s%3N 2>/dev/null || echo 0)

@@ -8,10 +8,10 @@ export default defineConfig({
   },
   entry: { index: 'src/index.ts' },
   format: ['cjs'],
-  target: 'node22',
+  target: 'node20',
   clean: true,
   sourcemap: true,
-  external: ['node:sqlite'],
+  external: ['node:sqlite', 'better-sqlite3'],
   banner: {
     js: '#!/usr/bin/env node',
   },

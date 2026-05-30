@@ -1,12 +1,12 @@
-import { DatabaseSync } from 'node:sqlite'
 import fs from 'fs'
 import { WORKSCRIBE_DIR, DB_PATH } from '../utils/paths'
 import type { EventRow, SessionRow } from './types'
+import { openDatabase, type DbAdapter } from './adapter'
 export type { EventRow, SessionRow } from './types'
 
-let _db: DatabaseSync | null = null
+let _db: DbAdapter | null = null
 
-export function getDb(): DatabaseSync {
+export function getDb(): DbAdapter {
   if (_db) return _db
 
   // Ensure ~/.workscribe/ exists
@@ -14,7 +14,7 @@ export function getDb(): DatabaseSync {
     fs.mkdirSync(WORKSCRIBE_DIR, { recursive: true })
   }
 
-  _db = new DatabaseSync(DB_PATH)
+  _db = openDatabase(DB_PATH)
   // Restrict DB file to owner-only after creation
   try {
     fs.chmodSync(DB_PATH, 0o600)
@@ -27,7 +27,7 @@ export function getDb(): DatabaseSync {
   return _db
 }
 
-function runMigrations(db: DatabaseSync): void {
+function runMigrations(db: DbAdapter): void {
   db.exec(`
     CREATE TABLE IF NOT EXISTS events (
       id          INTEGER PRIMARY KEY AUTOINCREMENT,
