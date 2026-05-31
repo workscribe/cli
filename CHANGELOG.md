@@ -1,5 +1,7 @@
 # Changelog
 
+## [1.6.2](https://github.com/workscribe/cli/compare/v1.6.1...v1.6.2) (2026-05-31)
+
 ## [1.6.1](https://github.com/workscribe/cli/compare/v1.6.0...v1.6.1) (2026-05-28)
 
 ### Features
