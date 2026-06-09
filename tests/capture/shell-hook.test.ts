@@ -21,6 +21,7 @@ import {
   isHookOutdated,
   installHook,
   updateHook,
+  removeHook,
 } from '../../src/capture/shell-hook'
 
 const mockFs = fs as unknown as Record<string, ReturnType<typeof vi.fn>>
@@ -157,5 +158,59 @@ describe('updateHook', () => {
     const written = mockFs.writeFileSync.mock.calls[0][1] as string
     const count = (written.match(/workscribe:hook:start/g) ?? []).length
     expect(count).toBe(1)
+  })
+})
+
+describe('removeHook', () => {
+  it('backs up the rc file before removing', () => {
+    const rc = `before\n${HOOK_BLOCK}\nafter`
+    mockFs.readFileSync.mockReturnValue(rc)
+    removeHook('/home/user/.zshrc')
+    expect(mockFs.copyFileSync).toHaveBeenCalledWith(
+      '/home/user/.zshrc',
+      expect.stringContaining('.zshrc.workscribe-backup-')
+    )
+  })
+
+  it('removes the hook block entirely', () => {
+    const rc = `before\n${HOOK_BLOCK}\nafter`
+    mockFs.readFileSync.mockReturnValue(rc)
+    removeHook('/home/user/.zshrc')
+    const written = mockFs.writeFileSync.mock.calls[0][1] as string
+    expect(written).not.toContain('workscribe:hook:start')
+    expect(written).not.toContain('workscribe:hook:end')
+  })
+
+  it('preserves content before and after the hook block', () => {
+    const rc = `before\n${HOOK_BLOCK}\nafter`
+    mockFs.readFileSync.mockReturnValue(rc)
+    removeHook('/home/user/.zshrc')
+    const written = mockFs.writeFileSync.mock.calls[0][1] as string
+    expect(written).toContain('before')
+    expect(written).toContain('after')
+  })
+
+  it('does not leave extra blank lines where the hook was', () => {
+    const rc = `line one\n\n${HOOK_BLOCK}\nline two`
+    mockFs.readFileSync.mockReturnValue(rc)
+    removeHook('/home/user/.zshrc')
+    const written = mockFs.writeFileSync.mock.calls[0][1] as string
+    expect(written).not.toMatch(/\n{3,}/)
+  })
+
+  it('also removes the preamble comment lines written by installHook', () => {
+    const withPreamble =
+      `# existing config\n` +
+      `# Workscribe — developer work journal\n` +
+      `# Do not edit this block manually. Managed by \`workscribe init\`.\n` +
+      `${HOOK_BLOCK}\n` +
+      `# after`
+    mockFs.readFileSync.mockReturnValue(withPreamble)
+    removeHook('/home/user/.zshrc')
+    const written = mockFs.writeFileSync.mock.calls[0][1] as string
+    expect(written).not.toContain('Workscribe — developer work journal')
+    expect(written).not.toContain('Do not edit this block manually')
+    expect(written).toContain('# existing config')
+    expect(written).toContain('# after')
   })
 })

@@ -4,6 +4,7 @@ import { log } from '../utils/logger'
 
 const HOOK_START = '# workscribe:hook:start'
 const HOOK_END = '# workscribe:hook:end'
+const HOOK_PREAMBLE = '# Workscribe — developer work journal'
 
 export function getInstalledHookBlock(rcFile: string): string | null {
   if (!fs.existsSync(rcFile)) return null
@@ -48,8 +49,10 @@ export function removeHook(rcFile: string): void {
   const content = fs.readFileSync(rcFile, 'utf-8')
   const startIdx = content.indexOf(HOOK_START)
   const endIdx = content.indexOf(HOOK_END) + HOOK_END.length
-  // Strip the block plus any blank line that preceded it
-  const before = content.slice(0, startIdx).replace(/\n+$/, '\n')
+  // Also remove the preamble comment lines that installHook writes before HOOK_START
+  const preambleIdx = content.lastIndexOf(HOOK_PREAMBLE, startIdx)
+  const blockStart = preambleIdx !== -1 ? preambleIdx : startIdx
+  const before = content.slice(0, blockStart).replace(/\n+$/, '\n')
   const after = content.slice(endIdx).replace(/^\n/, '')
   fs.writeFileSync(rcFile, before + after)
 }

@@ -9,7 +9,7 @@
   "scripts": {
     "build": "tsup",
     "prepack": "npm run build",
-    "postbuild": "chmod +x dist/index.js && node -e \"const fs=require('fs'),p='dist/index.js';fs.writeFileSync(p,fs.readFileSync(p,'utf8').replace(/require\\((['\\\"])sqlite\\1\\)/g,'require($1node:sqlite$1)'))\"",
+    "postbuild": "chmod +x dist/index.js && node -e \"const fs=require('fs'),p='dist/index.js';fs.writeFileSync(p,fs.readFileSync(p,'utf8').replace('require(\\\"sqlite\\\")', 'require(\\\"node:sqlite\\\")'))\"",
     "dev": "tsx src/index.ts",
     "watch": "tsup --watch",
     "typecheck": "tsc --noEmit",
@@ -73,15 +73,7 @@
       "prettier --write"
     ]
   },
-  "optionalDependencies": {
-    "better-sqlite3": ">=9.0.0"
-  },
-  "peerDependenciesMeta": {
-    "better-sqlite3": {
-      "optional": true
-    }
-  },
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   }
 }
