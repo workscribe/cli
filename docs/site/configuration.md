@@ -144,7 +144,7 @@ workscribe config set integrations.slackWebhook https://hooks.slack.com/services
 workscribe summary --slack
 ```
 
-Both keys are masked in `workscribe config` output for security.
+Webhook URLs are masked in both `workscribe config` and `workscribe config get` output — showing only the first four characters and total length. This confirms a value is set without exposing it in terminal history.
 
 ### Getting a Slack Incoming Webhook URL
 

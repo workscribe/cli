@@ -126,13 +126,14 @@ ollama pull llama3
 
 ## API key errors (401 / 403)
 
-Check what key is stored:
+Confirm a key is stored (output is masked for security):
 
 ```bash
 workscribe config get ai.apiKey
+# sk-a******** (51 chars)
 ```
 
-Reset it:
+If no key is set or you need to replace it:
 
 ```bash
 workscribe config set ai.apiKey <new-key>
@@ -150,10 +151,11 @@ curl -X POST <your-webhook-url> \
   -d '{"text":"test"}'
 ```
 
-If that works but `--slack` doesn't, check the config:
+If that works but `--slack` doesn't, confirm the webhook is set (output is masked):
 
 ```bash
 workscribe config get integrations.slackWebhook
+# http******** (68 chars)
 ```
 
 ---

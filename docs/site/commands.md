@@ -79,8 +79,9 @@ Each session gets its own heading. The heading is always generated from your cap
 
 **Caching:**
 - Daily summaries are cached per session in the database
+- Cached summaries are preserved when new events arrive — only new or unsummarised sessions call the AI
 - Weekly summaries are cached in `~/.workscribe/weekly-cache/<YYYY-WW>.md`
-- Use `--fresh` to force regeneration
+- Use `--fresh` to force regeneration of all sessions for the day
 
 ---
 
@@ -249,5 +250,15 @@ workscribe config set redact.extra "MY_SECRET_PATTERN"
 workscribe config set integrations.slackWebhook https://hooks.slack.com/services/...
 workscribe config set projects./Users/me/sandbox/myrepo actual-repo-name
 ```
+
+**Sensitive value masking:**
+
+`workscribe config get` and `workscribe config` mask API keys, tokens, and webhook URLs — showing only the first four characters and the total length:
+
+```
+sk-a******** (51 chars)
+```
+
+This confirms a value is set without exposing it in your terminal history.
 
 See [Configuration](/docs/configuration) for the full config reference.
