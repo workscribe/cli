@@ -87,7 +87,7 @@ Do not add `Co-Authored-By` trailers to commits.
 
 ## Documentation
 
-Documentation lives in the landing page repo at `workscribe.co/docs`. Source files are in `docs/site/` in this repo (gitignored — not pushed to GitHub).
+Documentation source lives in `docs/site/` in this repo and is published automatically to `workscribe.co/docs` via Mintlify on every push to `main`. The `mint.json` in that directory controls navigation and branding.
 
 **When to update docs:**
 
@@ -100,4 +100,10 @@ Documentation lives in the landing page repo at `workscribe.co/docs`. Source fil
 | Privacy or data handling change | `docs/site/privacy.md` |
 | New error or common failure mode | `docs/site/troubleshooting.md` |
 
-When a PR adds or changes a command, update the relevant doc file in the same commit.
+When a PR adds or changes a command, update the relevant doc file in the same commit. Docs deploy automatically — no manual sync step required.
+
+**Adding a new doc page:**
+1. Create the `.md` file in `docs/site/`
+2. Add it to the `navigation` array in `docs/site/mint.json`
+
+**Logo assets** go in `docs/site/logo/` (gitignored — add via Mintlify dashboard or manually).

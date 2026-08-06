@@ -1,0 +1,75 @@
+{
+  "$schema": "https://mintlify.com/schema.json",
+  "name": "Workscribe",
+  "logo": {
+    "dark": "/logo/dark.svg",
+    "light": "/logo/light.svg",
+    "href": "https://workscribe.co"
+  },
+  "favicon": "/logo/favicon.svg",
+  "colors": {
+    "primary": "#5bc4d4",
+    "light": "#7dd4e0",
+    "dark": "#1a2744",
+    "background": {
+      "dark": "#0d1117"
+    },
+    "anchors": {
+      "from": "#5bc4d4",
+      "to": "#1a2744"
+    }
+  },
+  "topbarLinks": [
+    {
+      "name": "GitHub",
+      "url": "https://github.com/workscribe/cli"
+    }
+  ],
+  "topbarCtaButton": {
+    "name": "Get Started",
+    "url": "https://workscribe.co"
+  },
+  "anchors": [
+    {
+      "name": "GitHub",
+      "icon": "github",
+      "url": "https://github.com/workscribe/cli"
+    },
+    {
+      "name": "npm",
+      "icon": "npm",
+      "url": "https://www.npmjs.com/package/@workscribe/cli"
+    },
+    {
+      "name": "Changelog",
+      "icon": "newspaper",
+      "url": "https://github.com/workscribe/cli/blob/main/CHANGELOG.md"
+    }
+  ],
+  "navigation": [
+    {
+      "group": "Getting Started",
+      "pages": ["getting-started"]
+    },
+    {
+      "group": "Reference",
+      "pages": ["commands", "configuration", "providers"]
+    },
+    {
+      "group": "Trust & Safety",
+      "pages": ["privacy"]
+    },
+    {
+      "group": "Support",
+      "pages": ["troubleshooting"]
+    }
+  ],
+  "footerSocials": {
+    "github": "https://github.com/workscribe/cli"
+  },
+  "feedback": {
+    "thumbsRating": true,
+    "suggestEdit": true,
+    "raiseIssue": true
+  }
+}

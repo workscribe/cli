@@ -3,6 +3,6 @@ dist/
 bin/
 *.js.map
 .DS_Store
-docs/
+docs/site/logo/
 .env
 .claude/

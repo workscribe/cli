@@ -21,8 +21,7 @@
     "format:check": "prettier --check src tests",
     "prepare": "husky",
     "release": "release-it",
-    "release:dry": "release-it --dry-run",
-    "sync-docs": "node scripts/sync-docs.js ../workscribe-landing-page user-docs"
+    "release:dry": "release-it --dry-run"
   },
   "files": [
     "dist",
