@@ -140,6 +140,17 @@ export function insertSessionEvent(sessionId: number, eventId: number): void {
   stmt.run({ session_id: sessionId, event_id: eventId })
 }
 
+export function getEventsBySessionId(sessionId: number): EventRow[] {
+  const db = getDb()
+  const stmt = db.prepare(`
+    SELECT e.* FROM events e
+    INNER JOIN session_events se ON se.event_id = e.id
+    WHERE se.session_id = $session_id
+    ORDER BY e.captured_at ASC
+  `)
+  return stmt.all({ session_id: sessionId }) as unknown as EventRow[]
+}
+
 export function getSessionsForDate(date: string): SessionRow[] {
   const db = getDb()
   const stmt = db.prepare('SELECT * FROM sessions WHERE date = $date ORDER BY started_at ASC')

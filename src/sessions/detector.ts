@@ -1,5 +1,12 @@
 import type { EventRow } from '../db/types'
-import { insertSession, insertSessionEvent, clearSessionsForDate, getSessionsForDate, getEventsForDate } from '../db'
+import {
+  insertSession,
+  insertSessionEvent,
+  clearSessionsForDate,
+  getSessionsForDate,
+  getEventsForDate,
+  getEventsBySessionId,
+} from '../db'
 import { readConfig } from '../config'
 import { splitByIdleGap, splitByRepo, minutesBetween } from './grouper'
 
@@ -34,29 +41,32 @@ export function getOrBuildSessions(date: string): Session[] {
       durationMinutes: minutesBetween(s.started_at, s.ended_at),
       eventCount: s.event_count,
       summary: s.summary,
-      events: [], // not needed when using cached
+      events: getEventsBySessionId(s.id),
     }))
+  }
+
+  // Preserve any cached summaries before clearing — keyed by repo+start time
+  // so they can be restored to matching sessions after rebuild
+  const savedSummaries = new Map<string, string>()
+  for (const s of existing) {
+    if (s.summary) savedSummaries.set(`${s.repo_name}|${s.started_at}`, s.summary)
   }
 
   // Rebuild sessions
   clearSessionsForDate(date)
-  return buildSessions(date, events)
+  return buildSessions(date, events, savedSummaries)
 }
 
-function buildSessions(date: string, events: EventRow[]): Session[] {
+function buildSessions(date: string, events: EventRow[], savedSummaries: Map<string, string> = new Map()): Session[] {
   const config = readConfig()
   const idleMs = config.session.idleTimeout * 60 * 1000
 
-  // Group events by repo, then split by idle gap within each repo group
   const sessions: Session[] = []
-
-  // Split by idle gaps first (regardless of repo)
   const timeGroups = splitByIdleGap(events, idleMs)
 
   for (const group of timeGroups) {
     if (group.length === 0) continue
 
-    // Within each time group, further split by repo change
     const repoGroups = splitByRepo(group)
 
     for (const repoGroup of repoGroups) {
@@ -66,13 +76,16 @@ function buildSessions(date: string, events: EventRow[]): Session[] {
       const last = repoGroup[repoGroup.length - 1]
       const repoName = last.repo_name ?? first.repo_name ?? null
 
+      // Restore a previously generated summary if the session boundaries match
+      const summary = savedSummaries.get(`${repoName}|${first.captured_at}`) ?? null
+
       const sessionId = insertSession({
         date,
         started_at: first.captured_at,
         ended_at: last.captured_at,
         repo_name: repoName,
         event_count: repoGroup.length,
-        summary: null,
+        summary,
       })
 
       for (const event of repoGroup) {
@@ -87,7 +100,7 @@ function buildSessions(date: string, events: EventRow[]): Session[] {
         repoName,
         durationMinutes: minutesBetween(first.captured_at, last.captured_at),
         eventCount: repoGroup.length,
-        summary: null,
+        summary,
         events: repoGroup,
       })
     }

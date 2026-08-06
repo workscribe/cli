@@ -41,7 +41,12 @@ export function registerConfig(program: Command): void {
       if (value === undefined) {
         log.warn(`Key not found: ${key}`)
       } else {
-        log.plain(String(value))
+        const lastSegment = key.split('.').pop() ?? ''
+        if (SENSITIVE_KEYS.has(lastSegment) && typeof value === 'string' && value.length > 0) {
+          log.plain(`${value.slice(0, 4)}${'*'.repeat(8)} (${value.length} chars)`)
+        } else {
+          log.plain(String(value))
+        }
       }
     })
 }
