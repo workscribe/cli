@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 
 vi.mock('child_process', () => ({ execSync: vi.fn() }))
 
@@ -6,8 +6,6 @@ import { execSync } from 'child_process'
 import { getCommitsSince } from '../../src/capture/git-snapshot'
 
 const mockExecSync = execSync as ReturnType<typeof vi.fn>
-
-beforeEach(() => vi.clearAllMocks())
 
 describe('getCommitsSince', () => {
   it('returns empty array when sha is empty', () => {

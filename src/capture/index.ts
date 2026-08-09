@@ -14,6 +14,7 @@ export function captureCommand(opts: {
   exitCode: number | null
   durationMs: number | null
   gitBefore?: string
+  source?: string
 }): void {
   // Check pause flag before any I/O
   if (fs.existsSync(PAUSE_FLAG_PATH)) return
@@ -37,6 +38,8 @@ export function captureCommand(opts: {
 
   // 5. Normalize to typed event
   const { category, metadata } = normalizeCommand(safeCommand)
+
+  if (opts.source) metadata.source = opts.source
 
   // 6. For ai_session events, enrich metadata with commits made during the session
   if (category === 'ai_session' && opts.gitBefore) {

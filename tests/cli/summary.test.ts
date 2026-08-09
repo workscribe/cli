@@ -1,4 +1,44 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
+
+// summary.ts imports from '../db' and '../sessions/detector', both of which
+// transitively load node:sqlite (Node 22+ only). Mock them before importing
+// the module under test so the import chain never reaches node:sqlite.
+vi.mock('../../src/db', () => ({
+  updateSessionSummary: vi.fn(),
+}))
+
+vi.mock('../../src/sessions/detector', () => ({
+  getOrBuildSessions: vi.fn(),
+}))
+
+vi.mock('../../src/ai/router', () => ({
+  getProvider: vi.fn(),
+}))
+
+vi.mock('../../src/config', () => ({
+  readConfig: vi.fn(),
+}))
+
+vi.mock('../../src/integrations/webhook', () => ({
+  postToWebhook: vi.fn(),
+}))
+
+vi.mock('../../src/integrations/slack', () => ({
+  formatForSlack: vi.fn(),
+  isSlackWebhookUrl: vi.fn(),
+}))
+
+vi.mock('fs', () => ({
+  default: {
+    existsSync: vi.fn(),
+    readFileSync: vi.fn(),
+    writeFileSync: vi.fn(),
+    mkdirSync: vi.fn(),
+  },
+}))
+
+vi.mock('../../src/utils/paths')
+
 import { parseBullets } from '../../src/cli/summary'
 
 describe('parseBullets', () => {

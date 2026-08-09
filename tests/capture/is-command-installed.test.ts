@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 
 vi.mock('child_process', () => ({ execSync: vi.fn() }))
 
@@ -6,8 +6,6 @@ import { execSync } from 'child_process'
 import { isCommandInstalled } from '../../src/capture/hooks/utils'
 
 const mockExecSync = execSync as ReturnType<typeof vi.fn>
-
-beforeEach(() => vi.clearAllMocks())
 
 describe('isCommandInstalled', () => {
   it('returns true when the command is found on PATH', () => {

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 
 vi.mock('fs', () => ({
   default: {
@@ -37,8 +37,6 @@ const SETTINGS_WITHOUT_HOOK = JSON.stringify({
     ],
   },
 })
-
-beforeEach(() => vi.clearAllMocks())
 
 describe('claudeCodeIntegration.isHookInstalled', () => {
   it('returns false when settings file does not exist', () => {

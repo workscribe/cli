@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 
 vi.mock('../../src/ai/fetch', () => ({
   fetchWithTimeout: vi.fn(),
@@ -8,8 +8,6 @@ import { fetchWithTimeout } from '../../src/ai/fetch'
 import { postToWebhook } from '../../src/integrations/webhook'
 
 const mockFetch = fetchWithTimeout as ReturnType<typeof vi.fn>
-
-beforeEach(() => vi.clearAllMocks())
 
 describe('postToWebhook', () => {
   it('sends correct JSON body to the URL', async () => {

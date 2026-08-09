@@ -19,7 +19,7 @@ export function registerHook(program: Command): void {
     .command('_hook')
     .description('Internal: capture events from AI tool hooks (stdin JSON payload)')
     .option('--source <source>', 'hook source identifier (e.g. claude-code)')
-    .action(() => {
+    .action((opts: { source?: string }) => {
       let raw = ''
       process.stdin.setEncoding('utf-8')
       process.stdin.on('data', (chunk: string) => {
@@ -29,7 +29,13 @@ export function registerHook(program: Command): void {
         try {
           const parsed = parseHookPayload(raw)
           if (!parsed) return
-          captureCommand({ command: parsed.command, cwd: parsed.cwd, exitCode: null, durationMs: null })
+          captureCommand({
+            command: parsed.command,
+            cwd: parsed.cwd,
+            exitCode: null,
+            durationMs: null,
+            source: opts.source,
+          })
         } catch (err) {
           debugLog('_hook', err)
         }

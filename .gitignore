@@ -1,6 +1,7 @@
 node_modules/
 dist/
 bin/
+coverage/
 *.js.map
 .DS_Store
 docs/site/logo/
