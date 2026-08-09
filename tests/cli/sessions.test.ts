@@ -63,8 +63,8 @@ describe('workscribe sessions', () => {
     it('uses singular "session" for a single result', async () => {
       mockGetOrBuildSessions.mockReturnValue([SAMPLE_SESSIONS[0]])
       await makeProgram().parseAsync(['sessions'], { from: 'user' })
-      const calls = mockLog.plain.mock.calls.map((c: unknown[]) => c[0] as string)
-      expect(calls.some((c) => c.includes('1 session') && !c.includes('1 sessions'))).toBe(true)
+      const calls = mockLog.plain.mock.calls.map((call: unknown[]) => call[0] as string)
+      expect(calls.some((call) => call.includes('1 session') && !call.includes('1 sessions'))).toBe(true)
     })
 
     it('logs a line per session containing the repo name', async () => {

@@ -14,7 +14,7 @@ function detectShellRcFiles(): { name: string; rcFile: string }[] {
     { name: 'bash', rcFile: path.join(os.homedir(), '.bashrc') },
     { name: 'bash', rcFile: path.join(os.homedir(), '.bash_profile') },
   ]
-  return candidates.filter((c) => fs.existsSync(c.rcFile) && isHookInstalled(c.rcFile))
+  return candidates.filter((candidate) => fs.existsSync(candidate.rcFile) && isHookInstalled(candidate.rcFile))
 }
 
 export function registerUninstall(program: Command): void {

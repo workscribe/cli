@@ -86,7 +86,7 @@ describe('claudeCodeIntegration.install', () => {
     const written = JSON.parse(mockFs.writeFileSync.mock.calls[0][1] as string)
     expect(written.hooks.PostToolUse).toHaveLength(2)
     const commands = written.hooks.PostToolUse.flatMap((e: { hooks: { command: string }[] }) =>
-      e.hooks.map((h) => h.command)
+      e.hooks.map((hook) => hook.command)
     )
     expect(commands).toContain('some-other-tool')
     expect(commands).toContain('workscribe _hook --source claude-code')

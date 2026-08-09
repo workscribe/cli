@@ -54,7 +54,7 @@ function applyMigrations(db: DatabaseSync): void {
 
   // Collect already-applied versions
   const applied = new Set(
-    (db.prepare('SELECT version FROM schema_migrations').all() as { version: number }[]).map((r) => r.version)
+    (db.prepare('SELECT version FROM schema_migrations').all() as { version: number }[]).map((row) => row.version)
   )
 
   // Apply each pending migration in order, wrapped in a transaction so a
@@ -181,7 +181,7 @@ export function updateSessionSummary(sessionId: number, summary: string): void {
 export function getLastEventIds(n: number): number[] {
   const db = getDb()
   const rows = db.prepare('SELECT id FROM events ORDER BY id DESC LIMIT $n').all({ n }) as { id: number }[]
-  return rows.map((r) => r.id)
+  return rows.map((row) => row.id)
 }
 
 export function getEventsByIds(ids: number[]): EventRow[] {

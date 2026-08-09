@@ -129,7 +129,7 @@ const makePayload = (events: { category: string; metadata?: Record<string, unkno
       startTime: '09:00',
       endTime: '10:00',
       durationMinutes: 60,
-      events: events.map((e) => ({ ...e, metadata: e.metadata ?? {}, exitCode: 0, durationMs: null })),
+      events: events.map((event) => ({ ...event, metadata: event.metadata ?? {}, exitCode: 0, durationMs: null })),
     },
   ],
 })

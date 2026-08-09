@@ -30,7 +30,7 @@ const CATEGORY_COLORS: Record<string, (s: string) => string> = {
 }
 
 const AI_TOOL_DISPLAY_NAMES: Record<string, string> = Object.fromEntries(
-  loadAIToolRegistry().map((t) => [t.tool, t.displayName])
+  loadAIToolRegistry().map((entry) => [entry.tool, entry.displayName])
 )
 
 export function registerEvents(program: Command): void {

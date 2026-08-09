@@ -45,8 +45,8 @@ describe('workscribe config', () => {
 
     it('masks apiKey values in the list view', async () => {
       await makeProgram().parseAsync(['config'], { from: 'user' })
-      const calls = mockLog.plain.mock.calls.map((c: unknown[]) => c[0] as string)
-      expect(calls.some((c) => c.includes('sk-ant-abc123456789'))).toBe(false)
+      const calls = mockLog.plain.mock.calls.map((call: unknown[]) => call[0] as string)
+      expect(calls.some((call) => call.includes('sk-ant-abc123456789'))).toBe(false)
     })
   })
 
@@ -61,9 +61,9 @@ describe('workscribe config', () => {
     it('masks the value for the apiKey key', async () => {
       mockGetConfigValue.mockReturnValue('sk-ant-abc123456789')
       await makeProgram().parseAsync(['config', 'get', 'ai.apiKey'], { from: 'user' })
-      const calls = mockLog.plain.mock.calls.map((c: unknown[]) => c[0] as string)
-      expect(calls.some((c) => c.includes('sk-ant-abc123456789'))).toBe(false)
-      expect(calls.some((c) => c.includes('****'))).toBe(true)
+      const calls = mockLog.plain.mock.calls.map((call: unknown[]) => call[0] as string)
+      expect(calls.some((call) => call.includes('sk-ant-abc123456789'))).toBe(false)
+      expect(calls.some((call) => call.includes('****'))).toBe(true)
     })
 
     it('logs a warning when the key is not found', async () => {
@@ -87,9 +87,9 @@ describe('workscribe config', () => {
 
     it('shows [set] instead of the value for sensitive keys', async () => {
       await makeProgram().parseAsync(['config', 'set', 'ai.apiKey', 'sk-secret-key'], { from: 'user' })
-      const calls = mockLog.success.mock.calls.map((c: unknown[]) => c[0] as string)
-      expect(calls.some((c) => c.includes('[set]'))).toBe(true)
-      expect(calls.some((c) => c.includes('sk-secret-key'))).toBe(false)
+      const calls = mockLog.success.mock.calls.map((call: unknown[]) => call[0] as string)
+      expect(calls.some((call) => call.includes('[set]'))).toBe(true)
+      expect(calls.some((call) => call.includes('sk-secret-key'))).toBe(false)
     })
   })
 })

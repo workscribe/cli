@@ -30,18 +30,18 @@ export function getOrBuildSessions(date: string): Session[] {
   if (events.length === 0) return []
 
   // If sessions exist and event count matches, use cached
-  const cachedEventCount = existing.reduce((sum, s) => sum + s.event_count, 0)
+  const cachedEventCount = existing.reduce((sum, sessionRow) => sum + sessionRow.event_count, 0)
   if (existing.length > 0 && cachedEventCount === events.length) {
-    return existing.map((s) => ({
-      id: s.id,
-      date: s.date,
-      startedAt: s.started_at,
-      endedAt: s.ended_at,
-      repoName: s.repo_name,
-      durationMinutes: minutesBetween(s.started_at, s.ended_at),
-      eventCount: s.event_count,
-      summary: s.summary,
-      events: getEventsBySessionId(s.id),
+    return existing.map((sessionRow) => ({
+      id: sessionRow.id,
+      date: sessionRow.date,
+      startedAt: sessionRow.started_at,
+      endedAt: sessionRow.ended_at,
+      repoName: sessionRow.repo_name,
+      durationMinutes: minutesBetween(sessionRow.started_at, sessionRow.ended_at),
+      eventCount: sessionRow.event_count,
+      summary: sessionRow.summary,
+      events: getEventsBySessionId(sessionRow.id),
     }))
   }
 

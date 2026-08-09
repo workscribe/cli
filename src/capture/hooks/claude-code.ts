@@ -27,8 +27,8 @@ export const claudeCodeIntegration: AIHookIntegration = {
     const postToolUse = ((settings.hooks as Record<string, unknown>)?.PostToolUse ?? []) as unknown[]
     return postToolUse.some((entry) => {
       const hooks = ((entry as Record<string, unknown>).hooks ?? []) as unknown[]
-      return hooks.some((h) => {
-        const hook = h as Record<string, unknown>
+      return hooks.some((hookItem) => {
+        const hook = hookItem as Record<string, unknown>
         return typeof hook.command === 'string' && hook.command.includes('workscribe _hook')
       })
     })
