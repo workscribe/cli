@@ -108,7 +108,7 @@ const VALID_HOOK_PAYLOAD = JSON.stringify({
 })
 
 describe('_hook integration', () => {
-  it('calls captureCommand with command and cwd from a valid payload', async () => {
+  it('calls captureCommand with command, cwd, and source from a valid payload', async () => {
     await withStdin(VALID_HOOK_PAYLOAD, async () => {
       await makeProgram().parseAsync(['_hook', '--source', 'claude-code'], { from: 'user' })
       await new Promise((r) => setImmediate(r))
@@ -119,7 +119,17 @@ describe('_hook integration', () => {
       cwd: '/home/user/myapp',
       exitCode: null,
       durationMs: null,
+      source: 'claude-code',
     })
+  })
+
+  it('calls captureCommand without source when --source is omitted', async () => {
+    await withStdin(VALID_HOOK_PAYLOAD, async () => {
+      await makeProgram().parseAsync(['_hook'], { from: 'user' })
+      await new Promise((r) => setImmediate(r))
+    })
+    expect(mockCapture).toHaveBeenCalledOnce()
+    expect(mockCapture).toHaveBeenCalledWith(expect.objectContaining({ source: undefined }))
   })
 
   it('does not call captureCommand when payload is empty', async () => {
