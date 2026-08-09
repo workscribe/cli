@@ -19,7 +19,7 @@ Safe to re-run at any time — installs missing hooks, updates outdated ones, an
 - Creates `~/.workscribe/` with owner-only permissions
 - Initialises the SQLite database
 - Installs or updates the shell hook in `~/.zshrc` or `~/.bashrc`
-- If Claude Code is detected, offers to install a session capture hook in `~/.claude/settings.json`
+- Detects installed AI coding tools (Claude Code, Aider, etc.) and offers to install a session capture hook for each — opt-in, defaults to no
 - Prompts you to choose an AI provider and enter your API key
 
 **Shell hook updates:**
