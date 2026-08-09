@@ -21,8 +21,8 @@ jobs:
           # Clone the public docs repo
           git clone https://x-access-token:${{ secrets.DOCS_DEPLOY_TOKEN }}@github.com/workscribe/docs.git /tmp/docs-repo
 
-          # Sync docs/site/ into the docs repo root
-          rsync -av --delete docs/site/ /tmp/docs-repo/
+          # Sync docs/site/ into the docs repo root (preserve .git)
+          rsync -av --delete --exclude='.git' docs/site/ /tmp/docs-repo/
 
           # Commit and push if anything changed
           cd /tmp/docs-repo
@@ -31,5 +31,5 @@ jobs:
             echo "No changes to deploy"
           else
             git commit -m "docs: sync from cli@${{ github.sha }}"
-            git push
+            git push origin HEAD:main
           fi
