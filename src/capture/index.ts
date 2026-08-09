@@ -39,6 +39,8 @@ export function captureCommand(opts: {
   // 5. Normalize to typed event
   const { category, metadata } = normalizeCommand(safeCommand)
 
+  if (category === 'ai_session' && config.capture.aiTools === false) return
+
   if (opts.source) metadata.source = opts.source
 
   // 6. For ai_session events, enrich metadata with commits made during the session

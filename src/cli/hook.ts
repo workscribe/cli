@@ -1,5 +1,6 @@
 import { Command } from 'commander'
 import { captureCommand } from '../capture'
+import { readConfig } from '../config'
 import { debugLog } from '../utils/logger'
 
 /** Parses a Claude Code PostToolUse stdin payload. Returns null if required fields are missing. */
@@ -27,6 +28,7 @@ export function registerHook(program: Command): void {
       })
       process.stdin.on('end', () => {
         try {
+          if (readConfig().capture.aiTools === false) return
           const parsed = parseHookPayload(raw)
           if (!parsed) return
           captureCommand({

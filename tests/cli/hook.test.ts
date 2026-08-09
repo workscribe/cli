@@ -1,13 +1,21 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.mock('../../src/capture', () => ({ captureCommand: vi.fn() }))
+
+vi.mock('../../src/config', () => ({ readConfig: vi.fn() }))
 
 import { EventEmitter } from 'events'
 import { Command } from 'commander'
 import { captureCommand } from '../../src/capture'
+import { readConfig } from '../../src/config'
 import { parseHookPayload, registerHook } from '../../src/cli/hook'
 
 const mockCapture = captureCommand as ReturnType<typeof vi.fn>
+const mockReadConfig = readConfig as ReturnType<typeof vi.fn>
+
+beforeEach(() => {
+  mockReadConfig.mockReturnValue({ capture: { aiTools: true } })
+})
 
 // ─── parseHookPayload ─────────────────────────────────────────────────────────
 
@@ -151,6 +159,15 @@ describe('_hook integration', () => {
   it('does not throw when payload is invalid JSON', async () => {
     await withStdin('not-json', async () => {
       await expect(makeProgram().parseAsync(['_hook'], { from: 'user' })).resolves.not.toThrow()
+      await new Promise((r) => setImmediate(r))
+    })
+    expect(mockCapture).not.toHaveBeenCalled()
+  })
+
+  it('does not call captureCommand when capture.aiTools is false', async () => {
+    mockReadConfig.mockReturnValue({ capture: { aiTools: false } })
+    await withStdin(VALID_HOOK_PAYLOAD, async () => {
+      await makeProgram().parseAsync(['_hook', '--source', 'claude-code'], { from: 'user' })
       await new Promise((r) => setImmediate(r))
     })
     expect(mockCapture).not.toHaveBeenCalled()
