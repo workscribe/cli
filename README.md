@@ -149,6 +149,7 @@ workscribe summary --webhook https://custom.endpoint/hook                 # one-
 | `session.idleTimeout` | `30` | Minutes of inactivity before a new session starts |
 | `capture.ignore` | common shell builtins | Commands to exclude from capture |
 | `capture.aiTools` | `true` | Set to `false` to disable all AI session capture |
+| `capture.includeAiderPrompt` | `true` | Set to `false` to skip reading Aider's history file for prompt context |
 | `redact.extra` | `[]` | Additional regex patterns to redact from captured commands |
 | `summary.format` | `markdown` | Output format: `markdown` or `json` |
 | `integrations.slackWebhook` | — | Slack incoming webhook URL |
