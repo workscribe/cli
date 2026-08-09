@@ -2,6 +2,7 @@ import { DatabaseSync } from 'node:sqlite'
 import fs from 'fs'
 import { WORKSCRIBE_DIR, DB_PATH } from '../utils/paths'
 import type { EventRow, SessionRow } from './types'
+import { MIGRATIONS } from './migrations'
 export type { EventRow, SessionRow } from './types'
 
 let _db: DatabaseSync | null = null
@@ -14,55 +15,69 @@ export function getDb(): DatabaseSync {
     fs.mkdirSync(WORKSCRIBE_DIR, { recursive: true })
   }
 
-  _db = new DatabaseSync(DB_PATH)
-  // Restrict DB file to owner-only after creation
+  // Don't assign to _db until after migrations succeed — if applyMigrations
+  // throws, _db stays null so the next call retries cleanly instead of
+  // returning a partially-initialised singleton.
+  const db = new DatabaseSync(DB_PATH)
   try {
     fs.chmodSync(DB_PATH, 0o600)
   } catch {
     /* ignore if already correct */
   }
-  _db.exec('PRAGMA journal_mode = WAL')
-  _db.exec('PRAGMA foreign_keys = ON')
-  runMigrations(_db)
+  db.exec('PRAGMA journal_mode = WAL')
+  db.exec('PRAGMA foreign_keys = ON')
+  applyMigrations(db)
+  _db = db
   return _db
 }
 
-function runMigrations(db: DatabaseSync): void {
+function applyMigrations(db: DatabaseSync): void {
+  // Create the migration tracking table if this is the first run
   db.exec(`
-    CREATE TABLE IF NOT EXISTS events (
-      id          INTEGER PRIMARY KEY AUTOINCREMENT,
-      captured_at TEXT    NOT NULL,
-      command     TEXT    NOT NULL,
-      cwd         TEXT    NOT NULL,
-      exit_code   INTEGER,
-      duration_ms INTEGER,
-      repo_name   TEXT,
-      branch      TEXT,
-      category    TEXT    NOT NULL DEFAULT 'other',
-      metadata    TEXT
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_events_captured_at ON events(captured_at);
-    CREATE INDEX IF NOT EXISTS idx_events_repo_name   ON events(repo_name);
-
-    CREATE TABLE IF NOT EXISTS sessions (
-      id          INTEGER PRIMARY KEY AUTOINCREMENT,
-      date        TEXT    NOT NULL,
-      started_at  TEXT    NOT NULL,
-      ended_at    TEXT    NOT NULL,
-      repo_name   TEXT,
-      event_count INTEGER NOT NULL DEFAULT 0,
-      summary     TEXT
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_sessions_date ON sessions(date);
-
-    CREATE TABLE IF NOT EXISTS session_events (
-      session_id  INTEGER NOT NULL REFERENCES sessions(id),
-      event_id    INTEGER NOT NULL REFERENCES events(id),
-      PRIMARY KEY (session_id, event_id)
-    );
+    CREATE TABLE IF NOT EXISTS schema_migrations (
+      version    INTEGER PRIMARY KEY,
+      applied_at TEXT    NOT NULL DEFAULT (datetime('now'))
+    )
   `)
+
+  // Bootstrap: if the events table already exists but schema_migrations is
+  // empty, this is an existing install that predates the migration system.
+  // Seed version 1 as applied so we don't re-run the initial schema.
+  const hasEvents = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='events'").get()
+  const hasVersion1 = db.prepare('SELECT version FROM schema_migrations WHERE version = 1').get()
+
+  if (hasEvents && !hasVersion1) {
+    db.prepare("INSERT INTO schema_migrations (version, applied_at) VALUES ($version, datetime('now'))").run({
+      version: 1,
+    })
+  }
+
+  // Collect already-applied versions
+  const applied = new Set(
+    (db.prepare('SELECT version FROM schema_migrations').all() as { version: number }[]).map((r) => r.version)
+  )
+
+  // Apply each pending migration in order, wrapped in a transaction so a
+  // partial failure leaves the DB cleanly at the previous version.
+  for (const migration of MIGRATIONS) {
+    if (applied.has(migration.version)) continue
+
+    db.exec('BEGIN')
+    try {
+      db.exec(migration.sql)
+      db.prepare("INSERT INTO schema_migrations (version, applied_at) VALUES ($version, datetime('now'))").run({
+        version: migration.version,
+      })
+      db.exec('COMMIT')
+    } catch (err) {
+      try {
+        db.exec('ROLLBACK')
+      } catch {
+        /* already rolled back or connection lost */
+      }
+      throw new Error(`Migration ${migration.version} (${migration.description}) failed: ${(err as Error).message}`)
+    }
+  }
 }
 
 // ─── Typed query helpers ──────────────────────────────────────────────────────
