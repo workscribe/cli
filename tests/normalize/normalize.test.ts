@@ -14,7 +14,7 @@ function normalize(cmd: string) {
 describe('normalizeCommand', () => {
   describe('git operations', () => {
     it('classifies git commit', () => {
-      expect(category('git commit -m "fix: auth bug"')).toBe('code_commit')
+      expect(category('git commit -m "fix: auth bug"')).toBe('shipping')
     })
 
     it('extracts commit message', () => {
@@ -23,12 +23,12 @@ describe('normalizeCommand', () => {
     })
 
     it('classifies git commit with no message flag', () => {
-      expect(category('git commit --amend')).toBe('code_commit')
+      expect(category('git commit --amend')).toBe('shipping')
     })
 
     it('classifies git push', () => {
-      expect(category('git push')).toBe('code_push')
-      expect(category('git push origin main')).toBe('code_push')
+      expect(category('git push')).toBe('shipping')
+      expect(category('git push origin main')).toBe('shipping')
     })
 
     it('extracts remote and branch from git push', () => {
@@ -38,46 +38,46 @@ describe('normalizeCommand', () => {
     })
 
     it('classifies git pull', () => {
-      expect(category('git pull')).toBe('code_pull')
-      expect(category('git pull origin main')).toBe('code_pull')
+      expect(category('git pull')).toBe('versioning')
+      expect(category('git pull origin main')).toBe('versioning')
     })
 
     it('classifies git fetch', () => {
-      expect(category('git fetch')).toBe('code_pull')
+      expect(category('git fetch')).toBe('versioning')
     })
 
     it('classifies git checkout as branch_switch', () => {
-      expect(category('git checkout feature/auth')).toBe('branch_switch')
+      expect(category('git checkout feature/auth')).toBe('versioning')
     })
 
     it('classifies git switch as branch_switch', () => {
-      expect(category('git switch main')).toBe('branch_switch')
+      expect(category('git switch main')).toBe('versioning')
     })
 
     it('classifies git merge', () => {
-      expect(category('git merge feature/auth')).toBe('code_merge')
+      expect(category('git merge feature/auth')).toBe('shipping')
     })
 
     it('classifies git rebase', () => {
-      expect(category('git rebase main')).toBe('code_merge')
+      expect(category('git rebase main')).toBe('shipping')
     })
 
     it('classifies git stash', () => {
-      expect(category('git stash')).toBe('code_stash')
-      expect(category('git stash pop')).toBe('code_stash')
+      expect(category('git stash')).toBe('versioning')
+      expect(category('git stash pop')).toBe('versioning')
     })
 
     it('classifies other git commands as git_other', () => {
-      expect(category('git log --oneline')).toBe('git_other')
-      expect(category('git diff HEAD')).toBe('git_other')
-      expect(category('git status')).toBe('git_other')
+      expect(category('git log --oneline')).toBe('versioning')
+      expect(category('git diff HEAD')).toBe('versioning')
+      expect(category('git status')).toBe('versioning')
     })
   })
 
   describe('dependency install', () => {
     it('classifies npm install', () => {
-      expect(category('npm install')).toBe('dependency_install')
-      expect(category('npm install axios')).toBe('dependency_install')
+      expect(category('npm install')).toBe('dependencies')
+      expect(category('npm install axios')).toBe('dependencies')
     })
 
     it('extracts packages from npm install', () => {
@@ -92,199 +92,250 @@ describe('normalizeCommand', () => {
     })
 
     it('classifies npm i shorthand', () => {
-      expect(category('npm i axios')).toBe('dependency_install')
+      expect(category('npm i axios')).toBe('dependencies')
     })
 
     it('classifies yarn add', () => {
-      expect(category('yarn add react')).toBe('dependency_install')
+      expect(category('yarn add react')).toBe('dependencies')
       const result = normalize('yarn add react react-dom')
       expect(result.metadata.tool).toBe('yarn')
     })
 
     it('classifies pnpm add', () => {
-      expect(category('pnpm add typescript')).toBe('dependency_install')
+      expect(category('pnpm add typescript')).toBe('dependencies')
     })
 
     it('classifies bun add', () => {
       const result = normalize('bun add react react-dom')
-      expect(result.category).toBe('dependency_install')
+      expect(result.category).toBe('dependencies')
       expect(result.metadata.tool).toBe('bun')
       expect(result.metadata.packages).toEqual(['react', 'react-dom'])
     })
 
     it('classifies bun install', () => {
-      expect(category('bun install')).toBe('dependency_install')
+      expect(category('bun install')).toBe('dependencies')
     })
 
     it('classifies pip install', () => {
       const result = normalize('pip install requests flask')
-      expect(result.category).toBe('dependency_install')
+      expect(result.category).toBe('dependencies')
       expect(result.metadata.tool).toBe('pip')
       expect(result.metadata.packages).toEqual(['requests', 'flask'])
     })
 
     it('classifies cargo add', () => {
       const result = normalize('cargo add serde')
-      expect(result.category).toBe('dependency_install')
+      expect(result.category).toBe('dependencies')
       expect(result.metadata.tool).toBe('cargo')
     })
 
     it('classifies brew install', () => {
-      expect(category('brew install jq')).toBe('dependency_install')
+      expect(category('brew install jq')).toBe('dependencies')
     })
 
     it('classifies go get', () => {
-      expect(category('go get github.com/pkg/errors')).toBe('dependency_install')
+      expect(category('go get github.com/pkg/errors')).toBe('dependencies')
+    })
+
+    it('classifies nvm as dependencies', () => {
+      expect(category('nvm install v22.22.0')).toBe('dependencies')
+      expect(category('nvm use 20')).toBe('dependencies')
+    })
+
+    it('classifies fnm as dependencies', () => {
+      expect(category('fnm install 20')).toBe('dependencies')
+    })
+
+    it('classifies volta as dependencies', () => {
+      expect(category('volta install node')).toBe('dependencies')
+    })
+
+    it('classifies rbenv as dependencies', () => {
+      expect(category('rbenv install 3.2.0')).toBe('dependencies')
+    })
+
+    it('classifies pyenv as dependencies', () => {
+      expect(category('pyenv global 3.11')).toBe('dependencies')
+    })
+
+    it('classifies asdf as dependencies', () => {
+      expect(category('asdf install nodejs 20.0.0')).toBe('dependencies')
     })
   })
 
   describe('dependency remove', () => {
     it('classifies npm uninstall', () => {
-      expect(category('npm uninstall lodash')).toBe('dependency_remove')
+      expect(category('npm uninstall lodash')).toBe('dependencies')
     })
 
     it('classifies npm remove', () => {
-      expect(category('npm remove axios')).toBe('dependency_remove')
+      expect(category('npm remove axios')).toBe('dependencies')
     })
 
     it('classifies yarn remove', () => {
-      expect(category('yarn remove express')).toBe('dependency_remove')
+      expect(category('yarn remove express')).toBe('dependencies')
     })
 
     it('classifies bun remove', () => {
       const result = normalize('bun remove lodash')
-      expect(result.category).toBe('dependency_remove')
+      expect(result.category).toBe('dependencies')
       expect(result.metadata.tool).toBe('bun')
       expect(result.metadata.packages).toEqual(['lodash'])
     })
 
     it('classifies pip uninstall', () => {
-      expect(category('pip uninstall requests')).toBe('dependency_remove')
+      expect(category('pip uninstall requests')).toBe('dependencies')
     })
   })
 
   describe('test runs', () => {
     it('classifies npm test', () => {
-      expect(category('npm test')).toBe('test_run')
-      expect(category('npm run test')).toBe('test_run')
+      expect(category('npm test')).toBe('testing')
+      expect(category('npm run test')).toBe('testing')
     })
 
     it('classifies yarn test', () => {
       const result = normalize('yarn test')
-      expect(result.category).toBe('test_run')
+      expect(result.category).toBe('testing')
       expect(result.metadata.tool).toBe('yarn')
     })
 
     it('classifies pnpm test', () => {
       const result = normalize('pnpm test')
-      expect(result.category).toBe('test_run')
+      expect(result.category).toBe('testing')
       expect(result.metadata.tool).toBe('pnpm')
     })
 
     it('classifies bun test', () => {
       const result = normalize('bun test')
-      expect(result.category).toBe('test_run')
+      expect(result.category).toBe('testing')
       expect(result.metadata.tool).toBe('bun')
     })
 
     it('classifies jest', () => {
-      expect(category('jest')).toBe('test_run')
-      expect(category('jest --watch')).toBe('test_run')
+      expect(category('jest')).toBe('testing')
+      expect(category('jest --watch')).toBe('testing')
       const result = normalize('jest')
       expect(result.metadata.tool).toBe('jest')
     })
 
     it('classifies vitest', () => {
-      expect(category('vitest run')).toBe('test_run')
+      expect(category('vitest run')).toBe('testing')
     })
 
     it('classifies pytest', () => {
-      expect(category('pytest')).toBe('test_run')
-      expect(category('pytest tests/')).toBe('test_run')
+      expect(category('pytest')).toBe('testing')
+      expect(category('pytest tests/')).toBe('testing')
     })
 
     it('classifies go test', () => {
-      expect(category('go test ./...')).toBe('test_run')
+      expect(category('go test ./...')).toBe('testing')
     })
 
     it('classifies cargo test', () => {
-      expect(category('cargo test')).toBe('test_run')
+      expect(category('cargo test')).toBe('testing')
     })
 
     it('classifies rspec', () => {
-      expect(category('rspec spec/')).toBe('test_run')
+      expect(category('rspec spec/')).toBe('testing')
+    })
+  })
+
+  describe('linting', () => {
+    it('classifies eslint directly', () => {
+      const result = normalize('eslint src/')
+      expect(result.category).toBe('linting')
+      expect(result.metadata.tool).toBe('eslint')
+    })
+
+    it('classifies prettier directly', () => {
+      const result = normalize('prettier --check src/')
+      expect(result.category).toBe('linting')
+      expect(result.metadata.tool).toBe('prettier')
+    })
+
+    it('classifies biome', () => {
+      expect(category('biome check src/')).toBe('linting')
+    })
+
+    it('classifies tslint', () => {
+      expect(category('tslint --project tsconfig.json')).toBe('linting')
+    })
+
+    it('classifies dprint', () => {
+      expect(category('dprint fmt')).toBe('linting')
     })
   })
 
   describe('builds', () => {
     it('classifies npm run build', () => {
-      expect(category('npm run build')).toBe('build')
+      expect(category('npm run build')).toBe('building')
     })
 
     it('classifies yarn build', () => {
-      expect(category('yarn build')).toBe('build')
+      expect(category('yarn build')).toBe('building')
     })
 
     it('classifies pnpm build', () => {
-      expect(category('pnpm build')).toBe('build')
+      expect(category('pnpm build')).toBe('building')
     })
 
     it('classifies bun run build', () => {
       const result = normalize('bun run build')
-      expect(result.category).toBe('build')
+      expect(result.category).toBe('building')
       expect(result.metadata.tool).toBe('bun')
     })
 
     it('classifies make', () => {
-      expect(category('make')).toBe('build')
-      expect(category('make install')).toBe('build')
+      expect(category('make')).toBe('building')
+      expect(category('make install')).toBe('building')
     })
 
     it('classifies cargo build', () => {
-      expect(category('cargo build --release')).toBe('build')
+      expect(category('cargo build --release')).toBe('building')
     })
 
     it('classifies go build', () => {
-      expect(category('go build ./...')).toBe('build')
+      expect(category('go build ./...')).toBe('building')
     })
 
     it('classifies docker build', () => {
-      expect(category('docker build -t myapp .')).toBe('build')
+      expect(category('docker build -t myapp .')).toBe('building')
     })
   })
 
   describe('dev servers', () => {
     it('classifies npm run dev', () => {
       const result = normalize('npm run dev')
-      expect(result.category).toBe('server_run')
+      expect(result.category).toBe('running')
       expect(result.metadata.script).toBe('dev')
     })
 
     it('classifies npm run start', () => {
-      expect(category('npm run start')).toBe('server_run')
+      expect(category('npm run start')).toBe('running')
     })
 
     it('classifies yarn dev', () => {
-      expect(category('yarn dev')).toBe('server_run')
+      expect(category('yarn dev')).toBe('running')
     })
 
     it('classifies pnpm dev', () => {
-      expect(category('pnpm dev')).toBe('server_run')
+      expect(category('pnpm dev')).toBe('running')
     })
 
     it('classifies bun run dev', () => {
       const result = normalize('bun run dev')
-      expect(result.category).toBe('server_run')
+      expect(result.category).toBe('running')
       expect(result.metadata.tool).toBe('bun')
       expect(result.metadata.script).toBe('dev')
     })
 
     it('classifies bun run start', () => {
-      expect(category('bun run start')).toBe('server_run')
+      expect(category('bun run start')).toBe('running')
     })
 
     it('classifies Django runserver', () => {
-      expect(category('python manage.py runserver')).toBe('server_run')
+      expect(category('python manage.py runserver')).toBe('running')
     })
   })
 
@@ -333,34 +384,111 @@ describe('normalizeCommand', () => {
     })
   })
 
+  describe('releasing', () => {
+    it('classifies npm publish', () => {
+      expect(category('npm publish')).toBe('releasing')
+    })
+
+    it('classifies cargo publish', () => {
+      expect(category('cargo publish')).toBe('releasing')
+    })
+
+    it('classifies docker push', () => {
+      const result = normalize('docker push myorg/myimage:latest')
+      expect(result.category).toBe('releasing')
+      expect(result.metadata.tool).toBe('docker')
+      expect(result.metadata.image).toBe('myorg/myimage:latest')
+    })
+
+    it('classifies gh release create', () => {
+      const result = normalize('gh release create v1.0.0')
+      expect(result.category).toBe('releasing')
+      expect(result.metadata.tool).toBe('gh')
+    })
+
+    it('classifies fly deploy', () => {
+      const result = normalize('fly deploy')
+      expect(result.category).toBe('releasing')
+      expect(result.metadata.tool).toBe('fly')
+    })
+
+    it('classifies vercel deploy', () => {
+      expect(category('vercel deploy')).toBe('releasing')
+    })
+
+    it('classifies netlify deploy', () => {
+      expect(category('netlify deploy')).toBe('releasing')
+    })
+
+    it('classifies railway up', () => {
+      expect(category('railway up')).toBe('releasing')
+    })
+
+    it('classifies wrangler deploy', () => {
+      expect(category('wrangler deploy')).toBe('releasing')
+    })
+  })
+
+  describe('database', () => {
+    it('classifies psql', () => {
+      const result = normalize('psql -U postgres mydb')
+      expect(result.category).toBe('database')
+      expect(result.metadata.tool).toBe('psql')
+    })
+
+    it('classifies mysql', () => {
+      expect(category('mysql -u root -p')).toBe('database')
+    })
+
+    it('classifies sqlite3', () => {
+      expect(category('sqlite3 dev.db')).toBe('database')
+    })
+
+    it('classifies mongosh', () => {
+      expect(category('mongosh')).toBe('database')
+    })
+
+    it('classifies redis-cli', () => {
+      expect(category('redis-cli')).toBe('database')
+    })
+
+    it('classifies pgcli', () => {
+      expect(category('pgcli mydb')).toBe('database')
+    })
+
+    it('classifies mycli', () => {
+      expect(category('mycli -u root')).toBe('database')
+    })
+  })
+
   describe('script runs', () => {
     it('classifies bash scripts', () => {
       const result = normalize('bash deploy.sh')
-      expect(result.category).toBe('script_run')
+      expect(result.category).toBe('running')
       expect(result.metadata.shell).toBe('bash')
     })
 
     it('classifies node scripts', () => {
-      expect(category('node scripts/migrate.js')).toBe('script_run')
+      expect(category('node scripts/migrate.js')).toBe('running')
     })
 
     it('classifies python scripts', () => {
-      expect(category('python3 scripts/seed.py')).toBe('script_run')
+      expect(category('python3 scripts/seed.py')).toBe('running')
     })
 
     it('classifies generic npm run scripts', () => {
       const result = normalize('npm run lint')
-      expect(result.category).toBe('script_run')
+      expect(result.category).toBe('running')
       expect(result.metadata.script).toBe('lint')
     })
 
     it('classifies npm run format', () => {
-      expect(category('npm run format')).toBe('script_run')
+      expect(category('npm run format')).toBe('running')
     })
 
     it('classifies bun run lint', () => {
       const result = normalize('bun run lint')
-      expect(result.category).toBe('script_run')
+      expect(result.category).toBe('running')
       expect(result.metadata.tool).toBe('bun')
       expect(result.metadata.script).toBe('lint')
     })
@@ -369,28 +497,28 @@ describe('normalizeCommand', () => {
   describe('code_search', () => {
     it('classifies grep', () => {
       const result = normalize('grep -r "something" src/')
-      expect(result.category).toBe('code_search')
+      expect(result.category).toBe('exploring')
       expect(result.metadata.tool).toBe('grep')
     })
 
     it('classifies grep variants', () => {
-      expect(category('egrep "pattern" file.txt')).toBe('code_search')
-      expect(category('fgrep "string" file.txt')).toBe('code_search')
+      expect(category('egrep "pattern" file.txt')).toBe('exploring')
+      expect(category('fgrep "string" file.txt')).toBe('exploring')
     })
 
     it('classifies rg', () => {
       const result = normalize('rg "TODO" src/')
-      expect(result.category).toBe('code_search')
+      expect(result.category).toBe('exploring')
       expect(result.metadata.tool).toBe('rg')
     })
 
     it('classifies ag', () => {
-      expect(category('ag "pattern"')).toBe('code_search')
+      expect(category('ag "pattern"')).toBe('exploring')
     })
 
     it('classifies find', () => {
       const result = normalize('find . -name "*.ts"')
-      expect(result.category).toBe('code_search')
+      expect(result.category).toBe('exploring')
       expect(result.metadata.tool).toBe('find')
     })
   })
@@ -398,101 +526,101 @@ describe('normalizeCommand', () => {
   describe('code_read', () => {
     it('classifies cat', () => {
       const result = normalize('cat src/index.ts')
-      expect(result.category).toBe('code_read')
+      expect(result.category).toBe('exploring')
       expect(result.metadata.tool).toBe('cat')
     })
 
     it('classifies head and tail', () => {
-      expect(category('head -n 20 README.md')).toBe('code_read')
-      expect(category('tail -f app.log')).toBe('code_read')
+      expect(category('head -n 20 README.md')).toBe('exploring')
+      expect(category('tail -f app.log')).toBe('exploring')
     })
 
     it('classifies less and more', () => {
-      expect(category('less package.json')).toBe('code_read')
-      expect(category('more README.md')).toBe('code_read')
+      expect(category('less package.json')).toBe('exploring')
+      expect(category('more README.md')).toBe('exploring')
     })
 
     it('classifies bat', () => {
-      expect(category('bat src/index.ts')).toBe('code_read')
+      expect(category('bat src/index.ts')).toBe('exploring')
     })
   })
 
   describe('file_ops', () => {
     it('classifies cp', () => {
       const result = normalize('cp src/foo.ts src/bar.ts')
-      expect(result.category).toBe('file_ops')
+      expect(result.category).toBe('files')
       expect(result.metadata.tool).toBe('cp')
     })
 
     it('classifies mv', () => {
-      expect(category('mv old-name.ts new-name.ts')).toBe('file_ops')
+      expect(category('mv old-name.ts new-name.ts')).toBe('files')
     })
 
     it('classifies rm', () => {
-      expect(category('rm -rf dist/')).toBe('file_ops')
+      expect(category('rm -rf dist/')).toBe('files')
     })
 
     it('classifies mkdir', () => {
-      expect(category('mkdir -p src/components')).toBe('file_ops')
+      expect(category('mkdir -p src/components')).toBe('files')
     })
 
     it('classifies touch', () => {
-      expect(category('touch .env.local')).toBe('file_ops')
+      expect(category('touch .env.local')).toBe('files')
     })
 
     it('classifies chmod', () => {
-      expect(category('chmod +x scripts/deploy.sh')).toBe('file_ops')
+      expect(category('chmod +x scripts/deploy.sh')).toBe('files')
     })
   })
 
   describe('environment', () => {
     it('classifies export', () => {
       const result = normalize('export NODE_ENV=production')
-      expect(result.category).toBe('environment')
+      expect(result.category).toBe('files')
       expect(result.metadata.variable).toBe('NODE_ENV')
     })
 
     it('classifies source', () => {
-      expect(category('source .env')).toBe('environment')
-      expect(category('source ~/.zshrc')).toBe('environment')
+      expect(category('source .env')).toBe('files')
+      expect(category('source ~/.zshrc')).toBe('files')
     })
   })
 
   describe('npx commands', () => {
     it('classifies npx vitest as test_run', () => {
       const result = normalize('npx vitest run tests/foo.test.ts')
-      expect(result.category).toBe('test_run')
+      expect(result.category).toBe('testing')
       expect(result.metadata.tool).toBe('vitest')
     })
 
     it('classifies npx jest as test_run', () => {
-      expect(category('npx jest --watch')).toBe('test_run')
+      expect(category('npx jest --watch')).toBe('testing')
     })
 
     it('classifies npx tsc as build', () => {
-      expect(category('npx tsc --noEmit')).toBe('build')
+      expect(category('npx tsc --noEmit')).toBe('building')
     })
 
-    it('classifies npx eslint as lint_run', () => {
+    it('classifies npx eslint as linting', () => {
       const result = normalize('npx eslint src tests')
-      expect(result.category).toBe('lint_run')
+      expect(result.category).toBe('linting')
       expect(result.metadata.tool).toBe('eslint')
     })
 
-    it('classifies npx prettier as lint_run', () => {
+    it('classifies npx prettier as linting', () => {
       const result = normalize('npx prettier --write src')
-      expect(result.category).toBe('lint_run')
+      expect(result.category).toBe('linting')
       expect(result.metadata.tool).toBe('prettier')
     })
 
     it('classifies generic npx as script_run', () => {
       const result = normalize('npx husky init')
-      expect(result.category).toBe('script_run')
+      expect(result.category).toBe('running')
       expect(result.metadata.tool).toBe('husky')
     })
 
     it('classifies npx create-* as script_run', () => {
-      expect(category('npx create-react-app my-app')).toBe('script_run')
+      expect(category('npx create-react-app my-app')).toBe('running')
     })
   })
 
@@ -580,7 +708,7 @@ describe('normalizeCommand', () => {
 
   describe('git -C flag handling', () => {
     it('classifies git -C <path> commit as code_commit', () => {
-      expect(category('git -C /Users/mark/sandbox/project commit -m "fix: auth"')).toBe('code_commit')
+      expect(category('git -C /Users/mark/sandbox/project commit -m "fix: auth"')).toBe('shipping')
     })
 
     it('extracts commit message from git -C commit', () => {
@@ -589,29 +717,29 @@ describe('normalizeCommand', () => {
     })
 
     it('classifies git -C push as code_push', () => {
-      expect(category('git -C /home/user/project push origin main')).toBe('code_push')
+      expect(category('git -C /home/user/project push origin main')).toBe('shipping')
     })
 
     it('classifies git -C pull as code_pull', () => {
-      expect(category('git -C /home/user/project pull')).toBe('code_pull')
+      expect(category('git -C /home/user/project pull')).toBe('versioning')
     })
 
     it('classifies git -C status as git_other', () => {
-      expect(category('git -C /home/user/project status')).toBe('git_other')
+      expect(category('git -C /home/user/project status')).toBe('versioning')
     })
 
     it('classifies git -C add as git_other', () => {
-      expect(category('git -C /home/user/project add src/')).toBe('git_other')
+      expect(category('git -C /home/user/project add src/')).toBe('versioning')
     })
   })
 
   describe('whitespace handling', () => {
     it('handles extra leading/trailing whitespace', () => {
-      expect(category('  git commit -m "fix"  ')).toBe('code_commit')
+      expect(category('  git commit -m "fix"  ')).toBe('shipping')
     })
 
     it('collapses multiple spaces', () => {
-      expect(category('npm  install  axios')).toBe('dependency_install')
+      expect(category('npm  install  axios')).toBe('dependencies')
     })
   })
 })

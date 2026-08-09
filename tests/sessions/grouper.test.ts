@@ -13,7 +13,7 @@ function makeEvent(overrides: Partial<EventRow> & { captured_at: string }): Even
     duration_ms: overrides.duration_ms ?? 500,
     repo_name: overrides.repo_name ?? 'myapp',
     branch: overrides.branch ?? 'main',
-    category: overrides.category ?? 'test_run',
+    category: overrides.category ?? 'testing',
     metadata: overrides.metadata ?? null,
   }
 }

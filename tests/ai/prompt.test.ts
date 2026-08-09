@@ -19,8 +19,8 @@ const TWO_DAY_PAYLOAD: WeekSummaryPayload = {
           endTime: '11:00',
           durationMinutes: 120,
           events: [
-            { category: 'code_commit', metadata: { message: 'fix: auth' }, exitCode: 0, durationMs: null },
-            { category: 'test_run', metadata: {}, exitCode: 0, durationMs: null },
+            { category: 'shipping', metadata: { message: 'fix: auth' }, exitCode: 0, durationMs: null },
+            { category: 'testing', metadata: {}, exitCode: 0, durationMs: null },
           ],
         },
       ],
@@ -36,8 +36,8 @@ const TWO_DAY_PAYLOAD: WeekSummaryPayload = {
           endTime: '15:30',
           durationMinutes: 90,
           events: [
-            { category: 'build', metadata: {}, exitCode: 0, durationMs: null },
-            { category: 'build', metadata: {}, exitCode: 0, durationMs: null },
+            { category: 'building', metadata: {}, exitCode: 0, durationMs: null },
+            { category: 'building', metadata: {}, exitCode: 0, durationMs: null },
           ],
         },
       ],
@@ -67,13 +67,13 @@ describe('buildWeeklyMessage', () => {
   })
 
   it('aggregates repeated events', () => {
-    expect(buildWeeklyMessage(TWO_DAY_PAYLOAD)).toContain('2x build')
+    expect(buildWeeklyMessage(TWO_DAY_PAYLOAD)).toContain('2x building')
   })
 
   it('does not prefix single events with count', () => {
     const msg = buildWeeklyMessage(TWO_DAY_PAYLOAD)
-    expect(msg).toContain('test_run')
-    expect(msg).not.toContain('1x test_run')
+    expect(msg).toContain('testing')
+    expect(msg).not.toContain('1x testing')
   })
 
   it('skips days not present in the payload', () => {
@@ -85,7 +85,7 @@ describe('buildWeeklyMessage', () => {
     expect(buildWeeklyMessage(payload)).not.toContain('Tuesday')
   })
 
-  it('excludes server_run and git_other', () => {
+  it('excludes exploring events', () => {
     const payload: WeekSummaryPayload = {
       weekStart: '2026-05-25',
       weekEnd: '2026-05-25',
@@ -101,9 +101,8 @@ describe('buildWeeklyMessage', () => {
               endTime: '10:00',
               durationMinutes: 60,
               events: [
-                { category: 'server_run', metadata: { tool: 'npm' }, exitCode: 0, durationMs: null },
-                { category: 'git_other', metadata: { subcommand: 'status' }, exitCode: 0, durationMs: null },
-                { category: 'code_commit', metadata: { message: 'fix: bug' }, exitCode: 0, durationMs: null },
+                { category: 'exploring', metadata: { tool: 'grep' }, exitCode: 0, durationMs: null },
+                { category: 'shipping', metadata: { message: 'fix: bug' }, exitCode: 0, durationMs: null },
               ],
             },
           ],
@@ -111,9 +110,8 @@ describe('buildWeeklyMessage', () => {
       ],
     }
     const msg = buildWeeklyMessage(payload)
-    expect(msg).not.toContain('server_run')
-    expect(msg).not.toContain('git_other')
-    expect(msg).toContain('code_commit')
+    expect(msg).not.toContain('exploring')
+    expect(msg).toContain('shipping')
   })
 })
 
@@ -137,61 +135,77 @@ const makePayload = (
 })
 
 describe('buildUserMessage', () => {
-  it('excludes server_run', () => {
+  it('excludes exploring events (grep, find, cat)', () => {
     const msg = buildUserMessage(
       makePayload([
-        { category: 'server_run', metadata: { tool: 'npm', script: 'dev' } },
-        { category: 'code_commit', metadata: { message: 'feat: init' } },
+        { category: 'exploring', metadata: { tool: 'grep' } },
+        { category: 'shipping', metadata: { message: 'feat: init' } },
       ])
     )
-    expect(msg).not.toContain('server_run')
-    expect(msg).toContain('code_commit')
+    expect(msg).not.toContain('exploring')
+    expect(msg).toContain('shipping')
   })
 
-  it('excludes git_other', () => {
+  it('includes running events', () => {
     const msg = buildUserMessage(
       makePayload([
-        { category: 'git_other', metadata: { subcommand: 'status' } },
-        { category: 'code_commit', metadata: { message: 'fix: bug' } },
+        { category: 'running', metadata: { tool: 'npm', script: 'dev' } },
+        { category: 'shipping', metadata: { message: 'fix: bug' } },
       ])
     )
-    expect(msg).not.toContain('git_other')
-    expect(msg).toContain('code_commit')
+    expect(msg).toContain('running')
+    expect(msg).toContain('shipping')
   })
 
-  it('excludes environment, code_search, and code_read', () => {
+  it('includes versioning events', () => {
     const msg = buildUserMessage(
       makePayload([
-        { category: 'environment', metadata: { variable: 'NODE_ENV' } },
-        { category: 'code_search', metadata: { tool: 'grep' } },
-        { category: 'code_read', metadata: { tool: 'cat' } },
-        { category: 'code_commit', metadata: { message: 'chore: update config' } },
+        { category: 'versioning', metadata: { subcommand: 'status' } },
+        { category: 'shipping', metadata: { message: 'fix: bug' } },
       ])
     )
-    expect(msg).not.toContain('environment')
-    expect(msg).not.toContain('code_search')
-    expect(msg).not.toContain('code_read')
-    expect(msg).toContain('code_commit')
+    expect(msg).toContain('versioning')
+    expect(msg).toContain('shipping')
   })
 
-  it('includes file_ops', () => {
+  it('includes dependencies events', () => {
     const msg = buildUserMessage(
       makePayload([
-        { category: 'file_ops', metadata: { tool: 'mkdir' } },
-        { category: 'code_commit', metadata: { message: 'feat: add components dir' } },
+        { category: 'dependencies', metadata: { tool: 'npm', packages: ['react'] } },
+        { category: 'shipping', metadata: { message: 'feat: add react' } },
       ])
     )
-    expect(msg).toContain('file_ops')
+    expect(msg).toContain('dependencies')
   })
 
-  it('includes code_push', () => {
+  it('includes infrastructure events', () => {
     const msg = buildUserMessage(
       makePayload([
-        { category: 'code_commit', metadata: { message: 'fix: bug' } },
-        { category: 'code_push', metadata: { remote: 'origin', branch: 'main' } },
+        { category: 'infrastructure', metadata: { tool: 'kubectl', subcommand: 'apply' } },
+        { category: 'shipping', metadata: { message: 'feat: deploy service' } },
       ])
     )
-    expect(msg).toContain('code_push')
+    expect(msg).toContain('infrastructure')
+  })
+
+  it('includes files events', () => {
+    const msg = buildUserMessage(
+      makePayload([
+        { category: 'files', metadata: { tool: 'mkdir' } },
+        { category: 'shipping', metadata: { message: 'feat: add components dir' } },
+      ])
+    )
+    expect(msg).toContain('files')
+  })
+
+  it('includes shipping events', () => {
+    const msg = buildUserMessage(
+      makePayload([
+        { category: 'shipping', metadata: { message: 'fix: bug' } },
+        { category: 'shipping', metadata: { remote: 'origin', branch: 'main' } },
+      ])
+    )
+    expect(msg).toContain('shipping')
   })
 
   it('renders other events with hint as other  [hint text]', () => {

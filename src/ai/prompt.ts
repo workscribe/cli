@@ -8,29 +8,31 @@ Project: api-service
 Branch: feature/auth
 Duration: 2h 00m
 Events:
-  - branch_switch {"branch":"feature/auth"}
-  - 2x dependency_install {"tool":"npm","packages":["bcrypt","jsonwebtoken"]}
-  - 2x test_run {"tool":"jest"} [failed]
-  - test_run {"tool":"jest"}
-  - 2x file_ops {"tool":"mkdir"}
-  - code_commit {"message":"fix: auth token validation"}
-  - code_push {"remote":"origin","branch":"feature/auth"}
+  - versioning {"branch":"feature/auth"}
+  - 2x dependencies {"tool":"npm","packages":["bcrypt","jsonwebtoken"]}
+  - 2x testing {"tool":"jest"} [failed]
+  - testing {"tool":"jest"}
+  - 2x files {"tool":"mkdir"}
+  - shipping {"message":"fix: auth token validation"}
+  - shipping {"remote":"origin","branch":"feature/auth"}
 
 OUTPUT:
 - Switched to the authentication feature branch and added authentication dependencies (bcrypt, JWT)
 - Resolved failing auth tests
 - Committed and pushed authentication fixes
 
-For dependency_install events: infer the purpose of packages from their names and describe the domain, not just the packages. Examples: bcrypt/jsonwebtoken → authentication, prisma/mongoose/pg → database, jest/vitest/mocha → testing, axios/got/node-fetch → HTTP client, stripe/paypal → payments, socket.io/ws → real-time. Use your knowledge of common packages. For unfamiliar packages, name them directly without guessing their domain.
+For dependencies events with a packages field: infer the purpose of packages from their names and describe the domain, not just the packages. Examples: bcrypt/jsonwebtoken → authentication, prisma/mongoose/pg → database, jest/vitest/mocha → testing, axios/got/node-fetch → HTTP client, stripe/paypal → payments, socket.io/ws → real-time. Use your knowledge of common packages. For unfamiliar packages, name them directly without guessing their domain.
 
-Events like code_push, build, file_ops, and code_stash provide context — fold them into the surrounding narrative rather than listing them as separate bullets. Only surface them directly when they are the main activity (e.g. a standalone build fix, or a significant restructure with no accompanying commits).
+Events like shipping (pushes), building, versioning (branch switches, stash), files (file ops, env vars), and infrastructure provide context — fold them into the surrounding narrative rather than listing them as separate bullets. Only surface them directly when they are the main activity (e.g. a standalone build fix, a deploy, or a significant restructure with no accompanying commits).
 
 For ai_session events: describe what was built during the AI session using the tool name (e.g. "via Claude Code"). If a commits array is present in metadata, use those commit messages to describe what was built. Group all activity from the session into one narrative bullet.
 
+For other events with a hint field: interpret the command snippet and describe the activity in plain language. Do not quote the raw command.
+
 Maximum 5 bullets. Output ONLY the bullet points, nothing else.`
 
-// Categories excluded from the AI payload — investigative/shell noise that adds no signal to summaries
-const EXCLUDED = new Set(['environment', 'code_search', 'code_read', 'server_run', 'git_other'])
+// exploring (grep/find/cat) is excluded — read-only investigation adds no signal to work summaries
+const EXCLUDED = new Set(['exploring'])
 
 export function buildUserMessage(payload: DaySummaryPayload): string {
   const lines: string[] = [`Date: ${payload.date}`, '']

@@ -20,7 +20,7 @@ const SAMPLE_EVENTS = [
   {
     id: 5,
     captured_at: '2026-05-28T10:05:00Z',
-    category: 'test_run',
+    category: 'testing',
     command: 'npm test',
     cwd: '/repo',
     exit_code: 0,
@@ -32,7 +32,7 @@ const SAMPLE_EVENTS = [
   {
     id: 4,
     captured_at: '2026-05-28T10:00:00Z',
-    category: 'code_commit',
+    category: 'shipping',
     command: 'git commit',
     cwd: '/repo',
     exit_code: 0,

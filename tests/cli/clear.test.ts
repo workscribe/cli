@@ -26,7 +26,7 @@ function makeProgram() {
 const SAMPLE_EVENTS = [
   {
     id: 1,
-    category: 'code_commit',
+    category: 'shipping',
     captured_at: '2026-05-28T10:00:00Z',
     command: 'git commit',
     cwd: '/repo',
@@ -38,7 +38,7 @@ const SAMPLE_EVENTS = [
   },
   {
     id: 2,
-    category: 'test_run',
+    category: 'testing',
     captured_at: '2026-05-28T10:05:00Z',
     command: 'npm test',
     cwd: '/repo',
@@ -50,7 +50,7 @@ const SAMPLE_EVENTS = [
   },
   {
     id: 3,
-    category: 'test_run',
+    category: 'testing',
     captured_at: '2026-05-28T10:10:00Z',
     command: 'npm test',
     cwd: '/repo',

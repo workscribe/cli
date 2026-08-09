@@ -69,7 +69,7 @@ beforeEach(() => {
   mockGetLastEvent.mockReturnValue(undefined)
   mockRedact.mockImplementation((cmd: string) => cmd)
   mockGetGitContext.mockReturnValue({ repoName: 'myapp', branch: 'main' })
-  mockNormalize.mockReturnValue({ category: 'code_commit', metadata: {} })
+  mockNormalize.mockReturnValue({ category: 'shipping', metadata: {} })
   mockReadLastAiderPrompt.mockReturnValue(null)
 })
 
@@ -93,7 +93,7 @@ describe('captureCommand — capture.aiTools kill switch', () => {
       ...BASE_CONFIG,
       capture: { ignore: [], aiTools: false, includeAiderPrompt: true },
     })
-    mockNormalize.mockReturnValue({ category: 'code_commit', metadata: {} })
+    mockNormalize.mockReturnValue({ category: 'shipping', metadata: {} })
     captureCommand({ command: 'git commit', cwd: '/repo', exitCode: 0, durationMs: 50 })
     expect(mockInsertEvent).toHaveBeenCalledOnce()
   })
@@ -163,7 +163,7 @@ describe('captureCommand — hint passthrough for other events', () => {
   })
 
   it('does not add hint or tool to non-other events', () => {
-    mockNormalize.mockReturnValue({ category: 'code_commit', metadata: { message: 'fix: bug' } })
+    mockNormalize.mockReturnValue({ category: 'shipping', metadata: { message: 'fix: bug' } })
     captureCommand({ command: 'git commit -m "fix: bug"', cwd: '/repo', exitCode: 0, durationMs: 50 })
     const stored = JSON.parse(mockInsertEvent.mock.calls[0][0].metadata)
     expect(stored.hint).toBeUndefined()
