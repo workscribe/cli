@@ -8,7 +8,7 @@ import { normalizeCommand } from '../normalize/patterns'
 import { readConfig } from '../config'
 import { shouldFilter, isDuplicate } from './filter'
 import { PAUSE_FLAG_PATH } from '../utils/paths'
-import AI_TOOLS from '../config/ai-tools.json'
+import { loadAIToolRegistry } from '../config/registry'
 
 export function captureCommand(opts: {
   command: string
@@ -55,7 +55,7 @@ export function captureCommand(opts: {
 
     // 6b. Last user prompt from history file (e.g. Aider)
     if (config.capture.includeAiderPrompt !== false) {
-      const toolEntry = AI_TOOLS.find((entry) => entry.tool === metadata.tool)
+      const toolEntry = loadAIToolRegistry().find((entry) => entry.tool === metadata.tool)
       if (toolEntry?.contextSource === 'history-file') {
         const prompt = readLastAiderPrompt(cwd)
         if (prompt) metadata.prompt = prompt

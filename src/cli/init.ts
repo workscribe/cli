@@ -8,7 +8,7 @@ import { WORKSCRIBE_DIR, CONFIG_PATH } from '../utils/paths'
 import { readConfig, writeConfig } from '../config'
 import { getDb } from '../db'
 import { log } from '../utils/logger'
-import AI_TOOLS from '../config/ai-tools.json'
+import { loadAIToolRegistry } from '../config/registry'
 import { isHookInstalled, isHookOutdated, installHook, updateHook } from '../capture/shell-hook'
 import { AI_HOOK_INTEGRATIONS } from '../capture/hooks'
 
@@ -78,7 +78,9 @@ export function registerInit(program: Command): void {
       }
 
       // 4. AI tool hook integrations (registry-driven — add new tools in src/capture/hooks/)
-      const installedTools = AI_TOOLS.filter((t) => t.hook !== null && AI_HOOK_INTEGRATIONS[t.hook!]?.isInstalled())
+      const installedTools = loadAIToolRegistry().filter(
+        (t) => t.hook !== null && AI_HOOK_INTEGRATIONS[t.hook!]?.isInstalled()
+      )
 
       if (installedTools.length === 0) {
         log.info('No AI coding tools detected — re-run workscribe init after installing one')

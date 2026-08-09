@@ -1,4 +1,5 @@
-import AI_TOOLS from '../config/ai-tools.json'
+import { loadAIToolRegistry } from '../config/registry'
+import { debugLog } from '../utils/logger'
 
 export interface NormalizedEvent {
   category: string
@@ -245,7 +246,14 @@ export const RULES: Rule[] = [
   makeRule(/^(chmod|chown|chgrp)\b/, 'file_ops', (m) => ({ tool: m[1] })),
 
   // ─── AI terminal tools (registry-driven) ─────────────────────────────────
-  ...AI_TOOLS.map((entry) => makeRule(new RegExp(entry.pattern), 'ai_session', () => ({ tool: entry.tool }))),
+  ...loadAIToolRegistry().flatMap((entry) => {
+    try {
+      return [makeRule(new RegExp(entry.pattern), 'ai_session', () => ({ tool: entry.tool }))]
+    } catch {
+      debugLog('registry', `Skipping tool "${entry.tool}" — invalid pattern: ${entry.pattern}`)
+      return []
+    }
+  }),
 ]
 
 export function normalizeCommand(command: string): NormalizedEvent {

@@ -3,7 +3,7 @@ import chalk from 'chalk'
 import { getEventsForDate } from '../db'
 import { log } from '../utils/logger'
 import { todayDate, parseDate, formatDate } from '../utils/format'
-import AI_TOOLS from '../config/ai-tools.json'
+import { loadAIToolRegistry } from '../config/registry'
 
 const CATEGORY_COLORS: Record<string, (s: string) => string> = {
   code_commit: chalk.green,
@@ -29,7 +29,9 @@ const CATEGORY_COLORS: Record<string, (s: string) => string> = {
   other: chalk.gray,
 }
 
-const AI_TOOL_DISPLAY_NAMES: Record<string, string> = Object.fromEntries(AI_TOOLS.map((t) => [t.tool, t.displayName]))
+const AI_TOOL_DISPLAY_NAMES: Record<string, string> = Object.fromEntries(
+  loadAIToolRegistry().map((t) => [t.tool, t.displayName])
+)
 
 export function registerEvents(program: Command): void {
   program

@@ -43,12 +43,12 @@ vi.mock('../../src/capture/hooks', () => ({
   },
 }))
 
-vi.mock('../../src/config/ai-tools.json', () => ({
-  default: [
+vi.mock('../../src/config/registry', () => ({
+  loadAIToolRegistry: vi.fn().mockReturnValue([
     { tool: 'claude', displayName: 'Claude Code', pattern: '^claude\\b', hook: 'claude-code', contextSource: 'hook' },
     { tool: 'aider', displayName: 'Aider', pattern: '^aider\\b', hook: 'aider', contextSource: null },
     { tool: 'gemini', displayName: 'Gemini', pattern: '^gemini\\b', hook: null, contextSource: null },
-  ],
+  ]),
 }))
 
 vi.mock('prompts', () => ({ default: vi.fn() }))

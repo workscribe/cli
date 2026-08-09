@@ -54,12 +54,20 @@ workscribe config set session.idleTimeout 20
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `capture.ignore` | string[] | `["cd", "ls", "pwd", …]` | Commands to ignore — matched against the base command |
+| `capture.aiTools` | boolean | `true` | Set to `false` to disable all AI session capture (shell hook events and PostToolUse hook) |
+| `capture.includeAiderPrompt` | boolean | `true` | Set to `false` to skip reading Aider's history file for last-prompt context |
 
 The default ignore list: `cd`, `ls`, `ll`, `la`, `ls -la`, `ls -l`, `ls -a`, `pwd`, `clear`, `exit`, `history`, `man`.
 
 ```bash
 # Add a command to the ignore list
 workscribe config set capture.ignore '["cd","ls","htop","top"]'
+
+# Disable all AI session tracking
+workscribe config set capture.aiTools false
+
+# Stop reading Aider's history file for prompt context
+workscribe config set capture.includeAiderPrompt false
 ```
 
 ---
@@ -165,6 +173,40 @@ workscribe config set integrations.slackWebhook https://hooks.slack.com/services
 ```
 
 > **Security note:** The webhook URL is the only credential — anyone with it can post to your channel. Workscribe automatically redacts it from captured commands so it never appears in your event log.
+
+---
+
+## User-defined AI tool registry
+
+Workscribe ships with built-in support for Claude Code, Aider, Gemini, GitHub Copilot, and other common AI coding tools. You can extend or override this list by creating `~/.workscribe/ai-tools.json`.
+
+**Format:**
+
+```json
+[
+  {
+    "tool": "my-tool",
+    "displayName": "My AI Tool",
+    "pattern": "^my-tool\\b",
+    "hook": null,
+    "contextSource": null
+  }
+]
+```
+
+| Field | Required | Description |
+|---|---|---|
+| `tool` | yes | Unique slug — used in event metadata and display |
+| `pattern` | yes | JavaScript regex string matched against the captured command |
+| `displayName` | no | Human-readable name shown in `workscribe events` (defaults to `tool`) |
+| `hook` | no | Hook integration key — `null` for shell-only tools |
+| `contextSource` | no | Set to `"history-file"` to read last prompt from a history file |
+
+**Override a built-in:** add an entry with the same `tool` slug — it replaces the built-in entry entirely.
+
+**Invalid regex:** entries with an invalid `pattern` are silently skipped. Enable `WORKSCRIBE_DEBUG=1` to see which entries were skipped.
+
+**Malformed file:** if the file is not valid JSON or not an array, Workscribe falls back to built-ins silently.
 
 ---
 
