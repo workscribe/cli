@@ -17,7 +17,18 @@ function eventRowToPayload(row: EventRow): EventPayload {
   } catch {
     /* ignore */
   }
-  return { category: row.category, metadata, exitCode: row.exit_code, durationMs: row.duration_ms }
+  const payload: EventPayload = {
+    category: row.category,
+    metadata,
+    exitCode: row.exit_code,
+    durationMs: row.duration_ms,
+  }
+  if (row.category === 'other' && typeof metadata.hint === 'string') {
+    payload.hint = metadata.hint
+    const { hint: _h, tool: _t, ...rest } = metadata
+    payload.metadata = rest
+  }
+  return payload
 }
 
 export function registerExport(program: Command): void {

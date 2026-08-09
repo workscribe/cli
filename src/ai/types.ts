@@ -1,6 +1,7 @@
 export interface EventPayload {
   category: string
   metadata: Record<string, unknown>
+  hint?: string
   exitCode: number | null
   durationMs: number | null
 }

@@ -138,3 +138,35 @@ describe('captureCommand — Aider prompt enrichment', () => {
     expect(mockReadLastAiderPrompt).not.toHaveBeenCalled()
   })
 })
+
+describe('captureCommand — hint passthrough for other events', () => {
+  it('sets metadata.tool to the first token of the command', () => {
+    mockNormalize.mockReturnValue({ category: 'other', metadata: {} })
+    captureCommand({ command: 'nvm install v22.22.0', cwd: '/repo', exitCode: 0, durationMs: 50 })
+    const stored = JSON.parse(mockInsertEvent.mock.calls[0][0].metadata)
+    expect(stored.tool).toBe('nvm')
+  })
+
+  it('sets metadata.hint to the redacted command string', () => {
+    mockNormalize.mockReturnValue({ category: 'other', metadata: {} })
+    captureCommand({ command: 'nvm install v22.22.0', cwd: '/repo', exitCode: 0, durationMs: 50 })
+    const stored = JSON.parse(mockInsertEvent.mock.calls[0][0].metadata)
+    expect(stored.hint).toBe('nvm install v22.22.0')
+  })
+
+  it('truncates hint to 120 characters', () => {
+    const longCmd = 'x '.repeat(100).trim() // 199 chars
+    mockNormalize.mockReturnValue({ category: 'other', metadata: {} })
+    captureCommand({ command: longCmd, cwd: '/repo', exitCode: 0, durationMs: 50 })
+    const stored = JSON.parse(mockInsertEvent.mock.calls[0][0].metadata)
+    expect(stored.hint.length).toBe(120)
+  })
+
+  it('does not add hint or tool to non-other events', () => {
+    mockNormalize.mockReturnValue({ category: 'code_commit', metadata: { message: 'fix: bug' } })
+    captureCommand({ command: 'git commit -m "fix: bug"', cwd: '/repo', exitCode: 0, durationMs: 50 })
+    const stored = JSON.parse(mockInsertEvent.mock.calls[0][0].metadata)
+    expect(stored.hint).toBeUndefined()
+    expect(stored.tool).toBeUndefined()
+  })
+})
