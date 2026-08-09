@@ -78,22 +78,29 @@ export function registerInit(program: Command): void {
       }
 
       // 4. AI tool hook integrations (registry-driven — add new tools in src/capture/hooks/)
-      for (const tool of AI_TOOLS.filter((t) => t.hook !== null)) {
-        const integration = AI_HOOK_INTEGRATIONS[tool.hook!]
-        if (!integration?.isInstalled()) continue
+      const installedTools = AI_TOOLS.filter((t) => t.hook !== null && AI_HOOK_INTEGRATIONS[t.hook!]?.isInstalled())
 
-        if (integration.isHookInstalled()) {
-          log.info(`${integration.displayName} session hook already installed`)
-        } else {
-          const { install } = await prompts({
-            type: 'confirm',
-            name: 'install',
-            message: `${integration.displayName} detected. Install session capture hook?`,
-            initial: true,
-          })
-          if (install) {
-            integration.install()
-            log.success(`${integration.displayName} session hook installed`)
+      if (installedTools.length === 0) {
+        log.info('No AI coding tools detected — re-run workscribe init after installing one')
+      } else {
+        for (const tool of installedTools) {
+          const integration = AI_HOOK_INTEGRATIONS[tool.hook!]!
+
+          if (integration.isHookInstalled()) {
+            log.info(`${integration.displayName} session hook already installed`)
+          } else {
+            const { install } = await prompts({
+              type: 'confirm',
+              name: 'install',
+              message: `${integration.displayName} detected. Install session capture hook?`,
+              initial: false,
+            })
+            if (install) {
+              integration.install()
+              log.success(`${integration.displayName} session hook installed`)
+            } else {
+              log.info(`${integration.displayName} hook skipped — re-run workscribe init to install later`)
+            }
           }
         }
       }
