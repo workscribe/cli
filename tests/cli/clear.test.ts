@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 
 vi.mock('../../src/db', () => ({
   getEventsForDate: vi.fn(),
@@ -6,11 +6,6 @@ vi.mock('../../src/db', () => ({
 }))
 
 vi.mock('prompts', () => ({ default: vi.fn() }))
-
-// Suppress output during tests
-vi.mock('../../src/utils/logger', () => ({
-  log: { plain: vi.fn(), error: vi.fn(), success: vi.fn() },
-}))
 
 import { Command } from 'commander'
 import prompts from 'prompts'
@@ -66,8 +61,6 @@ const SAMPLE_EVENTS = [
     metadata: null,
   },
 ]
-
-beforeEach(() => vi.clearAllMocks())
 
 describe('workscribe clear', () => {
   describe('no events', () => {

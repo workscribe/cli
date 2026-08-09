@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 
 vi.mock('fs', () => ({
   default: {
@@ -9,13 +9,7 @@ vi.mock('fs', () => ({
 
 vi.mock('prompts', () => ({ default: vi.fn() }))
 
-vi.mock('../../src/utils/logger', () => ({
-  log: { info: vi.fn(), success: vi.fn(), warn: vi.fn(), error: vi.fn(), plain: vi.fn() },
-}))
-
-vi.mock('../../src/utils/paths', () => ({
-  WORKSCRIBE_DIR: '/home/user/.workscribe',
-}))
+vi.mock('../../src/utils/paths')
 
 vi.mock('../../src/capture/shell-hook', () => ({
   isHookInstalled: vi.fn(),
@@ -39,8 +33,6 @@ function makeProgram() {
   registerUninstall(program)
   return program
 }
-
-beforeEach(() => vi.clearAllMocks())
 
 describe('workscribe uninstall', () => {
   describe('shell hook removal', () => {

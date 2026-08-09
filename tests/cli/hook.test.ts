@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 
 vi.mock('../../src/capture', () => ({ captureCommand: vi.fn() }))
 
@@ -8,8 +8,6 @@ import { captureCommand } from '../../src/capture'
 import { parseHookPayload, registerHook } from '../../src/cli/hook'
 
 const mockCapture = captureCommand as ReturnType<typeof vi.fn>
-
-beforeEach(() => vi.clearAllMocks())
 
 // ─── parseHookPayload ─────────────────────────────────────────────────────────
 

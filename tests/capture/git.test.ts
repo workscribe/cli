@@ -21,7 +21,6 @@ function setupGitRoot(root = '/home/user/sandbox/chronicle') {
 }
 
 beforeEach(() => {
-  vi.clearAllMocks()
   mockReadFileSync.mockImplementation(() => {
     throw new Error('no package.json')
   })

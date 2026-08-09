@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 
 vi.mock('fs', () => ({
   default: {
@@ -8,10 +8,6 @@ vi.mock('fs', () => ({
     copyFileSync: vi.fn(),
     appendFileSync: vi.fn(),
   },
-}))
-
-vi.mock('../../src/utils/logger', () => ({
-  log: { info: vi.fn(), success: vi.fn(), warn: vi.fn(), error: vi.fn(), plain: vi.fn() },
 }))
 
 import fs from 'fs'
@@ -32,8 +28,6 @@ _workscribe_preexec() { echo "hook"; }
 
 const RC_WITH_HOOK = `# other config\n${HOOK_BLOCK}\n# more config`
 const RC_WITHOUT_HOOK = `# just some zsh config\nexport PATH="$HOME/bin:$PATH"`
-
-beforeEach(() => vi.clearAllMocks())
 
 describe('getInstalledHookBlock', () => {
   it('returns null when file does not exist', () => {
