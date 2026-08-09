@@ -10,7 +10,7 @@ export function formatDate(isoString: string): string {
 }
 
 export function todayDate(): string {
-  return new Date().toISOString().split('T')[0]
+  return localDateStr(new Date())
 }
 
 export function parseDate(input: string): string {
