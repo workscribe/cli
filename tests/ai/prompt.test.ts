@@ -119,7 +119,9 @@ describe('buildWeeklyMessage', () => {
 
 // ─── buildUserMessage ─────────────────────────────────────────────────────────
 
-const makePayload = (events: { category: string; metadata?: Record<string, unknown> }[]): DaySummaryPayload => ({
+const makePayload = (
+  events: { category: string; metadata?: Record<string, unknown>; hint?: string }[]
+): DaySummaryPayload => ({
   date: '2026-05-28',
   sessions: [
     {
@@ -190,6 +192,36 @@ describe('buildUserMessage', () => {
       ])
     )
     expect(msg).toContain('code_push')
+  })
+
+  it('renders other events with hint as other  [hint text]', () => {
+    const msg = buildUserMessage(makePayload([{ category: 'other', metadata: {}, hint: 'nvm install v22.22.0' }]))
+    expect(msg).toContain('other  [nvm install v22.22.0]')
+  })
+
+  it('renders other events without hint as plain other', () => {
+    const msg = buildUserMessage(makePayload([{ category: 'other', metadata: {} }]))
+    expect(msg).toContain('other')
+    expect(msg).not.toContain('[')
+  })
+
+  it('appends [failed] to other events with hint', () => {
+    const payload: DaySummaryPayload = {
+      date: '2026-05-28',
+      sessions: [
+        {
+          date: '2026-05-28',
+          project: 'myapp',
+          branch: 'main',
+          startTime: '09:00',
+          endTime: '10:00',
+          durationMinutes: 60,
+          events: [{ category: 'other', metadata: {}, hint: 'bad-cmd --flag', exitCode: 1, durationMs: null }],
+        },
+      ],
+    }
+    const msg = buildUserMessage(payload)
+    expect(msg).toContain('other  [bad-cmd --flag] [failed]')
   })
 })
 

@@ -43,6 +43,13 @@ export function captureCommand(opts: {
 
   if (category === 'ai_session' && config.capture.aiTools === false) return
 
+  // Hint passthrough: preserve context for unrecognised commands so the AI can describe them
+  if (category === 'other') {
+    const firstToken = safeCommand.trim().split(/\s+/)[0]
+    if (firstToken) metadata.tool = firstToken
+    metadata.hint = safeCommand.trim().slice(0, 120)
+  }
+
   if (opts.source) metadata.source = opts.source
 
   // 6. For ai_session events, enrich metadata

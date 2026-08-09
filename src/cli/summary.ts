@@ -45,12 +45,18 @@ function eventRowToPayload(row: EventRow): EventPayload {
   } catch {
     /* ignore */
   }
-  return {
+  const payload: EventPayload = {
     category: row.category,
     metadata,
     exitCode: row.exit_code,
     durationMs: row.duration_ms,
   }
+  if (row.category === 'other' && typeof metadata.hint === 'string') {
+    payload.hint = metadata.hint
+    const { hint: _h, tool: _t, ...rest } = metadata
+    payload.metadata = rest
+  }
+  return payload
 }
 
 function sessionToPayload(s: ReturnType<typeof getOrBuildSessions>[number], date: string): SessionPayload {

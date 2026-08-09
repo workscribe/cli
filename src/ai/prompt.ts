@@ -45,9 +45,14 @@ export function buildUserMessage(payload: DaySummaryPayload): string {
     const counts = new Map<string, number>()
     for (const event of session.events) {
       if (EXCLUDED.has(event.category)) continue
-      const meta = Object.keys(event.metadata).length > 0 ? ` ${JSON.stringify(event.metadata)}` : ''
       const failed = event.exitCode !== null && event.exitCode !== 0 ? ' [failed]' : ''
-      const key = `${event.category}${meta}${failed}`
+      let key: string
+      if (event.hint) {
+        key = `other  [${event.hint}]${failed}`
+      } else {
+        const meta = Object.keys(event.metadata).length > 0 ? ` ${JSON.stringify(event.metadata)}` : ''
+        key = `${event.category}${meta}${failed}`
+      }
       counts.set(key, (counts.get(key) ?? 0) + 1)
     }
 
@@ -111,9 +116,14 @@ export function buildWeeklyMessage(payload: WeekSummaryPayload): string {
       const counts = new Map<string, number>()
       for (const e of s.events) {
         if (EXCLUDED.has(e.category)) continue
-        const meta = Object.keys(e.metadata).length > 0 ? ` ${JSON.stringify(e.metadata)}` : ''
         const failed = e.exitCode !== null && e.exitCode !== 0 ? ' [failed]' : ''
-        const key = `${e.category}${meta}${failed}`
+        let key: string
+        if (e.hint) {
+          key = `other  [${e.hint}]${failed}`
+        } else {
+          const meta = Object.keys(e.metadata).length > 0 ? ` ${JSON.stringify(e.metadata)}` : ''
+          key = `${e.category}${meta}${failed}`
+        }
         counts.set(key, (counts.get(key) ?? 0) + 1)
       }
       const eventLine = [...counts.entries()].map(([k, n]) => `${n > 1 ? `${n}x ` : ''}${k}`).join(', ')
