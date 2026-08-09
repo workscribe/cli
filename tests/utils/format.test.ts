@@ -1,5 +1,17 @@
 import { describe, it, expect } from 'vitest'
-import { startOfWeek, eachDayOfRange } from '../../src/utils/format'
+import { todayDate, startOfWeek, eachDayOfRange } from '../../src/utils/format'
+
+describe('todayDate', () => {
+  it('returns a YYYY-MM-DD string', () => {
+    expect(todayDate()).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+  })
+
+  it('returns local calendar date, not UTC date', () => {
+    const now = new Date()
+    const localDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+    expect(todayDate()).toBe(localDate)
+  })
+})
 
 describe('startOfWeek', () => {
   it('returns Monday when given a Monday', () => {

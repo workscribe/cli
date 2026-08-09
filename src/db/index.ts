@@ -111,7 +111,7 @@ export function getEventsForDate(date: string): EventRow[] {
   const db = getDb()
   const stmt = db.prepare(`
     SELECT * FROM events
-    WHERE date(captured_at) = $date
+    WHERE date(captured_at, 'localtime') = $date
     ORDER BY captured_at ASC
   `)
   return stmt.all({ date }) as unknown as EventRow[]
@@ -199,7 +199,7 @@ export function deleteEventsByIds(ids: number[]): void {
   const placeholders = ids.map(() => '?').join(', ')
 
   const affectedDates = db
-    .prepare(`SELECT DISTINCT date(captured_at) as date FROM events WHERE id IN (${placeholders})`)
+    .prepare(`SELECT DISTINCT date(captured_at, 'localtime') as date FROM events WHERE id IN (${placeholders})`)
     .all(...ids) as { date: string }[]
 
   db.prepare(`DELETE FROM events WHERE id IN (${placeholders})`).run(...ids)
