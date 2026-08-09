@@ -4,7 +4,9 @@ vi.mock('../../src/db', () => ({
   getEventsForDate: vi.fn(),
 }))
 
-vi.mock('../../src/config/ai-tools.json', () => ({ default: [] }))
+vi.mock('../../src/config/registry', () => ({
+  loadAIToolRegistry: vi.fn().mockReturnValue([]),
+}))
 
 import { Command } from 'commander'
 import { getEventsForDate } from '../../src/db'

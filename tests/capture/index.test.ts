@@ -24,12 +24,12 @@ vi.mock('../../src/capture/git-snapshot', () => ({ getCommitsSince: vi.fn() }))
 
 vi.mock('../../src/capture/aider', () => ({ readLastAiderPrompt: vi.fn() }))
 
-vi.mock('../../src/config/ai-tools.json', () => ({
-  default: [
+vi.mock('../../src/config/registry', () => ({
+  loadAIToolRegistry: vi.fn().mockReturnValue([
     { tool: 'claude', pattern: '^claude\\b', hook: 'claude-code', contextSource: 'hook' },
     { tool: 'aider', pattern: '^aider\\b', hook: null, contextSource: 'history-file' },
     { tool: 'gemini', pattern: '^gemini\\b', hook: null, contextSource: null },
-  ],
+  ]),
 }))
 
 vi.mock('../../src/utils/paths', () => ({ PAUSE_FLAG_PATH: '/home/user/.workscribe/paused' }))
