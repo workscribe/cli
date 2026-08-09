@@ -126,8 +126,8 @@ describe('splitByRepo', () => {
     ]
     const groups = splitByRepo(events)
     expect(groups).toHaveLength(2)
-    expect(groups[0].every((e) => e.repo_name === 'api')).toBe(true)
-    expect(groups[1].every((e) => e.repo_name === 'frontend')).toBe(true)
+    expect(groups[0].every((event) => event.repo_name === 'api')).toBe(true)
+    expect(groups[1].every((event) => event.repo_name === 'frontend')).toBe(true)
   })
 
   it('creates a new group when switching back to a previous repo', () => {

@@ -77,8 +77,8 @@ describe('workscribe status', () => {
     it('shows today event count', async () => {
       mockGetEventsForDate.mockReturnValue([{}, {}])
       await makeProgram().parseAsync(['status'], { from: 'user' })
-      const calls = mockLog.plain.mock.calls.map((c: unknown[]) => c[0] as string)
-      expect(calls.some((c) => c.includes('2'))).toBe(true)
+      const calls = mockLog.plain.mock.calls.map((call: unknown[]) => call[0] as string)
+      expect(calls.some((call) => call.includes('2'))).toBe(true)
     })
   })
 
@@ -103,8 +103,8 @@ describe('workscribe status', () => {
     it('omits last event line when no events have been captured', async () => {
       mockGetLastEvent.mockReturnValue(undefined)
       await makeProgram().parseAsync(['status'], { from: 'user' })
-      const calls = mockLog.plain.mock.calls.map((c: unknown[]) => c[0] as string)
-      expect(calls.some((c) => c.includes('Last event'))).toBe(false)
+      const calls = mockLog.plain.mock.calls.map((call: unknown[]) => call[0] as string)
+      expect(calls.some((call) => call.includes('Last event'))).toBe(false)
     })
   })
 

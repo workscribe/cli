@@ -52,14 +52,14 @@ export function registerExport(program: Command): void {
         process.exit(1)
       }
 
-      const sessionPayloads: SessionPayload[] = sessions.map((s) => ({
+      const sessionPayloads: SessionPayload[] = sessions.map((session) => ({
         date,
-        project: s.repoName,
-        branch: s.events[0]?.branch ?? null,
-        startTime: formatDate(s.startedAt),
-        endTime: formatDate(s.endedAt),
-        durationMinutes: s.durationMinutes,
-        events: s.events.map(eventRowToPayload),
+        project: session.repoName,
+        branch: session.events[0]?.branch ?? null,
+        startTime: formatDate(session.startedAt),
+        endTime: formatDate(session.endedAt),
+        durationMinutes: session.durationMinutes,
+        events: session.events.map(eventRowToPayload),
       }))
 
       const payload: DaySummaryPayload = { date, sessions: sessionPayloads }

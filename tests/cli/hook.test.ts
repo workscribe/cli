@@ -119,7 +119,7 @@ describe('_hook integration', () => {
   it('calls captureCommand with command, cwd, and source from a valid payload', async () => {
     await withStdin(VALID_HOOK_PAYLOAD, async () => {
       await makeProgram().parseAsync(['_hook', '--source', 'claude-code'], { from: 'user' })
-      await new Promise((r) => setImmediate(r))
+      await new Promise((resolve) => setImmediate(resolve))
     })
     expect(mockCapture).toHaveBeenCalledOnce()
     expect(mockCapture).toHaveBeenCalledWith({
@@ -134,7 +134,7 @@ describe('_hook integration', () => {
   it('calls captureCommand without source when --source is omitted', async () => {
     await withStdin(VALID_HOOK_PAYLOAD, async () => {
       await makeProgram().parseAsync(['_hook'], { from: 'user' })
-      await new Promise((r) => setImmediate(r))
+      await new Promise((resolve) => setImmediate(resolve))
     })
     expect(mockCapture).toHaveBeenCalledOnce()
     expect(mockCapture).toHaveBeenCalledWith(expect.objectContaining({ source: undefined }))
@@ -143,7 +143,7 @@ describe('_hook integration', () => {
   it('does not call captureCommand when payload is empty', async () => {
     await withStdin('', async () => {
       await makeProgram().parseAsync(['_hook'], { from: 'user' })
-      await new Promise((r) => setImmediate(r))
+      await new Promise((resolve) => setImmediate(resolve))
     })
     expect(mockCapture).not.toHaveBeenCalled()
   })
@@ -151,7 +151,7 @@ describe('_hook integration', () => {
   it('does not call captureCommand when cwd is missing', async () => {
     await withStdin(JSON.stringify({ tool_input: { command: 'npm test' } }), async () => {
       await makeProgram().parseAsync(['_hook'], { from: 'user' })
-      await new Promise((r) => setImmediate(r))
+      await new Promise((resolve) => setImmediate(resolve))
     })
     expect(mockCapture).not.toHaveBeenCalled()
   })
@@ -159,7 +159,7 @@ describe('_hook integration', () => {
   it('does not throw when payload is invalid JSON', async () => {
     await withStdin('not-json', async () => {
       await expect(makeProgram().parseAsync(['_hook'], { from: 'user' })).resolves.not.toThrow()
-      await new Promise((r) => setImmediate(r))
+      await new Promise((resolve) => setImmediate(resolve))
     })
     expect(mockCapture).not.toHaveBeenCalled()
   })
@@ -168,7 +168,7 @@ describe('_hook integration', () => {
     mockReadConfig.mockReturnValue({ capture: { aiTools: false } })
     await withStdin(VALID_HOOK_PAYLOAD, async () => {
       await makeProgram().parseAsync(['_hook', '--source', 'claude-code'], { from: 'user' })
-      await new Promise((r) => setImmediate(r))
+      await new Promise((resolve) => setImmediate(resolve))
     })
     expect(mockCapture).not.toHaveBeenCalled()
   })

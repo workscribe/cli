@@ -34,7 +34,7 @@ interface SessionSummaryJson {
 export function parseBullets(text: string): string[] {
   return text
     .split('\n')
-    .map((l) => l.replace(/^[•\-]\s*/, '').trim())
+    .map((line) => line.replace(/^[•\-]\s*/, '').trim())
     .filter(Boolean)
 }
 
@@ -116,7 +116,7 @@ export function registerSummary(program: Command): void {
         for (const day of days) {
           const sessions = getOrBuildSessions(day)
           if (sessions.length > 0) {
-            weeklyDays.push({ date: day, sessions: sessions.map((s) => sessionToPayload(s, day)) })
+            weeklyDays.push({ date: day, sessions: sessions.map((session) => sessionToPayload(session, day)) })
           }
         }
 
@@ -146,7 +146,7 @@ export function registerSummary(program: Command): void {
         try {
           const summary = provider.summarizeWeek
             ? await provider.summarizeWeek(payload)
-            : await provider.summarize({ date: today, sessions: weeklyDays.flatMap((d) => d.sessions) })
+            : await provider.summarize({ date: today, sessions: weeklyDays.flatMap((day) => day.sessions) })
 
           log.plain('')
           log.plain(summary)
@@ -184,16 +184,16 @@ export function registerSummary(program: Command): void {
       const jsonMode = config.summary?.format === 'json'
 
       if (!opts.fresh) {
-        const allCached = sessions.every((s) => s.summary)
+        const allCached = sessions.every((session) => session.summary)
         if (allCached) {
-          const fullSummary = sessions.map((s) => s.summary!).join('\n\n')
+          const fullSummary = sessions.map((session) => session.summary!).join('\n\n')
           log.plain('')
           if (jsonMode) {
-            const jsonOut: SessionSummaryJson[] = sessions.map((s) => ({
-              project: s.repoName,
-              branch: s.events[0]?.branch ?? null,
-              durationMinutes: s.durationMinutes,
-              bullets: parseBullets(s.summary!.replace(/^## .+\n/, '')),
+            const jsonOut: SessionSummaryJson[] = sessions.map((session) => ({
+              project: session.repoName,
+              branch: session.events[0]?.branch ?? null,
+              durationMinutes: session.durationMinutes,
+              bullets: parseBullets(session.summary!.replace(/^## .+\n/, '')),
             }))
             log.plain(JSON.stringify({ date, sessions: jsonOut }, null, 2))
           } else {

@@ -95,8 +95,8 @@ describe('workscribe events', () => {
     it('does not show overflow message when limit equals total', async () => {
       mockGetEvents.mockReturnValue(SAMPLE_EVENTS)
       await makeProgram().parseAsync(['events', '--limit', '3'], { from: 'user' })
-      const calls = mockLog.plain.mock.calls.map((c: unknown[]) => c[0])
-      expect(calls.some((c) => typeof c === 'string' && c.includes('more'))).toBe(false)
+      const calls = mockLog.plain.mock.calls.map((call: unknown[]) => call[0])
+      expect(calls.some((call) => typeof call === 'string' && call.includes('more'))).toBe(false)
     })
   })
 

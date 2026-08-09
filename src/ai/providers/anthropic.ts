@@ -33,7 +33,7 @@ export class AnthropicProvider implements AIProvider {
     }
 
     const data = (await response.json()) as { content: Array<{ type: string; text: string }> }
-    return data.content.find((c) => c.type === 'text')?.text ?? ''
+    return data.content.find((block) => block.type === 'text')?.text ?? ''
   }
 
   async summarizeWeek(payload: WeekSummaryPayload): Promise<string> {
@@ -58,6 +58,6 @@ export class AnthropicProvider implements AIProvider {
     }
 
     const data = (await response.json()) as { content: Array<{ type: string; text: string }> }
-    return data.content.find((c) => c.type === 'text')?.text ?? ''
+    return data.content.find((block) => block.type === 'text')?.text ?? ''
   }
 }

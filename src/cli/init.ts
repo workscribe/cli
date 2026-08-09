@@ -79,7 +79,7 @@ export function registerInit(program: Command): void {
 
       // 4. AI tool hook integrations (registry-driven — add new tools in src/capture/hooks/)
       const installedTools = loadAIToolRegistry().filter(
-        (t) => t.hook !== null && AI_HOOK_INTEGRATIONS[t.hook!]?.isInstalled()
+        (entry) => entry.hook !== null && AI_HOOK_INTEGRATIONS[entry.hook!]?.isInstalled()
       )
 
       if (installedTools.length === 0) {
