@@ -3,10 +3,12 @@ import { insertEvent, getLastEvent } from '../db'
 import { redact } from './redact'
 import { getGitContext } from './git'
 import { getCommitsSince } from './git-snapshot'
+import { readLastAiderPrompt } from './aider'
 import { normalizeCommand } from '../normalize/patterns'
 import { readConfig } from '../config'
 import { shouldFilter, isDuplicate } from './filter'
 import { PAUSE_FLAG_PATH } from '../utils/paths'
+import AI_TOOLS from '../config/ai-tools.json'
 
 export function captureCommand(opts: {
   command: string
@@ -43,10 +45,22 @@ export function captureCommand(opts: {
 
   if (opts.source) metadata.source = opts.source
 
-  // 6. For ai_session events, enrich metadata with commits made during the session
-  if (category === 'ai_session' && opts.gitBefore) {
-    const commits = getCommitsSince(opts.gitBefore, cwd)
-    if (commits.length > 0) metadata.commits = commits
+  // 6. For ai_session events, enrich metadata
+  if (category === 'ai_session') {
+    // 6a. Commits made during the session
+    if (opts.gitBefore) {
+      const commits = getCommitsSince(opts.gitBefore, cwd)
+      if (commits.length > 0) metadata.commits = commits
+    }
+
+    // 6b. Last user prompt from history file (e.g. Aider)
+    if (config.capture.includeAiderPrompt !== false) {
+      const toolEntry = AI_TOOLS.find((entry) => entry.tool === metadata.tool)
+      if (toolEntry?.contextSource === 'history-file') {
+        const prompt = readLastAiderPrompt(cwd)
+        if (prompt) metadata.prompt = prompt
+      }
+    }
   }
 
   // 7. Persist

@@ -22,6 +22,16 @@ vi.mock('../../src/capture/git', () => ({ getGitContext: vi.fn() }))
 
 vi.mock('../../src/capture/git-snapshot', () => ({ getCommitsSince: vi.fn() }))
 
+vi.mock('../../src/capture/aider', () => ({ readLastAiderPrompt: vi.fn() }))
+
+vi.mock('../../src/config/ai-tools.json', () => ({
+  default: [
+    { tool: 'claude', pattern: '^claude\\b', hook: 'claude-code', contextSource: 'hook' },
+    { tool: 'aider', pattern: '^aider\\b', hook: null, contextSource: 'history-file' },
+    { tool: 'gemini', pattern: '^gemini\\b', hook: null, contextSource: null },
+  ],
+}))
+
 vi.mock('../../src/utils/paths', () => ({ PAUSE_FLAG_PATH: '/home/user/.workscribe/paused' }))
 
 import fs from 'fs'
@@ -31,6 +41,7 @@ import { normalizeCommand } from '../../src/normalize/patterns'
 import { shouldFilter, isDuplicate } from '../../src/capture/filter'
 import { redact } from '../../src/capture/redact'
 import { getGitContext } from '../../src/capture/git'
+import { readLastAiderPrompt } from '../../src/capture/aider'
 import { captureCommand } from '../../src/capture'
 
 const mockFs = fs as unknown as Record<string, ReturnType<typeof vi.fn>>
@@ -42,9 +53,10 @@ const mockIsDuplicate = isDuplicate as ReturnType<typeof vi.fn>
 const mockRedact = redact as ReturnType<typeof vi.fn>
 const mockGetGitContext = getGitContext as ReturnType<typeof vi.fn>
 const mockGetLastEvent = getLastEvent as ReturnType<typeof vi.fn>
+const mockReadLastAiderPrompt = readLastAiderPrompt as ReturnType<typeof vi.fn>
 
 const BASE_CONFIG = {
-  capture: { ignore: [], aiTools: true },
+  capture: { ignore: [], aiTools: true, includeAiderPrompt: true },
   redact: { extra: [] },
   projects: {},
 }
@@ -58,6 +70,7 @@ beforeEach(() => {
   mockRedact.mockImplementation((cmd: string) => cmd)
   mockGetGitContext.mockReturnValue({ repoName: 'myapp', branch: 'main' })
   mockNormalize.mockReturnValue({ category: 'code_commit', metadata: {} })
+  mockReadLastAiderPrompt.mockReturnValue(null)
 })
 
 describe('captureCommand — capture.aiTools kill switch', () => {
@@ -76,9 +89,52 @@ describe('captureCommand — capture.aiTools kill switch', () => {
   })
 
   it('still captures non-ai_session events when capture.aiTools is false', () => {
-    mockReadConfig.mockReturnValue({ ...BASE_CONFIG, capture: { ignore: [], aiTools: false } })
+    mockReadConfig.mockReturnValue({
+      ...BASE_CONFIG,
+      capture: { ignore: [], aiTools: false, includeAiderPrompt: true },
+    })
     mockNormalize.mockReturnValue({ category: 'code_commit', metadata: {} })
     captureCommand({ command: 'git commit', cwd: '/repo', exitCode: 0, durationMs: 50 })
     expect(mockInsertEvent).toHaveBeenCalledOnce()
+  })
+})
+
+describe('captureCommand — Aider prompt enrichment', () => {
+  it('adds prompt to metadata for history-file tools when prompt is found', () => {
+    mockNormalize.mockReturnValue({ category: 'ai_session', metadata: { tool: 'aider' } })
+    mockReadLastAiderPrompt.mockReturnValue('refactor the payment service')
+    captureCommand({ command: 'aider', cwd: '/repo', exitCode: 0, durationMs: 100 })
+    const stored = JSON.parse(mockInsertEvent.mock.calls[0][0].metadata)
+    expect(stored.prompt).toBe('refactor the payment service')
+  })
+
+  it('does not add prompt when readLastAiderPrompt returns null', () => {
+    mockNormalize.mockReturnValue({ category: 'ai_session', metadata: { tool: 'aider' } })
+    mockReadLastAiderPrompt.mockReturnValue(null)
+    captureCommand({ command: 'aider', cwd: '/repo', exitCode: 0, durationMs: 100 })
+    const stored = JSON.parse(mockInsertEvent.mock.calls[0][0].metadata)
+    expect(stored.prompt).toBeUndefined()
+  })
+
+  it('does not call readLastAiderPrompt when includeAiderPrompt is false', () => {
+    mockReadConfig.mockReturnValue({
+      ...BASE_CONFIG,
+      capture: { ignore: [], aiTools: true, includeAiderPrompt: false },
+    })
+    mockNormalize.mockReturnValue({ category: 'ai_session', metadata: { tool: 'aider' } })
+    captureCommand({ command: 'aider', cwd: '/repo', exitCode: 0, durationMs: 100 })
+    expect(mockReadLastAiderPrompt).not.toHaveBeenCalled()
+  })
+
+  it('does not call readLastAiderPrompt for hook-based tools (e.g. Claude Code)', () => {
+    mockNormalize.mockReturnValue({ category: 'ai_session', metadata: { tool: 'claude' } })
+    captureCommand({ command: 'claude', cwd: '/repo', exitCode: 0, durationMs: 100 })
+    expect(mockReadLastAiderPrompt).not.toHaveBeenCalled()
+  })
+
+  it('does not call readLastAiderPrompt for tools with no contextSource', () => {
+    mockNormalize.mockReturnValue({ category: 'ai_session', metadata: { tool: 'gemini' } })
+    captureCommand({ command: 'gemini', cwd: '/repo', exitCode: 0, durationMs: 100 })
+    expect(mockReadLastAiderPrompt).not.toHaveBeenCalled()
   })
 })
