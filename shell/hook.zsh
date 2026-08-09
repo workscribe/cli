@@ -9,7 +9,7 @@ _workscribe_preexec() {
 
 _workscribe_precmd() {
   local exit_code=$?
-  (( $+commands[workscribe] )) || return 0
+  command -v workscribe > /dev/null 2>&1 || return 0
   if [[ -n "$_workscribe_cmd" ]]; then
     local _raw_ms=$(( ($EPOCHREALTIME - $_workscribe_cmd_start) * 1000 ))
     local duration_ms=${_raw_ms%%.*}
@@ -19,7 +19,7 @@ _workscribe_precmd() {
       --exit "$exit_code" \
       --duration "$duration_ms" \
       ${_workscribe_git_before:+--git-before "$_workscribe_git_before"} \
-      2>/dev/null &!
+      > /dev/null 2>&1 &!
     _workscribe_cmd=""
     _workscribe_git_before=""
   fi

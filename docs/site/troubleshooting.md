@@ -179,6 +179,14 @@ This loses captured history but config is unaffected.
 
 ## Uninstalling
 
+Run the uninstall command first — it removes the shell hook from your rc file before the binary is deleted:
+
+```bash
+workscribe uninstall
+```
+
+Then remove the package:
+
 ```bash
 # npm
 npm uninstall -g @workscribe/cli
@@ -193,10 +201,32 @@ pnpm remove -g @workscribe/cli
 bun remove -g @workscribe/cli
 ```
 
-Then remove your data:
+> **Note:** From v1.8.0 onwards, `npm uninstall -g` removes the shell hook automatically via a `preuninstall` lifecycle script. Running `workscribe uninstall` first is still recommended if you want to be prompted about deleting your data.
+
+---
+
+## Shell errors after uninstalling (`workscribe_precmd: unknown function`)
+
+If you uninstalled the package without running `workscribe uninstall` first, the shell hook block may still be in your rc file. The binary is gone so you can't use the CLI to clean it up — use this one-liner instead.
+
+**zsh:**
 
 ```bash
-rm -rf ~/.workscribe
+perl -i -0pe 's/\n?# Workscribe[^\n]*\n# Do not edit[^\n]*\n# workscribe:hook:start.*?# workscribe:hook:end\n?//s' ~/.zshrc && source ~/.zshrc
 ```
 
-And remove the hook block from your `~/.zshrc` or `~/.bashrc` — delete everything between `# workscribe:hook:start` and `# workscribe:hook:end`.
+**bash:**
+
+```bash
+perl -i -0pe 's/\n?# Workscribe[^\n]*\n# Do not edit[^\n]*\n# workscribe:hook:start.*?# workscribe:hook:end\n?//s' ~/.bashrc && source ~/.bashrc
+```
+
+Or open the file in any editor and manually delete everything between (and including) the two lines:
+
+```
+# workscribe:hook:start
+...
+# workscribe:hook:end
+```
+
+After removing the block, restart your terminal or run `source ~/.zshrc` (or `~/.bashrc`).

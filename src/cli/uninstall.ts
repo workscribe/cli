@@ -21,7 +21,8 @@ export function registerUninstall(program: Command): void {
   program
     .command('uninstall')
     .description('Remove shell hooks and optionally delete all Workscribe data')
-    .action(async () => {
+    .option('--hooks-only', 'remove shell hooks only, skip data deletion prompt (used by npm preuninstall)')
+    .action(async (opts) => {
       log.plain(chalk.bold('\n  Workscribe — Uninstall\n'))
 
       // 1. Remove shell hooks from any rc files that have them
@@ -38,6 +39,8 @@ export function registerUninstall(program: Command): void {
           )
         }
       }
+
+      if (opts.hooksOnly) return
 
       // 2. Optionally delete ~/.workscribe/ data
       if (fs.existsSync(WORKSCRIBE_DIR)) {

@@ -22,7 +22,7 @@ _workscribe_precmd() {
       --exit "$exit_code" \
       --duration "$duration" \
       ${_workscribe_git_before:+--git-before "$_workscribe_git_before"} \
-      2>/dev/null &
+      > /dev/null 2>&1 &
     _workscribe_last_cmd=""
     _workscribe_git_before=""
   fi
