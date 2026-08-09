@@ -229,6 +229,40 @@ When paused, the shell hook still fires but events are silently discarded. Usefu
 
 ---
 
+## workscribe uninstall
+
+Remove shell hooks and optionally delete all Workscribe data.
+
+```bash
+workscribe uninstall
+workscribe uninstall --hooks-only
+```
+
+| Option | Description |
+|---|---|
+| `--hooks-only` | Remove shell hooks only — skip the data deletion prompt |
+
+**What it does:**
+- Detects and removes the Workscribe hook block from `~/.zshrc`, `~/.bashrc`, and `~/.bash_profile`
+- Prompts whether to delete `~/.workscribe/` (database, config, exports) — defaults to **no**
+- Prints the command to remove the CLI itself (`npm uninstall -g @workscribe/cli`)
+
+**After running:**
+
+The hook is removed from your rc file but remains active in your current shell session. Either restart your terminal or run:
+
+```bash
+source ~/.zshrc   # or ~/.bashrc
+```
+
+**If you've already removed the binary** and still see `_workscribe_precmd` errors, remove the hook block manually:
+
+1. Open `~/.zshrc` (or `~/.bashrc`)
+2. Delete everything between `# workscribe:hook:start` and `# workscribe:hook:end` (inclusive)
+3. Run `source ~/.zshrc` or restart your terminal
+
+---
+
 ## workscribe config
 
 View and update configuration.
