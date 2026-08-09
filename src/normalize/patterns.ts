@@ -38,132 +38,151 @@ function extractPackages(cmd: string, afterKeyword: string): string[] {
 
 export const RULES: Rule[] = [
   // ─── Git operations ───────────────────────────────────────────────────────
-  makeRule(/^git\s+commit\b/, 'code_commit', (_m, cmd) => {
+  makeRule(/^git\s+commit\b/, 'shipping', (_m, cmd) => {
     const msgMatch = cmd.match(/-m\s+["']?([^"']+)["']?/)
     return { message: msgMatch ? msgMatch[1].trim() : null }
   }),
 
-  makeRule(/^git\s+push\b/, 'code_push', (_m, cmd) => {
+  makeRule(/^git\s+push\b/, 'shipping', (_m, cmd) => {
     const parts = cmd.split(/\s+/)
     return { remote: parts[2] ?? 'origin', branch: parts[3] ?? null }
   }),
 
-  makeRule(/^git\s+(pull|fetch)\b/, 'code_pull', (_m, cmd) => {
+  makeRule(/^git\s+(pull|fetch)\b/, 'versioning', (_m, cmd) => {
     const parts = cmd.split(/\s+/)
     return { subcommand: parts[1], remote: parts[2] ?? 'origin' }
   }),
 
-  makeRule(/^git\s+(checkout|switch)\b/, 'branch_switch', (_m, cmd) => {
+  makeRule(/^git\s+(checkout|switch)\b/, 'versioning', (_m, cmd) => {
     const parts = cmd.split(/\s+/)
     const branch = parts.find((part) => !part.startsWith('-') && part !== 'git' && part !== parts[1])
     return { branch: branch ?? null }
   }),
 
-  makeRule(/^git\s+(merge|rebase)\b/, 'code_merge', (_m, cmd) => {
+  makeRule(/^git\s+(merge|rebase)\b/, 'shipping', (_m, cmd) => {
     const parts = cmd.split(/\s+/)
     return { subcommand: parts[1], target: parts[2] ?? null }
   }),
 
-  makeRule(/^git\s+stash\b/, 'code_stash', (_m, cmd) => {
+  makeRule(/^git\s+stash\b/, 'versioning', (_m, cmd) => {
     const parts = cmd.split(/\s+/)
     return { subcommand: parts[2] ?? 'push' }
   }),
 
-  makeRule(/^git\s+/, 'git_other', (_m, cmd) => {
+  makeRule(/^git\s+/, 'versioning', (_m, cmd) => {
     const parts = cmd.split(/\s+/)
     return { subcommand: parts[1] ?? null }
   }),
 
-  // ─── Package managers — install ───────────────────────────────────────────
-  makeRule(/^npm\s+(install|i|add)\b/, 'dependency_install', (_m, cmd) => ({
+  // ─── Releasing ────────────────────────────────────────────────────────────
+  makeRule(/^npm\s+publish\b/, 'releasing', () => ({ tool: 'npm' })),
+  makeRule(/^cargo\s+publish\b/, 'releasing', () => ({ tool: 'cargo' })),
+  makeRule(/^gem\s+push\b/, 'releasing', () => ({ tool: 'gem' })),
+  makeRule(/^docker\s+push\b/, 'releasing', (_m, cmd) => ({ tool: 'docker', image: cmd.split(/\s+/)[2] ?? null })),
+  makeRule(/^gh\s+release\b/, 'releasing', (_m, cmd) => ({ tool: 'gh', subcommand: cmd.split(/\s+/)[2] ?? null })),
+  makeRule(/^fly\s+(deploy|launch)\b/, 'releasing', (match) => ({ tool: 'fly', subcommand: match[1] })),
+  makeRule(/^vercel\s+(deploy|build|--prod)\b/, 'releasing', () => ({ tool: 'vercel' })),
+  makeRule(/^netlify\s+deploy\b/, 'releasing', () => ({ tool: 'netlify' })),
+  makeRule(/^railway\s+up\b/, 'releasing', () => ({ tool: 'railway' })),
+  makeRule(/^wrangler\s+deploy\b/, 'releasing', () => ({ tool: 'wrangler' })),
+
+  // ─── Dependencies ─────────────────────────────────────────────────────────
+  makeRule(/^npm\s+(install|i|add)\b/, 'dependencies', (_m, cmd) => ({
     tool: 'npm',
     packages: extractPackages(cmd, cmd.includes('install') ? 'install' : cmd.includes(' i ') ? ' i ' : 'add'),
   })),
 
-  makeRule(/^(yarn|pnpm)\s+(install|add)\b/, 'dependency_install', (m, cmd) => ({
+  makeRule(/^(yarn|pnpm)\s+(install|add)\b/, 'dependencies', (m, cmd) => ({
     tool: m[1],
     packages: extractPackages(cmd, 'add'),
   })),
 
-  makeRule(/^bun\s+(install|add)\b/, 'dependency_install', (_m, cmd) => ({
+  makeRule(/^bun\s+(install|add)\b/, 'dependencies', (_m, cmd) => ({
     tool: 'bun',
     packages: extractPackages(cmd, 'add'),
   })),
 
-  makeRule(/^pip\s+(install)\b/, 'dependency_install', (_m, cmd) => ({
+  makeRule(/^pip\s+(install)\b/, 'dependencies', (_m, cmd) => ({
     tool: 'pip',
     packages: extractPackages(cmd, 'install'),
   })),
 
-  makeRule(/^cargo\s+add\b/, 'dependency_install', (_m, cmd) => ({
+  makeRule(/^cargo\s+add\b/, 'dependencies', (_m, cmd) => ({
     tool: 'cargo',
     packages: extractPackages(cmd, 'add'),
   })),
 
-  makeRule(/^(brew)\s+install\b/, 'dependency_install', (_m, cmd) => ({
+  makeRule(/^(brew)\s+install\b/, 'dependencies', (_m, cmd) => ({
     tool: 'brew',
     packages: extractPackages(cmd, 'install'),
   })),
 
-  makeRule(/^go\s+get\b/, 'dependency_install', (_m, cmd) => ({
+  makeRule(/^go\s+get\b/, 'dependencies', (_m, cmd) => ({
     tool: 'go',
     packages: extractPackages(cmd, 'get'),
   })),
 
-  // ─── Package managers — remove ────────────────────────────────────────────
-  makeRule(/^npm\s+(uninstall|remove|rm)\b/, 'dependency_remove', (_m, cmd) => ({
+  makeRule(/^npm\s+(uninstall|remove|rm)\b/, 'dependencies', (_m, cmd) => ({
     tool: 'npm',
     packages: extractPackages(cmd, cmd.split(/\s+/)[1]),
   })),
 
-  makeRule(/^(yarn|pnpm)\s+remove\b/, 'dependency_remove', (m, cmd) => ({
+  makeRule(/^(yarn|pnpm)\s+remove\b/, 'dependencies', (m, cmd) => ({
     tool: m[1],
     packages: extractPackages(cmd, 'remove'),
   })),
 
-  makeRule(/^bun\s+remove\b/, 'dependency_remove', (_m, cmd) => ({
+  makeRule(/^bun\s+remove\b/, 'dependencies', (_m, cmd) => ({
     tool: 'bun',
     packages: extractPackages(cmd, 'remove'),
   })),
 
-  makeRule(/^pip\s+uninstall\b/, 'dependency_remove', (_m, cmd) => ({
+  makeRule(/^pip\s+uninstall\b/, 'dependencies', (_m, cmd) => ({
     tool: 'pip',
     packages: extractPackages(cmd, 'uninstall'),
   })),
 
+  // Runtime version managers
+  makeRule(/^nvm\b/, 'dependencies', (_m, cmd) => ({ tool: 'nvm', subcommand: cmd.split(/\s+/)[1] ?? null })),
+  makeRule(/^(fnm|volta)\b/, 'dependencies', (m, cmd) => ({ tool: m[1], subcommand: cmd.split(/\s+/)[1] ?? null })),
+  makeRule(/^(rbenv|pyenv|asdf)\b/, 'dependencies', (m, cmd) => ({
+    tool: m[1],
+    subcommand: cmd.split(/\s+/)[1] ?? null,
+  })),
+
   // ─── Tests ────────────────────────────────────────────────────────────────
-  makeRule(/^npm\s+(test|run\s+test)\b/, 'test_run', () => ({ tool: 'npm' })),
-  makeRule(/^yarn\s+test\b/, 'test_run', () => ({ tool: 'yarn' })),
-  makeRule(/^pnpm\s+test\b/, 'test_run', () => ({ tool: 'pnpm' })),
-  makeRule(/^bun\s+test\b/, 'test_run', () => ({ tool: 'bun' })),
-  makeRule(/^(jest|vitest)\b/, 'test_run', (match) => ({ tool: match[1] })),
-  makeRule(/^pytest\b/, 'test_run', () => ({ tool: 'pytest' })),
-  makeRule(/^go\s+test\b/, 'test_run', () => ({ tool: 'go' })),
-  makeRule(/^cargo\s+test\b/, 'test_run', () => ({ tool: 'cargo' })),
-  makeRule(/^rspec\b/, 'test_run', () => ({ tool: 'rspec' })),
-  makeRule(/^(php\s+)?phpunit\b/, 'test_run', () => ({ tool: 'phpunit' })),
+  makeRule(/^npm\s+(test|run\s+test)\b/, 'testing', () => ({ tool: 'npm' })),
+  makeRule(/^yarn\s+test\b/, 'testing', () => ({ tool: 'yarn' })),
+  makeRule(/^pnpm\s+test\b/, 'testing', () => ({ tool: 'pnpm' })),
+  makeRule(/^bun\s+test\b/, 'testing', () => ({ tool: 'bun' })),
+  makeRule(/^(jest|vitest)\b/, 'testing', (match) => ({ tool: match[1] })),
+  makeRule(/^pytest\b/, 'testing', () => ({ tool: 'pytest' })),
+  makeRule(/^go\s+test\b/, 'testing', () => ({ tool: 'go' })),
+  makeRule(/^cargo\s+test\b/, 'testing', () => ({ tool: 'cargo' })),
+  makeRule(/^rspec\b/, 'testing', () => ({ tool: 'rspec' })),
+  makeRule(/^(php\s+)?phpunit\b/, 'testing', () => ({ tool: 'phpunit' })),
 
   // ─── Build ────────────────────────────────────────────────────────────────
-  makeRule(/^npm\s+run\s+build\b/, 'build', () => ({ tool: 'npm' })),
-  makeRule(/^(yarn|pnpm)\s+build\b/, 'build', (match) => ({ tool: match[1] })),
-  makeRule(/^bun\s+run\s+build\b/, 'build', () => ({ tool: 'bun' })),
-  makeRule(/^(make|gmake)\b/, 'build', (match) => ({ tool: match[1] })),
-  makeRule(/^cargo\s+build\b/, 'build', () => ({ tool: 'cargo' })),
-  makeRule(/^go\s+build\b/, 'build', () => ({ tool: 'go' })),
-  makeRule(/^docker\s+build\b/, 'build', () => ({ tool: 'docker' })),
-  makeRule(/^(mvn|gradle)\b/, 'build', (match) => ({ tool: match[1] })),
+  makeRule(/^npm\s+run\s+build\b/, 'building', () => ({ tool: 'npm' })),
+  makeRule(/^(yarn|pnpm)\s+build\b/, 'building', (match) => ({ tool: match[1] })),
+  makeRule(/^bun\s+run\s+build\b/, 'building', () => ({ tool: 'bun' })),
+  makeRule(/^(make|gmake)\b/, 'building', (match) => ({ tool: match[1] })),
+  makeRule(/^cargo\s+build\b/, 'building', () => ({ tool: 'cargo' })),
+  makeRule(/^go\s+build\b/, 'building', () => ({ tool: 'go' })),
+  makeRule(/^docker\s+build\b/, 'building', () => ({ tool: 'docker' })),
+  makeRule(/^(mvn|gradle)\b/, 'building', (match) => ({ tool: match[1] })),
 
-  // ─── Dev server ───────────────────────────────────────────────────────────
-  makeRule(/^npm\s+run\s+(dev|start|serve)\b/, 'server_run', (_m, cmd) => ({
+  // ─── Dev server / running ─────────────────────────────────────────────────
+  makeRule(/^npm\s+run\s+(dev|start|serve)\b/, 'running', (_m, cmd) => ({
     tool: 'npm',
     script: cmd.split(/\s+/)[2],
   })),
-  makeRule(/^(yarn|pnpm)\s+(dev|start)\b/, 'server_run', (match) => ({ tool: match[1], script: match[2] })),
-  makeRule(/^bun\s+run\s+(dev|start|serve)\b/, 'server_run', (_m, cmd) => ({
+  makeRule(/^(yarn|pnpm)\s+(dev|start)\b/, 'running', (match) => ({ tool: match[1], script: match[2] })),
+  makeRule(/^bun\s+run\s+(dev|start|serve)\b/, 'running', (_m, cmd) => ({
     tool: 'bun',
     script: cmd.split(/\s+/)[2],
   })),
-  makeRule(/^python\s+.*manage\.py\s+runserver\b/, 'server_run', () => ({ tool: 'django' })),
+  makeRule(/^python\s+.*manage\.py\s+runserver\b/, 'running', () => ({ tool: 'django' })),
 
   // ─── Infrastructure ───────────────────────────────────────────────────────
   makeRule(/^ssh\b/, 'infrastructure', (_m, cmd) => {
@@ -181,7 +200,7 @@ export const RULES: Rule[] = [
     return { tool: m[1], subcommand: parts[1] ?? null }
   }),
 
-  makeRule(/^docker\s+(run|compose|ps|stop|start|rm|exec)\b/, 'infrastructure', (m, cmd) => {
+  makeRule(/^docker\s+(run|compose|ps|stop|start|rm|exec)\b/, 'infrastructure', (_m, cmd) => {
     const parts = cmd.split(/\s+/)
     return { tool: 'docker', subcommand: parts[1] }
   }),
@@ -191,59 +210,70 @@ export const RULES: Rule[] = [
     return { tool: m[1], subcommand: parts[1] ?? null }
   }),
 
+  // ─── Database ─────────────────────────────────────────────────────────────
+  makeRule(/^(psql|pgcli)\b/, 'database', (m) => ({ tool: m[1] })),
+  makeRule(/^(mysql|mycli)\b/, 'database', (m) => ({ tool: m[1] })),
+  makeRule(/^sqlite3\b/, 'database', () => ({ tool: 'sqlite3' })),
+  makeRule(/^(mongosh|mongo)\b/, 'database', (m) => ({ tool: m[1] })),
+  makeRule(/^redis-cli\b/, 'database', () => ({ tool: 'redis-cli' })),
+
   // ─── npx ─────────────────────────────────────────────────────────────────
-  makeRule(/^npx\s+(jest|vitest|mocha|ava|tap)\b/, 'test_run', (_m, cmd) => ({
+  makeRule(/^npx\s+(jest|vitest|mocha|ava|tap)\b/, 'testing', (_m, cmd) => ({
     tool: cmd.split(/\s+/)[1],
   })),
-  makeRule(/^npx\s+tsc\b/, 'build', () => ({ tool: 'tsc' })),
-  makeRule(/^npx\s+(eslint|tslint|biome)\b/, 'lint_run', (_m, cmd) => ({
+  makeRule(/^npx\s+tsc\b/, 'building', () => ({ tool: 'tsc' })),
+  makeRule(/^npx\s+(eslint|tslint|biome)\b/, 'linting', (_m, cmd) => ({
     tool: cmd.split(/\s+/)[1],
   })),
-  makeRule(/^npx\s+(prettier|dprint)\b/, 'lint_run', (_m, cmd) => ({
+  makeRule(/^npx\s+(prettier|dprint)\b/, 'linting', (_m, cmd) => ({
     tool: cmd.split(/\s+/)[1],
   })),
-  makeRule(/^npx\s+\S+/, 'script_run', (_m, cmd) => ({
+  makeRule(/^npx\s+\S+/, 'running', (_m, cmd) => ({
     tool: cmd.split(/\s+/)[1],
   })),
 
   // ─── Scripts ──────────────────────────────────────────────────────────────
-  makeRule(/^(bash|sh|zsh|fish)\s+\S+/, 'script_run', (match) => ({ shell: match[1] })),
-  makeRule(/^node\s+\S+\.(?:js|mjs|cjs)\b/, 'script_run', () => ({ runtime: 'node' })),
-  makeRule(/^python3?\s+\S+\.py\b/, 'script_run', () => ({ runtime: 'python' })),
+  makeRule(/^(bash|sh|zsh|fish)\s+\S+/, 'running', (match) => ({ shell: match[1] })),
+  makeRule(/^node\s+\S+\.(?:js|mjs|cjs)\b/, 'running', () => ({ runtime: 'node' })),
+  makeRule(/^python3?\s+\S+\.py\b/, 'running', () => ({ runtime: 'python' })),
 
-  // ─── Environment ──────────────────────────────────────────────────────────
-  makeRule(/^export\s+\w+=/, 'environment', (_m, cmd) => {
-    const varName = cmd.match(/^export\s+(\w+)=/)?.[1] ?? null
-    return { variable: varName }
-  }),
-  makeRule(/^source\s+/, 'environment', () => ({})),
+  // ─── Linting / code quality ───────────────────────────────────────────────
+  makeRule(/^(eslint|tslint|biome)\b/, 'linting', (match) => ({ tool: match[1] })),
+  makeRule(/^(prettier|dprint)\b/, 'linting', (match) => ({ tool: match[1] })),
 
   // ─── generic run scripts ──────────────────────────────────────────────────
-  makeRule(/^npm\s+run\s+\S+/, 'script_run', (_m, cmd) => ({
+  makeRule(/^npm\s+run\s+\S+/, 'running', (_m, cmd) => ({
     tool: 'npm',
     script: cmd.split(/\s+/)[2],
   })),
 
-  makeRule(/^bun\s+run\s+\S+/, 'script_run', (_m, cmd) => ({
+  makeRule(/^bun\s+run\s+\S+/, 'running', (_m, cmd) => ({
     tool: 'bun',
     script: cmd.split(/\s+/)[2],
   })),
 
   // ─── Code search ─────────────────────────────────────────────────────────
-  makeRule(/^(grep|egrep|fgrep)\b/, 'code_search', (match) => ({ tool: match[1] })),
-  makeRule(/^(rg|ag|ack|ripgrep)\b/, 'code_search', (match) => ({ tool: match[1] })),
-  makeRule(/^find\s/, 'code_search', () => ({ tool: 'find' })),
+  makeRule(/^(grep|egrep|fgrep)\b/, 'exploring', (match) => ({ tool: match[1] })),
+  makeRule(/^(rg|ag|ack|ripgrep)\b/, 'exploring', (match) => ({ tool: match[1] })),
+  makeRule(/^find\s/, 'exploring', () => ({ tool: 'find' })),
 
   // ─── Code read ────────────────────────────────────────────────────────────
-  makeRule(/^(cat|bat|less|more)\s+\S+/, 'code_read', (match) => ({ tool: match[1] })),
-  makeRule(/^(head|tail)\b/, 'code_read', (match) => ({ tool: match[1] })),
+  makeRule(/^(cat|bat|less|more)\s+\S+/, 'exploring', (match) => ({ tool: match[1] })),
+  makeRule(/^(head|tail)\b/, 'exploring', (match) => ({ tool: match[1] })),
 
   // ─── File operations ──────────────────────────────────────────────────────
-  makeRule(/^(cp|rsync)\b/, 'file_ops', (match) => ({ tool: match[1] })),
-  makeRule(/^(mv)\b/, 'file_ops', () => ({ tool: 'mv' })),
-  makeRule(/^(rm|rmdir)\b/, 'file_ops', (match) => ({ tool: match[1] })),
-  makeRule(/^(mkdir|touch|ln)\b/, 'file_ops', (match) => ({ tool: match[1] })),
-  makeRule(/^(chmod|chown|chgrp)\b/, 'file_ops', (match) => ({ tool: match[1] })),
+  makeRule(/^(cp|rsync)\b/, 'files', (match) => ({ tool: match[1] })),
+  makeRule(/^(mv)\b/, 'files', () => ({ tool: 'mv' })),
+  makeRule(/^(rm|rmdir)\b/, 'files', (match) => ({ tool: match[1] })),
+  makeRule(/^(mkdir|touch|ln)\b/, 'files', (match) => ({ tool: match[1] })),
+  makeRule(/^(chmod|chown|chgrp)\b/, 'files', (match) => ({ tool: match[1] })),
+
+  // ─── Environment ──────────────────────────────────────────────────────────
+  makeRule(/^export\s+\w+=/, 'files', (_m, cmd) => {
+    const varName = cmd.match(/^export\s+(\w+)=/)?.[1] ?? null
+    return { variable: varName }
+  }),
+  makeRule(/^source\s+/, 'files', () => ({})),
 
   // ─── AI terminal tools (registry-driven) ─────────────────────────────────
   ...loadAIToolRegistry().flatMap((entry) => {

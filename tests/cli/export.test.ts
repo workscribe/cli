@@ -51,7 +51,7 @@ const SAMPLE_SESSIONS = [
     events: [
       {
         id: 1,
-        category: 'code_commit',
+        category: 'shipping',
         captured_at: '2026-05-28T09:00:00Z',
         command: 'git commit',
         cwd: '/repo',

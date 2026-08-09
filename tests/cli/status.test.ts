@@ -88,7 +88,7 @@ describe('workscribe status', () => {
         id: 1,
         captured_at: '2026-05-28T10:00:00Z',
         command: 'git status',
-        category: 'git_other',
+        category: 'versioning',
         cwd: '/repo',
         exit_code: 0,
         duration_ms: 50,
