@@ -1,6 +1,6 @@
 {
   "name": "@workscribe/cli",
-  "version": "1.9.0",
+  "version": "1.10.0",
   "description": "Passive developer work journal — automatic terminal activity summaries",
   "type": "commonjs",
   "bin": {
