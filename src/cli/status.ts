@@ -1,7 +1,7 @@
 import { Command } from 'commander'
 import fs from 'fs'
 import chalk from 'chalk'
-import { getEventCount, getLastEvent } from '../db'
+import { getEventCount, getLastEvent, getRecentOtherRate } from '../db'
 import { readConfig } from '../config'
 import { log } from '../utils/logger'
 import { formatDate, todayDate } from '../utils/format'
@@ -41,6 +41,29 @@ export function registerStatus(program: Command): void {
         `  AI provider  ${config.ai.provider ? chalk.cyan(config.ai.provider) : chalk.yellow('not configured')}`
       )
       if (config.ai.model) log.plain(`  Model        ${chalk.dim(config.ai.model)}`)
+
+      const activeProfiles = config.capture.profiles
+      log.plain(
+        `  Profiles     ${activeProfiles.length > 0 ? chalk.cyan(activeProfiles.join(', ')) : chalk.dim('none')}`
+      )
+
+      const { total: weekTotal, otherCount } = getRecentOtherRate(7)
+      if (weekTotal > 0) {
+        const otherPct = Math.round((otherCount / weekTotal) * 100)
+        if (otherPct >= 25) {
+          log.plain('')
+          log.plain(
+            `  ${chalk.yellow('⚠')}  ${otherCount} of ${weekTotal} events (${otherPct}%) are uncategorised this week.`
+          )
+          log.plain(
+            chalk.dim(
+              '     Run workscribe profile detect  — scan current directory for matching profiles\n' +
+                '     Run workscribe profile suggest  — analyse your command history'
+            )
+          )
+        }
+      }
+
       log.plain('')
     })
 }

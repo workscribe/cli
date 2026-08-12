@@ -1,5 +1,5 @@
 import type { AIProvider, DaySummaryPayload, WeekSummaryPayload } from '../types'
-import { SYSTEM_PROMPT, buildUserMessage, WEEKLY_SYSTEM_PROMPT, buildWeeklyMessage } from '../prompt'
+import { getSystemPrompt, buildUserMessage, WEEKLY_SYSTEM_PROMPT, buildWeeklyMessage } from '../prompt'
 import { fetchWithTimeout } from '../fetch'
 
 export class AnthropicProvider implements AIProvider {
@@ -22,7 +22,7 @@ export class AnthropicProvider implements AIProvider {
       body: JSON.stringify({
         model: this.model,
         max_tokens: 1024,
-        system: SYSTEM_PROMPT,
+        system: getSystemPrompt(),
         messages: [{ role: 'user', content: buildUserMessage(payload) }],
       }),
     })

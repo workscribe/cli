@@ -1,6 +1,14 @@
-import { describe, it, expect } from 'vitest'
-import { buildWeeklyMessage, buildUserMessage, SYSTEM_PROMPT } from '../../src/ai/prompt'
+import { describe, it, expect, vi } from 'vitest'
+
+vi.mock('../../src/profiles/loader', () => ({
+  getActiveProfileAiContexts: vi.fn().mockReturnValue([]),
+}))
+
+import { buildWeeklyMessage, buildUserMessage, SYSTEM_PROMPT, getSystemPrompt } from '../../src/ai/prompt'
+import { getActiveProfileAiContexts } from '../../src/profiles/loader'
 import type { WeekSummaryPayload, DaySummaryPayload } from '../../src/ai/types'
+
+const mockGetActiveProfileAiContexts = getActiveProfileAiContexts as ReturnType<typeof vi.fn>
 
 // ─── buildWeeklyMessage ───────────────────────────────────────────────────────
 
@@ -240,6 +248,30 @@ describe('buildUserMessage', () => {
 })
 
 // ─── SYSTEM_PROMPT ────────────────────────────────────────────────────────────
+
+describe('getSystemPrompt', () => {
+  it('returns the base SYSTEM_PROMPT when no profiles are active', () => {
+    mockGetActiveProfileAiContexts.mockReturnValue([])
+    expect(getSystemPrompt()).toBe(SYSTEM_PROMPT)
+  })
+
+  it('appends a single profile aiContext to the base prompt', () => {
+    mockGetActiveProfileAiContexts.mockReturnValue(['This developer works with Flutter and Dart.'])
+    const result = getSystemPrompt()
+    expect(result).toContain(SYSTEM_PROMPT)
+    expect(result).toContain('This developer works with Flutter and Dart.')
+  })
+
+  it('appends multiple profile aiContext strings separated by newline', () => {
+    mockGetActiveProfileAiContexts.mockReturnValue([
+      'This developer works with Flutter and Dart.',
+      'This developer uses Android tooling.',
+    ])
+    const result = getSystemPrompt()
+    expect(result).toContain('Flutter and Dart')
+    expect(result).toContain('Android tooling')
+  })
+})
 
 describe('SYSTEM_PROMPT', () => {
   it('instructs the model to infer domain from package names', () => {

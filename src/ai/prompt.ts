@@ -1,5 +1,6 @@
 import type { DaySummaryPayload, WeekSummaryPayload } from './types'
 import { formatDuration } from '../utils/format'
+import { getActiveProfileAiContexts } from '../profiles/loader'
 
 export const SYSTEM_PROMPT = `You write short developer work summaries. Here is an example:
 
@@ -30,6 +31,12 @@ For ai_session events: describe what was built during the AI session using the t
 For other events with a hint field: interpret the command snippet and describe the activity in plain language. Do not quote the raw command.
 
 Maximum 5 bullets. Output ONLY the bullet points, nothing else.`
+
+export function getSystemPrompt(): string {
+  const contexts = getActiveProfileAiContexts()
+  if (contexts.length === 0) return SYSTEM_PROMPT
+  return SYSTEM_PROMPT + '\n\n' + contexts.join('\n')
+}
 
 // exploring (grep/find/cat) is excluded — read-only investigation adds no signal to work summaries
 const EXCLUDED = new Set(['exploring'])

@@ -4,8 +4,10 @@ import path from 'path'
 import os from 'os'
 import prompts from 'prompts'
 import chalk from 'chalk'
-import { WORKSCRIBE_DIR, CONFIG_PATH } from '../utils/paths'
+import { WORKSCRIBE_DIR, CONFIG_PATH, PROFILES_DIR } from '../utils/paths'
 import { readConfig, writeConfig } from '../config'
+import { detectProfilesForDirectory } from '../profiles/loader'
+import { installProfile, cacheManifest } from '../profiles/fetcher'
 import { getDb } from '../db'
 import { log } from '../utils/logger'
 import { loadAIToolRegistry } from '../config/registry'
@@ -26,7 +28,7 @@ export function registerInit(program: Command): void {
     .action(async () => {
       log.plain(chalk.bold('\n  Workscribe — Developer Work Journal\n'))
 
-      // 1. Create ~/.workscribe/ with owner-only permissions
+      // 1. Create ~/.workscribe/ and ~/.workscribe/profiles/ with owner-only permissions
       if (!fs.existsSync(WORKSCRIBE_DIR)) {
         fs.mkdirSync(WORKSCRIBE_DIR, { recursive: true, mode: 0o700 })
         log.success(`Created ${WORKSCRIBE_DIR}`)
@@ -36,6 +38,9 @@ export function registerInit(program: Command): void {
         } catch {
           /* ignore */
         }
+      }
+      if (!fs.existsSync(PROFILES_DIR)) {
+        fs.mkdirSync(PROFILES_DIR, { recursive: true, mode: 0o700 })
       }
 
       // 2. Initialize database (runs migrations)
@@ -107,8 +112,38 @@ export function registerInit(program: Command): void {
         }
       }
 
-      // 5. AI provider setup
+      // 5. Profile detection
       const config = readConfig()
+      try {
+        await cacheManifest()
+        const detected = detectProfilesForDirectory(process.cwd())
+        const alreadyActive = new Set(config.capture.profiles)
+        const toPrompt = detected.filter((entry) => !alreadyActive.has(entry.name))
+
+        if (toPrompt.length > 0) {
+          log.plain('')
+          for (const entry of toPrompt) {
+            const { install } = await prompts({
+              type: 'confirm',
+              name: 'install',
+              message: `${entry.displayName} project detected. Enable the ${entry.displayName} profile?`,
+              initial: true,
+            })
+            if (install) {
+              await installProfile(entry.name)
+              config.capture.profiles = [...new Set([...config.capture.profiles, entry.name])]
+              log.success(`${entry.displayName} profile enabled`)
+            }
+          }
+          writeConfig(config)
+        } else if (detected.length === 0) {
+          log.info('No project profiles detected — run workscribe profile detect from your project directory')
+        }
+      } catch {
+        log.info('Could not reach profile registry — run workscribe profile detect after connecting')
+      }
+
+      // 6. AI provider setup
 
       if (config.ai.provider) {
         log.info(`AI provider already configured: ${chalk.cyan(config.ai.provider)}`)
@@ -160,7 +195,7 @@ export function registerInit(program: Command): void {
         }
       }
 
-      // 6. Write config if not exists
+      // 7. Write config if not exists
       if (!fs.existsSync(CONFIG_PATH)) {
         writeConfig(config)
         log.success('Config file created')

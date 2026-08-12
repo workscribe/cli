@@ -1,5 +1,5 @@
 import type { AIProvider, DaySummaryPayload, WeekSummaryPayload } from '../types'
-import { SYSTEM_PROMPT, buildUserMessage, WEEKLY_SYSTEM_PROMPT, buildWeeklyMessage } from '../prompt'
+import { getSystemPrompt, buildUserMessage, WEEKLY_SYSTEM_PROMPT, buildWeeklyMessage } from '../prompt'
 import { fetchWithTimeout } from '../fetch'
 
 export class OllamaProvider implements AIProvider {
@@ -19,7 +19,7 @@ export class OllamaProvider implements AIProvider {
         model: this.model,
         stream: false,
         messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'system', content: getSystemPrompt() },
           { role: 'user', content: buildUserMessage(payload) },
         ],
         options: {
