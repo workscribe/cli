@@ -4,6 +4,7 @@ vi.mock('../../src/db', () => ({
   getEventCount: vi.fn(),
   getLastEvent: vi.fn(),
   getEventsForDate: vi.fn(),
+  getRecentOtherRate: vi.fn(),
 }))
 
 vi.mock('../../src/config', () => ({
@@ -20,7 +21,7 @@ vi.mock('../../src/utils/paths')
 
 import fs from 'fs'
 import { Command } from 'commander'
-import { getEventCount, getLastEvent, getEventsForDate } from '../../src/db'
+import { getEventCount, getLastEvent, getEventsForDate, getRecentOtherRate } from '../../src/db'
 import { readConfig } from '../../src/config'
 import { log } from '../../src/utils/logger'
 import { registerStatus } from '../../src/cli/status'
@@ -29,12 +30,14 @@ const mockFs = fs as unknown as Record<string, ReturnType<typeof vi.fn>>
 const mockGetEventCount = getEventCount as ReturnType<typeof vi.fn>
 const mockGetLastEvent = getLastEvent as ReturnType<typeof vi.fn>
 const mockGetEventsForDate = getEventsForDate as ReturnType<typeof vi.fn>
+const mockGetRecentOtherRate = getRecentOtherRate as ReturnType<typeof vi.fn>
 const mockReadConfig = readConfig as ReturnType<typeof vi.fn>
 const mockLog = log as Record<string, ReturnType<typeof vi.fn>>
 
 const BASE_CONFIG = {
   ai: { provider: 'anthropic', apiKey: 'sk-test', model: null },
   session: { idleTimeout: 30 },
+  capture: { profiles: [] },
 }
 
 function makeProgram() {
@@ -48,6 +51,7 @@ beforeEach(() => {
   mockGetEventCount.mockReturnValue(42)
   mockGetEventsForDate.mockReturnValue([])
   mockGetLastEvent.mockReturnValue(undefined)
+  mockGetRecentOtherRate.mockReturnValue({ total: 100, otherCount: 10 })
   mockReadConfig.mockReturnValue(BASE_CONFIG)
   mockFs.existsSync.mockReturnValue(false)
 })
@@ -105,6 +109,42 @@ describe('workscribe status', () => {
       await makeProgram().parseAsync(['status'], { from: 'user' })
       const calls = mockLog.plain.mock.calls.map((call: unknown[]) => call[0] as string)
       expect(calls.some((call) => call.includes('Last event'))).toBe(false)
+    })
+  })
+
+  describe('profiles', () => {
+    it('shows active profiles when configured', async () => {
+      mockReadConfig.mockReturnValue({ ...BASE_CONFIG, capture: { profiles: ['flutter', 'android'] } })
+      await makeProgram().parseAsync(['status'], { from: 'user' })
+      expect(mockLog.plain).toHaveBeenCalledWith(expect.stringContaining('flutter'))
+    })
+
+    it('shows "none" when no profiles are active', async () => {
+      await makeProgram().parseAsync(['status'], { from: 'user' })
+      expect(mockLog.plain).toHaveBeenCalledWith(expect.stringContaining('none'))
+    })
+  })
+
+  describe('other event rate hint', () => {
+    it('shows a hint when other events exceed 25% of total', async () => {
+      mockGetRecentOtherRate.mockReturnValue({ total: 100, otherCount: 30 })
+      await makeProgram().parseAsync(['status'], { from: 'user' })
+      expect(mockLog.plain).toHaveBeenCalledWith(expect.stringContaining('30%'))
+      expect(mockLog.plain).toHaveBeenCalledWith(expect.stringContaining('workscribe profile'))
+    })
+
+    it('does not show a hint when other events are below 25%', async () => {
+      mockGetRecentOtherRate.mockReturnValue({ total: 100, otherCount: 20 })
+      await makeProgram().parseAsync(['status'], { from: 'user' })
+      const calls = (mockLog.plain as ReturnType<typeof vi.fn>).mock.calls.flat().join(' ')
+      expect(calls).not.toContain('uncategorised')
+    })
+
+    it('does not show a hint when there are no events', async () => {
+      mockGetRecentOtherRate.mockReturnValue({ total: 0, otherCount: 0 })
+      await makeProgram().parseAsync(['status'], { from: 'user' })
+      const calls = (mockLog.plain as ReturnType<typeof vi.fn>).mock.calls.flat().join(' ')
+      expect(calls).not.toContain('uncategorised')
     })
   })
 

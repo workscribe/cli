@@ -15,6 +15,7 @@ export interface WorkscribeConfig {
     ignore: string[]
     aiTools: boolean
     includeAiderPrompt: boolean
+    profiles: string[]
   }
   redact: {
     extra: string[]
@@ -43,6 +44,7 @@ const DEFAULTS: WorkscribeConfig = {
     ignore: ['cd', 'ls', 'll', 'la', 'ls -la', 'ls -l', 'ls -a', 'pwd', 'clear', 'exit', 'history', 'man'],
     aiTools: true,
     includeAiderPrompt: true,
+    profiles: [],
   },
   redact: {
     extra: [],

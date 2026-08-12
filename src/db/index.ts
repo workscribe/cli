@@ -219,6 +219,34 @@ export function deleteEventsForDate(date: string): number {
   return result.changes
 }
 
+export function getOtherEventToolCounts(days: number): { tool: string; count: number }[] {
+  const db = getDb()
+  return db
+    .prepare(
+      `SELECT json_extract(metadata, '$.tool') as tool, COUNT(*) as count
+       FROM events
+       WHERE category = 'other'
+         AND captured_at >= datetime('now', $offset)
+         AND json_extract(metadata, '$.tool') IS NOT NULL
+       GROUP BY tool
+       ORDER BY count DESC`
+    )
+    .all({ offset: `-${days} days` }) as { tool: string; count: number }[]
+}
+
+export function getRecentOtherRate(days: number): { total: number; otherCount: number } {
+  const db = getDb()
+  const row = db
+    .prepare(
+      `SELECT COUNT(*) as total,
+              SUM(CASE WHEN category = 'other' THEN 1 ELSE 0 END) as otherCount
+       FROM events
+       WHERE captured_at >= datetime('now', $offset)`
+    )
+    .get({ offset: `-${days} days` }) as { total: number; otherCount: number }
+  return row
+}
+
 export function clearSessionsForDate(date: string): void {
   const db = getDb()
   // Remove session_events first due to FK constraint

@@ -1,4 +1,5 @@
 import { loadAIToolRegistry } from '../config/registry'
+import { getActiveProfileRules } from '../profiles/loader'
 import { debugLog } from '../utils/logger'
 
 export interface NormalizedEvent {
@@ -7,7 +8,6 @@ export interface NormalizedEvent {
 }
 
 interface Rule {
-  // Returns metadata if command matches, null otherwise
   match(cmd: string): NormalizedEvent | null
 }
 
@@ -36,7 +36,7 @@ function extractPackages(cmd: string, afterKeyword: string): string[] {
     .filter((part) => part && !part.startsWith('-'))
 }
 
-export const RULES: Rule[] = [
+const BASE_RULES: Rule[] = [
   // ─── Git operations ───────────────────────────────────────────────────────
   makeRule(/^git\s+commit\b/, 'shipping', (_m, cmd) => {
     const msgMatch = cmd.match(/-m\s+["']?([^"']+)["']?/)
@@ -274,17 +274,24 @@ export const RULES: Rule[] = [
     return { variable: varName }
   }),
   makeRule(/^source\s+/, 'files', () => ({})),
+]
 
-  // ─── AI terminal tools (registry-driven) ─────────────────────────────────
-  ...loadAIToolRegistry().flatMap((entry) => {
+function aiToolRules(): Rule[] {
+  return loadAIToolRegistry().flatMap((entry) => {
     try {
       return [makeRule(new RegExp(entry.pattern), 'ai_session', () => ({ tool: entry.tool }))]
     } catch {
       debugLog('registry', `Skipping tool "${entry.tool}" — invalid pattern: ${entry.pattern}`)
       return []
     }
-  }),
-]
+  })
+}
+
+export function buildRules(profileRules: Array<{ match(cmd: string): NormalizedEvent | null }> = []): Rule[] {
+  return [...BASE_RULES, ...profileRules, ...aiToolRules()]
+}
+
+export const RULES: Rule[] = buildRules(getActiveProfileRules())
 
 export function normalizeCommand(command: string): NormalizedEvent {
   let trimmed = command.trim().replace(/\s+/g, ' ')
