@@ -53,7 +53,7 @@ function eventRowToPayload(row: EventRow): EventPayload {
   }
   if (row.category === 'other' && typeof metadata.hint === 'string') {
     payload.hint = metadata.hint
-    const { hint: _h, tool: _t, ...rest } = metadata
+    const { hint: _hint, tool: _tool, ...rest } = metadata
     payload.metadata = rest
   }
   return payload
@@ -85,8 +85,8 @@ async function handleWebhook(
       const body = isSlackWebhookUrl(webhookUrl) ? formatForSlack(summary, username) : summary
       await postToWebhook(webhookUrl, body)
       log.success('Posted.')
-    } catch (e) {
-      log.error(`Webhook failed: ${(e as Error).message}`)
+    } catch (error) {
+      log.error(`Webhook failed: ${(error as Error).message}`)
     }
   } else if (opts.slack && !config.integrations?.slackWebhook) {
     log.warn('--slack requires integrations.slackWebhook to be set in config')
@@ -107,8 +107,8 @@ export function registerSummary(program: Command): void {
       let provider
       try {
         provider = getProvider(config)
-      } catch (e) {
-        log.error((e as Error).message)
+      } catch (error) {
+        log.error((error as Error).message)
         process.exit(1)
       }
 
@@ -162,8 +162,8 @@ export function registerSummary(program: Command): void {
           fs.writeFileSync(cacheFile, summary, { encoding: 'utf-8', mode: 0o600 })
 
           await handleWebhook(opts, config, summary)
-        } catch (e) {
-          log.error(`Weekly summary failed [${config.ai.provider}]: ${(e as Error).message}`)
+        } catch (error) {
+          log.error(`Weekly summary failed [${config.ai.provider}]: ${(error as Error).message}`)
           process.exit(1)
         }
         return
@@ -174,8 +174,8 @@ export function registerSummary(program: Command): void {
       if (opts.date) {
         try {
           date = parseDate(opts.date)
-        } catch (e) {
-          log.error((e as Error).message)
+        } catch (error) {
+          log.error((error as Error).message)
           process.exit(1)
         }
       }
@@ -237,8 +237,8 @@ export function registerSummary(program: Command): void {
               bullets: parseBullets(bullets),
             })
           }
-        } catch (e) {
-          log.error(`Summary failed [${config.ai.provider}]: ${(e as Error).message}`)
+        } catch (error) {
+          log.error(`Summary failed [${config.ai.provider}]: ${(error as Error).message}`)
           process.exit(1)
         }
       }

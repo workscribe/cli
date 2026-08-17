@@ -85,6 +85,41 @@ Each session gets its own heading. The heading is always generated from your cap
 
 ---
 
+## workscribe week
+
+Generate an AI weekly digest covering Monday through today.
+
+```bash
+workscribe week
+workscribe week --fresh
+workscribe week --slack
+workscribe week --webhook <url>
+```
+
+| Option | Description |
+|---|---|
+| `--fresh` | Bypass cache and regenerate the digest |
+| `--slack` | Post the digest to your configured Slack webhook |
+| `--webhook <url>` | Post the digest to a custom webhook URL |
+
+The natural pre-standup ritual for Monday morning or end-of-week reporting. Output is markdown grouped by day, with each session summarised under its project and branch.
+
+**Caching:**
+
+Results are cached in `~/.workscribe/weekly-cache/<YYYY-WW>.md`. Running `workscribe week` a second time in the same week returns the cached digest instantly. Use `--fresh` to force regeneration.
+
+**Slack:**
+
+Configure your webhook first:
+
+```bash
+workscribe config set integrations.slackWebhook https://hooks.slack.com/services/...
+```
+
+Then run `workscribe week --slack` to post. See [workscribe summary](#workscribe-summary) for full Slack setup instructions.
+
+---
+
 ## workscribe sessions
 
 List detected work sessions for a date.
