@@ -1,4 +1,7 @@
 import { Command } from 'commander'
+import { assertNodeVersion } from './utils/node-version'
+
+assertNodeVersion(process.versions.node)
 import { registerCapture } from './cli/capture'
 import { registerHook } from './cli/hook'
 
