@@ -80,6 +80,41 @@ describe('workscribe sessions', () => {
     })
   })
 
+  describe('notes', () => {
+    it('displays note text indented under the session', async () => {
+      mockGetOrBuildSessions.mockReturnValue([
+        {
+          ...SAMPLE_SESSIONS[0],
+          events: [{ category: 'note', metadata: JSON.stringify({ text: 'Fixed race condition' }) }],
+        },
+      ])
+      await makeProgram().parseAsync(['sessions'], { from: 'user' })
+      expect(mockLog.plain).toHaveBeenCalledWith(expect.stringContaining('Fixed race condition'))
+    })
+
+    it('does not display note lines when there are no note events', async () => {
+      mockGetOrBuildSessions.mockReturnValue([
+        {
+          ...SAMPLE_SESSIONS[0],
+          events: [{ category: 'shipping', metadata: '{}' }],
+        },
+      ])
+      await makeProgram().parseAsync(['sessions'], { from: 'user' })
+      const calls = (mockLog.plain as ReturnType<typeof vi.fn>).mock.calls.flat().join(' ')
+      expect(calls).not.toContain('note')
+    })
+
+    it('skips note events with missing or malformed metadata', async () => {
+      mockGetOrBuildSessions.mockReturnValue([
+        {
+          ...SAMPLE_SESSIONS[0],
+          events: [{ category: 'note', metadata: '{ bad json' }],
+        },
+      ])
+      await expect(makeProgram().parseAsync(['sessions'], { from: 'user' })).resolves.not.toThrow()
+    })
+  })
+
   describe('--date', () => {
     it('passes the specified date to getOrBuildSessions', async () => {
       mockGetOrBuildSessions.mockReturnValue([])

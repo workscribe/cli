@@ -249,6 +249,69 @@ describe('buildUserMessage', () => {
 
 // ─── SYSTEM_PROMPT ────────────────────────────────────────────────────────────
 
+describe('note events in buildUserMessage', () => {
+  it('renders a note before the event list as NOTE: <text>', () => {
+    const msg = buildUserMessage(
+      makePayload([
+        { category: 'note', metadata: { text: 'Fixed race condition in auth middleware' } },
+        { category: 'shipping', metadata: { message: 'fix: auth' } },
+      ])
+    )
+    expect(msg).toContain('NOTE: Fixed race condition in auth middleware')
+    expect(msg).toContain('shipping')
+  })
+
+  it('excludes note events from the aggregated event list', () => {
+    const msg = buildUserMessage(makePayload([{ category: 'note', metadata: { text: 'some context' } }]))
+    expect(msg).not.toContain('note {"text"')
+    expect(msg).not.toContain('1x note')
+  })
+
+  it('renders multiple notes in order', () => {
+    const msg = buildUserMessage(
+      makePayload([
+        { category: 'note', metadata: { text: 'first note' } },
+        { category: 'note', metadata: { text: 'second note' } },
+      ])
+    )
+    const firstPos = msg.indexOf('NOTE: first note')
+    const secondPos = msg.indexOf('NOTE: second note')
+    expect(firstPos).toBeGreaterThanOrEqual(0)
+    expect(secondPos).toBeGreaterThan(firstPos)
+  })
+})
+
+describe('note events in buildWeeklyMessage', () => {
+  it('renders a note under the session in the weekly message', () => {
+    const payload: WeekSummaryPayload = {
+      weekStart: '2026-05-25',
+      weekEnd: '2026-05-25',
+      days: [
+        {
+          date: '2026-05-25',
+          sessions: [
+            {
+              date: '2026-05-25',
+              project: 'api-service',
+              branch: 'main',
+              startTime: '09:00',
+              endTime: '10:00',
+              durationMinutes: 60,
+              events: [
+                { category: 'note', metadata: { text: 'Blocked by infra outage' }, exitCode: null, durationMs: null },
+                { category: 'shipping', metadata: { message: 'fix: retry' }, exitCode: 0, durationMs: null },
+              ],
+            },
+          ],
+        },
+      ],
+    }
+    const msg = buildWeeklyMessage(payload)
+    expect(msg).toContain('NOTE: Blocked by infra outage')
+    expect(msg).toContain('shipping')
+  })
+})
+
 describe('getSystemPrompt', () => {
   it('returns the base SYSTEM_PROMPT when no profiles are active', () => {
     mockGetActiveProfileAiContexts.mockReturnValue([])

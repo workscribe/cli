@@ -38,8 +38,9 @@ export function getSystemPrompt(): string {
   return SYSTEM_PROMPT + '\n\n' + contexts.join('\n')
 }
 
-// exploring (grep/find/cat) is excluded — read-only investigation adds no signal to work summaries
-const EXCLUDED = new Set(['exploring'])
+// exploring (grep/find/cat) and note are excluded from event aggregation —
+// notes are rendered separately before the event list so the model reads context first
+const EXCLUDED = new Set(['exploring', 'note'])
 
 export function buildUserMessage(payload: DaySummaryPayload): string {
   const lines: string[] = [`Date: ${payload.date}`, '']
@@ -48,6 +49,13 @@ export function buildUserMessage(payload: DaySummaryPayload): string {
     lines.push(`Project: ${session.project ?? 'unknown'}`)
     if (session.branch) lines.push(`Branch: ${session.branch}`)
     lines.push(`Duration: ${formatDuration(session.durationMinutes)}`)
+
+    for (const event of session.events) {
+      if (event.category === 'note') {
+        lines.push(`NOTE: ${event.metadata.text as string}`)
+      }
+    }
+
     lines.push('Events:')
 
     // Aggregate repeated events so the model sees "3x build" not 3 separate build lines
@@ -117,25 +125,31 @@ export function buildWeeklyMessage(payload: WeekSummaryPayload): string {
     const dayName = DAY_NAMES[new Date(date + 'T00:00:00').getDay()]
     lines.push(`${dayName} ${date}:`)
 
-    for (const s of sessions) {
-      const project = s.project ?? 'unknown'
-      const branch = s.branch ? ` (${s.branch})` : ''
-      lines.push(`  Project: ${project}${branch} — ${formatDuration(s.durationMinutes)}`)
+    for (const session of sessions) {
+      const project = session.project ?? 'unknown'
+      const branch = session.branch ? ` (${session.branch})` : ''
+      lines.push(`  Project: ${project}${branch} — ${formatDuration(session.durationMinutes)}`)
+
+      for (const event of session.events) {
+        if (event.category === 'note') {
+          lines.push(`  NOTE: ${event.metadata.text as string}`)
+        }
+      }
 
       const counts = new Map<string, number>()
-      for (const e of s.events) {
-        if (EXCLUDED.has(e.category)) continue
-        const failed = e.exitCode !== null && e.exitCode !== 0 ? ' [failed]' : ''
+      for (const event of session.events) {
+        if (EXCLUDED.has(event.category)) continue
+        const failed = event.exitCode !== null && event.exitCode !== 0 ? ' [failed]' : ''
         let key: string
-        if (e.hint) {
-          key = `other  [${e.hint}]${failed}`
+        if (event.hint) {
+          key = `other  [${event.hint}]${failed}`
         } else {
-          const meta = Object.keys(e.metadata).length > 0 ? ` ${JSON.stringify(e.metadata)}` : ''
-          key = `${e.category}${meta}${failed}`
+          const meta = Object.keys(event.metadata).length > 0 ? ` ${JSON.stringify(event.metadata)}` : ''
+          key = `${event.category}${meta}${failed}`
         }
         counts.set(key, (counts.get(key) ?? 0) + 1)
       }
-      const eventLine = [...counts.entries()].map(([k, n]) => `${n > 1 ? `${n}x ` : ''}${k}`).join(', ')
+      const eventLine = [...counts.entries()].map(([key, count]) => `${count > 1 ? `${count}x ` : ''}${key}`).join(', ')
       lines.push(`  Events: ${eventLine}`)
     }
 

@@ -15,6 +15,7 @@ import { registerUndo } from './cli/undo'
 import { registerClear } from './cli/clear'
 import { registerUninstall } from './cli/uninstall'
 import { registerProfile } from './cli/profile'
+import { registerNote } from './cli/note'
 
 const program = new Command()
 
@@ -34,5 +35,6 @@ registerUndo(program)
 registerClear(program)
 registerUninstall(program)
 registerProfile(program)
+registerNote(program)
 
 program.parse()

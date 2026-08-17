@@ -14,8 +14,8 @@ export function registerSessions(program: Command): void {
       if (opts.date) {
         try {
           date = parseDate(opts.date)
-        } catch (e) {
-          log.error((e as Error).message)
+        } catch (error) {
+          log.error((error as Error).message)
           process.exit(1)
         }
       }
@@ -39,6 +39,18 @@ export function registerSessions(program: Command): void {
         log.plain(
           `  ${chalk.dim(start)} – ${chalk.dim(end)}  ${repo}  ${chalk.dim(duration)}  ${chalk.dim(session.eventCount + ' events')}`
         )
+
+        for (const event of session.events) {
+          if (event.category === 'note') {
+            let text = ''
+            try {
+              text = (JSON.parse(event.metadata ?? '{}') as { text?: string }).text ?? ''
+            } catch {
+              /* ignore malformed metadata */
+            }
+            if (text) log.plain(`    ${chalk.yellow('note')}  ${chalk.dim(text)}`)
+          }
+        }
       }
 
       log.plain('')
