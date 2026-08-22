@@ -91,6 +91,7 @@ workscribe config set redact.extra '["MY_INTERNAL_TOKEN"]'
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `summary.format` | `"markdown"` \| `"json"` | `"markdown"` | Output format for daily summaries |
+| `summary.includeCategories` | string[] | `[]` | Event categories to re-include in the AI prompt (overrides built-in exclusions). Excluded by default: `exploring`, `linting`. Example: `["linting"]` to include lint pass/fail results. |
 
 In `json` mode, `workscribe summary` outputs structured data instead of markdown:
 

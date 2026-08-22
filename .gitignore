@@ -5,5 +5,8 @@ coverage/
 *.js.map
 .DS_Store
 docs/site/logo/
+docs/*
+!docs/site/
+!docs/site/**
 .env
 .claude/

@@ -46,6 +46,7 @@ workscribe summary --webhook <url>
 | `--date <YYYY-MM-DD>` | Summarise a specific date instead of today |
 | `--week` | Summarise Mon–today for the current week |
 | `--fresh` | Bypass cache and regenerate the summary |
+| `--verbose` | Show all captured events (including those not sent to AI) before generating the summary |
 | `--slack` | Post the summary to your configured Slack webhook |
 | `--webhook <url>` | Post the summary to a custom webhook URL |
 
