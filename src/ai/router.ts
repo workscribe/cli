@@ -33,6 +33,7 @@ export function getProvider(config: WorkscribeConfig): AIProvider {
     providerConfig,
     model || providerConfig.defaultModel,
     apiKey,
-    baseUrl || providerConfig.defaultBaseUrl
+    baseUrl || providerConfig.defaultBaseUrl,
+    config.summary?.includeCategories ?? []
   )
 }

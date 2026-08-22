@@ -8,7 +8,8 @@ export class GenericProvider implements AIProvider {
     private config: ProviderConfig,
     private model: string,
     private apiKey: string,
-    private baseUrl: string
+    private baseUrl: string,
+    private includeCategories: string[] = []
   ) {}
 
   private async call(system: string, userMsg: string, maxTokens: number): Promise<string> {
@@ -24,7 +25,7 @@ export class GenericProvider implements AIProvider {
   }
 
   async summarize(payload: DaySummaryPayload): Promise<string> {
-    return this.call(getSystemPrompt(), buildUserMessage(payload), this.config.dailyTokens)
+    return this.call(getSystemPrompt(), buildUserMessage(payload, this.includeCategories), this.config.dailyTokens)
   }
 
   async summarizeWeek(payload: WeekSummaryPayload): Promise<string> {
