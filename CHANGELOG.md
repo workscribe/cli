@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.11.0](https://github.com/workscribe/cli/compare/v1.9.0...v1.11.0) (2026-08-22)
+
+### Features
+
+* improve summary quality and add excluded-events transparency ([4cb38d6](https://github.com/workscribe/cli/commit/4cb38d6f7d5a6b8bccbf0424aced8607e9872630))
+* improved init onboarding UX with step indicators, hook explanation, and API key validation ([38008d2](https://github.com/workscribe/cli/commit/38008d219c824d9e3d90db52b77f5674836a14bc))
+* **WOR-10:** add workscribe note for session annotations ([1d4a216](https://github.com/workscribe/cli/commit/1d4a216db59fc407d5890d6697594ea72818cf2c))
+* **WOR-40:** implement 13-category semantic vocabulary ([73ef6d7](https://github.com/workscribe/cli/commit/73ef6d7dc26268b5e194240cb7957ac0b393206a))
+* **WOR-41:** profile pack system with remote registry ([dfd661d](https://github.com/workscribe/cli/commit/dfd661d29d4b54057288af52f6c4a1f9e9f26e39))
+* **WOR-9:** add workscribe week command for weekly digest ([567f22b](https://github.com/workscribe/cli/commit/567f22b09e0e75f3898bcf007096ae3df1500af8))
+
+### Bug Fixes
+
+* address three security issues from architectural review ([7ae4a04](https://github.com/workscribe/cli/commit/7ae4a04bd852ec8026a70be89849e724555e2571))
+* **F-04:** add actionable Node version guard on startup ([8e56d57](https://github.com/workscribe/cli/commit/8e56d5763276bc30c87154008e58bddaa3b460e4))
+
 ## [1.7.2](https://github.com/workscribe/cli/compare/v1.7.1...v1.7.2) (2026-08-09)
 
 ## [1.7.1](https://github.com/workscribe/cli/compare/v1.8.0...v1.7.1) (2026-08-09)
