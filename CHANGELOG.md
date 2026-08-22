@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.12.0](https://github.com/workscribe/cli/compare/v1.11.0...v1.12.0) (2026-08-22)
+
+### Features
+
+* world-class CLI improvements (W-01) ([7893434](https://github.com/workscribe/cli/commit/7893434945a8c2fa11f48196cebc54d0fa73dcf9))
+
+### Bug Fixes
+
+* improve profile suggest output accuracy ([ac62eb8](https://github.com/workscribe/cli/commit/ac62eb8a0916322e02efae897ba95dfc40bba7e7))
+
 ## [1.11.0](https://github.com/workscribe/cli/compare/v1.9.0...v1.11.0) (2026-08-22)
 
 ### Features
