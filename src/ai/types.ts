@@ -33,4 +33,5 @@ export interface WeekSummaryPayload {
 export interface AIProvider {
   summarize(payload: DaySummaryPayload): Promise<string>
   summarizeWeek?(payload: WeekSummaryPayload): Promise<string>
+  validate(): Promise<void>
 }

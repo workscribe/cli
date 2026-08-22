@@ -9,6 +9,7 @@ import { readConfig, writeConfig } from '../config'
 import { detectProfilesForDirectory } from '../profiles/loader'
 import { installProfile, cacheManifest } from '../profiles/fetcher'
 import { getDb } from '../db'
+import { getProvider } from '../ai/router'
 import { log } from '../utils/logger'
 import { loadAIToolRegistry } from '../config/registry'
 import { isHookInstalled, isHookOutdated, installHook, updateHook } from '../capture/shell-hook'
@@ -21,14 +22,21 @@ function detectShell(): { name: string; rcFile: string } | null {
   return null
 }
 
+function step(current: number, total: number, label: string): void {
+  log.plain(chalk.bold(`\n  [${current}/${total}] ${label}`))
+}
+
 export function registerInit(program: Command): void {
   program
     .command('init')
     .description('Set up Workscribe and install or update shell hooks')
     .action(async () => {
+      const TOTAL_STEPS = 5
       log.plain(chalk.bold('\n  Workscribe — Developer Work Journal\n'))
 
-      // 1. Create ~/.workscribe/ and ~/.workscribe/profiles/ with owner-only permissions
+      // ── Step 1: Data directory ────────────────────────────────────────────────
+      step(1, TOTAL_STEPS, 'Creating data directory')
+
       if (!fs.existsSync(WORKSCRIBE_DIR)) {
         fs.mkdirSync(WORKSCRIBE_DIR, { recursive: true, mode: 0o700 })
         log.success(`Created ${WORKSCRIBE_DIR}`)
@@ -38,16 +46,20 @@ export function registerInit(program: Command): void {
         } catch {
           /* ignore */
         }
+        log.info(`${WORKSCRIBE_DIR} already exists`)
       }
       if (!fs.existsSync(PROFILES_DIR)) {
         fs.mkdirSync(PROFILES_DIR, { recursive: true, mode: 0o700 })
       }
 
-      // 2. Initialize database (runs migrations)
+      // ── Step 2: Database ──────────────────────────────────────────────────────
+      step(2, TOTAL_STEPS, 'Initialising database')
       getDb()
-      log.success('Database initialized')
+      log.success('Database ready')
 
-      // 3. Detect shell and install or update hook
+      // ── Step 3: Shell hook ────────────────────────────────────────────────────
+      step(3, TOTAL_STEPS, 'Installing shell hook')
+
       const shell = detectShell()
       if (!shell) {
         log.warn('Could not detect shell. Supported: zsh, bash')
@@ -61,6 +73,12 @@ export function registerInit(program: Command): void {
           if (!fs.existsSync(shell.rcFile)) fs.writeFileSync(shell.rcFile, '')
 
           if (!isHookInstalled(shell.rcFile)) {
+            log.plain('')
+            log.plain(chalk.dim('  Workscribe adds a lightweight hook to your shell that captures each'))
+            log.plain(chalk.dim('  command you run — the text, exit code, duration, and working directory.'))
+            log.plain(chalk.dim('  It runs in the background and adds no latency to your terminal.'))
+            log.plain(chalk.dim('  Credentials and secrets are redacted before anything is stored.'))
+            log.plain('')
             installHook(shell.rcFile, hookContent)
             log.success(`Shell hook installed in ${shell.rcFile}`)
           } else if (isHookOutdated(shell.rcFile, hookContent)) {
@@ -82,7 +100,9 @@ export function registerInit(program: Command): void {
         }
       }
 
-      // 4. AI tool hook integrations (registry-driven — add new tools in src/capture/hooks/)
+      // ── Step 4: AI tools ──────────────────────────────────────────────────────
+      step(4, TOTAL_STEPS, 'Detecting AI coding tools')
+
       const installedTools = loadAIToolRegistry().filter(
         (entry) => entry.hook !== null && AI_HOOK_INTEGRATIONS[entry.hook!]?.isInstalled()
       )
@@ -112,7 +132,7 @@ export function registerInit(program: Command): void {
         }
       }
 
-      // 5. Profile detection
+      // Profile detection (part of environment scan, no separate step)
       const config = readConfig()
       try {
         await cacheManifest()
@@ -143,7 +163,10 @@ export function registerInit(program: Command): void {
         log.info('Could not reach profile registry — run workscribe profile detect after connecting')
       }
 
-      // 6. AI provider setup
+      // ── Step 5: AI provider ───────────────────────────────────────────────────
+      step(5, TOTAL_STEPS, 'Configuring AI provider')
+
+      let providerConfigured = !!config.ai.provider
 
       if (config.ai.provider) {
         log.info(`AI provider already configured: ${chalk.cyan(config.ai.provider)}`)
@@ -162,7 +185,10 @@ export function registerInit(program: Command): void {
           ],
         })
 
-        if (provider && provider !== 'skip') {
+        if (!provider || provider === 'skip') {
+          providerConfigured = false
+          log.info('Skipped — run later: workscribe config set ai.provider <provider>')
+        } else {
           config.ai.provider = provider
 
           if (provider === 'ollama') {
@@ -188,29 +214,67 @@ export function registerInit(program: Command): void {
             }
           }
 
-          writeConfig(config)
-          log.success(`AI provider set to ${chalk.cyan(provider)}`)
-        } else if (provider === 'skip' || !provider) {
-          log.info('Skipped — run later: workscribe config set ai.provider <provider>')
+          // Validate the key with a lightweight test call
+          log.plain('')
+          log.info(`Validating ${chalk.cyan(provider)} connection…`)
+          try {
+            const testProvider = getProvider(config)
+            await testProvider.validate()
+            log.success('API key verified')
+            writeConfig(config)
+            providerConfigured = true
+          } catch (error) {
+            log.warn(`Validation failed: ${(error as Error).message}`)
+            const { retry } = await prompts({
+              type: 'confirm',
+              name: 'retry',
+              message: 'Save anyway and configure later?',
+              initial: false,
+            })
+            if (retry) {
+              writeConfig(config)
+              providerConfigured = false
+              log.info('Config saved — run workscribe config set ai.apiKey <key> to update')
+            } else {
+              log.info('API key not saved — run workscribe init again to configure')
+              providerConfigured = false
+            }
+          }
         }
       }
 
-      // 7. Write config if not exists
+      // ── Config file ───────────────────────────────────────────────────────────
       if (!fs.existsSync(CONFIG_PATH)) {
         writeConfig(config)
-        log.success('Config file created')
       }
 
+      // ── What to do next ───────────────────────────────────────────────────────
       log.plain('')
       log.plain(chalk.bold('  Setup complete!'))
-      if (shell) {
-        log.plain('')
-        log.plain(`  Activate capture now:  ${chalk.cyan(`source ${shell.rcFile}`)}`)
-        log.plain(`  Or restart your terminal.`)
-      }
       log.plain('')
-      log.plain(`  ${chalk.dim('workscribe summary')}   — generate today\'s work summary`)
-      log.plain(`  ${chalk.dim('workscribe status')}    — check capture is working`)
+
+      if (shell) {
+        log.plain(`  Activate capture now:`)
+        log.plain(`    ${chalk.cyan(`source ${shell.rcFile}`)}`)
+        log.plain(`  Or restart your terminal.`)
+        log.plain('')
+      }
+
+      if (providerConfigured) {
+        log.plain(`  Then run a few commands and generate your first summary:`)
+        log.plain(`    ${chalk.cyan('workscribe summary')}`)
+        log.plain('')
+        log.plain(`  Check capture is working:`)
+        log.plain(`    ${chalk.cyan('workscribe status')}`)
+      } else {
+        log.plain(`  Before generating summaries, configure an AI provider:`)
+        log.plain(`    ${chalk.cyan('workscribe config set ai.provider anthropic')}`)
+        log.plain(`    ${chalk.cyan('workscribe config set ai.apiKey <your-key>')}`)
+        log.plain('')
+        log.plain(`  Then run:`)
+        log.plain(`    ${chalk.cyan('workscribe summary')}`)
+      }
+
       log.plain('')
     })
 }
