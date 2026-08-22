@@ -38,6 +38,13 @@ export class OllamaProvider implements AIProvider {
     return data.message?.content ?? ''
   }
 
+  async validate(): Promise<void> {
+    const response = await fetchWithTimeout(`${this.baseUrl}/api/tags`, { method: 'GET' })
+    if (!response.ok) {
+      throw new Error(`Ollama is not reachable at ${this.baseUrl}. Is it running? Try: ollama serve`)
+    }
+  }
+
   async summarizeWeek(payload: WeekSummaryPayload): Promise<string> {
     const response = await fetchWithTimeout(`${this.baseUrl}/api/chat`, {
       method: 'POST',

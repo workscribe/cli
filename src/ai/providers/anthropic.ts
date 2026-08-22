@@ -36,6 +36,26 @@ export class AnthropicProvider implements AIProvider {
     return data.content.find((block) => block.type === 'text')?.text ?? ''
   }
 
+  async validate(): Promise<void> {
+    const response = await fetchWithTimeout('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': this.apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: this.model,
+        max_tokens: 1,
+        messages: [{ role: 'user', content: '.' }],
+      }),
+    })
+    if (!response.ok) {
+      const body = await response.text()
+      throw new Error(`Anthropic API error ${response.status}: ${body}`)
+    }
+  }
+
   async summarizeWeek(payload: WeekSummaryPayload): Promise<string> {
     const response = await fetchWithTimeout('https://api.anthropic.com/v1/messages', {
       method: 'POST',

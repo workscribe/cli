@@ -41,6 +41,25 @@ export class OpenAIProvider implements AIProvider {
     return data.choices[0]?.message?.content ?? ''
   }
 
+  async validate(): Promise<void> {
+    const response = await fetchWithTimeout(`${this.baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${this.apiKey}`,
+      },
+      body: JSON.stringify({
+        model: this.model,
+        messages: [{ role: 'user', content: '.' }],
+        max_tokens: 1,
+      }),
+    })
+    if (!response.ok) {
+      const body = await response.text()
+      throw new Error(`OpenAI API error ${response.status}: ${body}`)
+    }
+  }
+
   async summarizeWeek(payload: WeekSummaryPayload): Promise<string> {
     const response = await fetchWithTimeout(`${this.baseUrl}/chat/completions`, {
       method: 'POST',
