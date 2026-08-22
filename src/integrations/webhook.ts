@@ -1,4 +1,4 @@
-import { fetchWithTimeout } from '../ai/fetch'
+import { fetchWithTimeout } from '../utils/fetch'
 
 export async function postToWebhook(url: string, text: string): Promise<void> {
   const response = await fetchWithTimeout(

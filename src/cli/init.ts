@@ -4,7 +4,7 @@ import path from 'path'
 import os from 'os'
 import prompts from 'prompts'
 import chalk from 'chalk'
-import { WORKSCRIBE_DIR, CONFIG_PATH, PROFILES_DIR } from '../utils/paths'
+import { CONFIG_PATH, PROFILES_DIR, REQUIRED_DIRS } from '../utils/paths'
 import { readConfig, writeConfig } from '../config'
 import { detectProfilesForDirectory } from '../profiles/loader'
 import { installProfile, cacheManifest } from '../profiles/fetcher'
@@ -12,13 +12,25 @@ import { getDb } from '../db'
 import { getProvider } from '../ai/router'
 import { log } from '../utils/logger'
 import { loadAIToolRegistry } from '../config/registry'
-import { isHookInstalled, isHookOutdated, installHook, updateHook } from '../capture/shell-hook'
+import {
+  isHookInstalled,
+  isHookOutdated,
+  installHook,
+  updateHook,
+  isCompletionsInstalled,
+  installCompletions,
+} from '../capture/shell-hook'
 import { AI_HOOK_INTEGRATIONS } from '../capture/hooks'
+import { getPublicCommands } from './completions'
 
 function detectShell(): { name: string; rcFile: string } | null {
   const shell = process.env.SHELL ?? ''
   if (shell.includes('zsh')) return { name: 'zsh', rcFile: path.join(os.homedir(), '.zshrc') }
   if (shell.includes('bash')) return { name: 'bash', rcFile: path.join(os.homedir(), '.bashrc') }
+  if (shell.includes('fish')) {
+    const confDir = path.join(os.homedir(), '.config', 'fish', 'conf.d')
+    return { name: 'fish', rcFile: path.join(confDir, 'workscribe.fish') }
+  }
   return null
 }
 
@@ -34,20 +46,23 @@ export function registerInit(program: Command): void {
       const TOTAL_STEPS = 5
       log.plain(chalk.bold('\n  Workscribe — Developer Work Journal\n'))
 
-      // ── Step 1: Data directory ────────────────────────────────────────────────
-      step(1, TOTAL_STEPS, 'Creating data directory')
+      // ── Step 1: Data directories ──────────────────────────────────────────────
+      step(1, TOTAL_STEPS, 'Creating data directories')
 
-      if (!fs.existsSync(WORKSCRIBE_DIR)) {
-        fs.mkdirSync(WORKSCRIBE_DIR, { recursive: true, mode: 0o700 })
-        log.success(`Created ${WORKSCRIBE_DIR}`)
-      } else {
-        try {
-          fs.chmodSync(WORKSCRIBE_DIR, 0o700)
-        } catch {
-          /* ignore */
+      for (const dir of REQUIRED_DIRS) {
+        if (!fs.existsSync(dir)) {
+          fs.mkdirSync(dir, { recursive: true, mode: 0o700 })
+          log.success(`Created ${dir}`)
+        } else {
+          try {
+            fs.chmodSync(dir, 0o700)
+          } catch {
+            /* ignore */
+          }
+          log.info(`${dir} already exists`)
         }
-        log.info(`${WORKSCRIBE_DIR} already exists`)
       }
+
       if (!fs.existsSync(PROFILES_DIR)) {
         fs.mkdirSync(PROFILES_DIR, { recursive: true, mode: 0o700 })
       }
@@ -57,19 +72,28 @@ export function registerInit(program: Command): void {
       getDb()
       log.success('Database ready')
 
-      // ── Step 3: Shell hook ────────────────────────────────────────────────────
+      // ── Step 3: Shell hook + completions ──────────────────────────────────────
       step(3, TOTAL_STEPS, 'Installing shell hook')
 
       const shell = detectShell()
       if (!shell) {
-        log.warn('Could not detect shell. Supported: zsh, bash')
-        log.plain(`Manually add the hook from: ${chalk.cyan('shell/hook.zsh')} or ${chalk.cyan('shell/hook.bash')}`)
+        log.warn('Could not detect shell. Supported: zsh, bash, fish')
+        log.plain(
+          `  Manually add the hook from: ${chalk.cyan('shell/hook.zsh')}, ${chalk.cyan('shell/hook.bash')}, or ${chalk.cyan('shell/hook.fish')}`
+        )
       } else {
         const hookFile = path.join(__dirname, '..', 'shell', `hook.${shell.name}`)
         if (!fs.existsSync(hookFile)) {
           log.warn(`Hook template not found at ${hookFile}`)
         } else {
           const hookContent = fs.readFileSync(hookFile, 'utf-8')
+
+          // For fish: ensure conf.d directory exists before touching the file
+          if (shell.name === 'fish') {
+            const confDir = path.dirname(shell.rcFile)
+            if (!fs.existsSync(confDir)) fs.mkdirSync(confDir, { recursive: true })
+          }
+
           if (!fs.existsSync(shell.rcFile)) fs.writeFileSync(shell.rcFile, '')
 
           if (!isHookInstalled(shell.rcFile)) {
@@ -96,6 +120,26 @@ export function registerInit(program: Command): void {
             }
           } else {
             log.info(`Shell hook up to date in ${shell.rcFile}`)
+          }
+
+          // Offer completions install
+          if (isCompletionsInstalled(shell)) {
+            log.info('Shell completions already installed')
+          } else {
+            const { installComps } = await prompts({
+              type: 'confirm',
+              name: 'installComps',
+              message: 'Install shell completions (tab-complete workscribe commands)?',
+              initial: true,
+            })
+            if (installComps) {
+              try {
+                installCompletions(shell, getPublicCommands(program))
+                log.success('Shell completions installed')
+              } catch (error) {
+                log.warn(`Completions install failed: ${(error as Error).message}`)
+              }
+            }
           }
         }
       }
@@ -214,7 +258,6 @@ export function registerInit(program: Command): void {
             }
           }
 
-          // Validate the key with a lightweight test call
           log.plain('')
           log.info(`Validating ${chalk.cyan(provider)} connection…`)
           try {
@@ -255,8 +298,13 @@ export function registerInit(program: Command): void {
 
       if (shell) {
         log.plain(`  Activate capture now:`)
-        log.plain(`    ${chalk.cyan(`source ${shell.rcFile}`)}`)
-        log.plain(`  Or restart your terminal.`)
+        if (shell.name === 'fish') {
+          log.plain(`    Restart your terminal`)
+          log.plain(`    ${chalk.dim(`or run: source ${shell.rcFile}`)}`)
+        } else {
+          log.plain(`    ${chalk.cyan(`source ${shell.rcFile}`)}`)
+          log.plain(`  Or restart your terminal.`)
+        }
         log.plain('')
       }
 

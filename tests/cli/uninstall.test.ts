@@ -9,7 +9,10 @@ vi.mock('fs', () => ({
 
 vi.mock('prompts', () => ({ default: vi.fn() }))
 
-vi.mock('../../src/utils/paths')
+vi.mock('../../src/utils/paths', () => ({
+  WORKSCRIBE_DIR: '/home/user/.workscribe',
+  REQUIRED_DIRS: ['/home/user/.workscribe'],
+}))
 
 vi.mock('../../src/capture/shell-hook', () => ({
   isHookInstalled: vi.fn(),
