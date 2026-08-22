@@ -1,4 +1,7 @@
 import { Command } from 'commander'
+import { assertNodeVersion } from './utils/node-version'
+
+assertNodeVersion(process.versions.node)
 import { registerCapture } from './cli/capture'
 import { registerHook } from './cli/hook'
 
@@ -16,6 +19,7 @@ import { registerClear } from './cli/clear'
 import { registerUninstall } from './cli/uninstall'
 import { registerProfile } from './cli/profile'
 import { registerNote } from './cli/note'
+import { registerWeek } from './cli/week'
 
 const program = new Command()
 
@@ -36,5 +40,6 @@ registerClear(program)
 registerUninstall(program)
 registerProfile(program)
 registerNote(program)
+registerWeek(program)
 
 program.parse()
