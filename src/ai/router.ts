@@ -1,7 +1,7 @@
 import type { AIProvider } from './types'
 import type { WorkscribeConfig } from '../config'
-import { GenericProvider } from './providers'
-import { PROVIDER_CONFIGS } from './providers/config'
+import { GenericProvider } from './generic-provider'
+import { PROVIDER_CONFIGS } from './provider-config'
 
 export function getProvider(config: WorkscribeConfig): AIProvider {
   const { provider, apiKey = '', model, baseUrl } = config.ai

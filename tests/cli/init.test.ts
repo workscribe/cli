@@ -7,6 +7,7 @@ vi.mock('fs', () => ({
     chmodSync: vi.fn(),
     readFileSync: vi.fn(),
     writeFileSync: vi.fn(),
+    appendFileSync: vi.fn(),
   },
 }))
 
@@ -17,13 +18,21 @@ vi.mock('../../src/config', () => ({
   writeConfig: vi.fn(),
 }))
 
-vi.mock('../../src/utils/paths')
+vi.mock('../../src/utils/paths', () => ({
+  WORKSCRIBE_DIR: '/home/user/.workscribe',
+  CONFIG_PATH: '/home/user/.workscribe/config.json',
+  PROFILES_DIR: '/home/user/.workscribe/profiles',
+  UPDATE_CHECK_PATH: '/home/user/.workscribe/update-check.json',
+  REQUIRED_DIRS: ['/home/user/.workscribe'],
+}))
 
 vi.mock('../../src/capture/shell-hook', () => ({
   isHookInstalled: vi.fn(),
   isHookOutdated: vi.fn(),
   installHook: vi.fn(),
   updateHook: vi.fn(),
+  isCompletionsInstalled: vi.fn(),
+  installCompletions: vi.fn(),
 }))
 
 vi.mock('../../src/capture/hooks', () => ({
@@ -68,7 +77,7 @@ import fs from 'fs'
 import { Command } from 'commander'
 import prompts from 'prompts'
 import { readConfig } from '../../src/config'
-import { isHookInstalled, installHook } from '../../src/capture/shell-hook'
+import { isHookInstalled, installHook, isCompletionsInstalled } from '../../src/capture/shell-hook'
 import { AI_HOOK_INTEGRATIONS } from '../../src/capture/hooks'
 import { getProvider } from '../../src/ai/router'
 import { log } from '../../src/utils/logger'
@@ -79,6 +88,7 @@ const mockPrompts = prompts as ReturnType<typeof vi.fn>
 const mockReadConfig = readConfig as ReturnType<typeof vi.fn>
 const mockIsHookInstalled = isHookInstalled as ReturnType<typeof vi.fn>
 const mockInstallHook = installHook as ReturnType<typeof vi.fn>
+const mockIsCompletionsInstalled = isCompletionsInstalled as ReturnType<typeof vi.fn>
 const mockGetProvider = getProvider as ReturnType<typeof vi.fn>
 const mockLog = log as Record<string, ReturnType<typeof vi.fn>>
 const claudeIntegration = AI_HOOK_INTEGRATIONS['claude-code'] as Record<string, ReturnType<typeof vi.fn>>
@@ -97,6 +107,8 @@ beforeEach(() => {
   // filesystem: workscribe dir exists, shell rc exists, hook template exists, config exists
   mockFs.existsSync.mockReturnValue(true)
   mockFs.readFileSync.mockReturnValue('# hook content')
+  // Completions already installed — skips the prompt in tests that don't test that flow
+  mockIsCompletionsInstalled.mockReturnValue(true)
 
   // shell hook: already installed and up to date — isolates AI tool step
   mockIsHookInstalled.mockReturnValue(true)

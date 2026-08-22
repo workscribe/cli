@@ -20,6 +20,11 @@ import { registerUninstall } from './cli/uninstall'
 import { registerProfile } from './cli/profile'
 import { registerNote } from './cli/note'
 import { registerWeek } from './cli/week'
+import { registerBugReport } from './cli/bug-report'
+import { registerCompletions } from './cli/completions'
+import { checkForUpdate } from './utils/update-check'
+
+checkForUpdate()
 
 const program = new Command()
 
@@ -41,5 +46,7 @@ registerUninstall(program)
 registerProfile(program)
 registerNote(program)
 registerWeek(program)
+registerBugReport(program)
+registerCompletions(program)
 
 program.parse()

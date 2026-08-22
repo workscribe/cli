@@ -4,6 +4,7 @@ import { PROFILES_DIR } from '../utils/paths'
 import { isValidProfile, isValidManifest } from './schema'
 import type { ManifestEntry, Profile } from './schema'
 import { debugLog } from '../utils/logger'
+import { fetchWithTimeout } from '../utils/fetch'
 
 const REGISTRY_BASE = 'https://raw.githubusercontent.com/workscribe/profiles/main'
 
@@ -12,7 +13,7 @@ function manifestCachePath(): string {
 }
 
 export async function fetchManifest(): Promise<ManifestEntry[]> {
-  const response = await fetch(`${REGISTRY_BASE}/manifest.json`)
+  const response = await fetchWithTimeout(`${REGISTRY_BASE}/manifest.json`, {})
   if (!response.ok) throw new Error(`Registry unreachable (${response.status})`)
   const data: unknown = await response.json()
   if (!isValidManifest(data)) throw new Error('Manifest format unrecognised')
@@ -20,7 +21,7 @@ export async function fetchManifest(): Promise<ManifestEntry[]> {
 }
 
 export async function fetchProfile(name: string): Promise<Profile> {
-  const response = await fetch(`${REGISTRY_BASE}/${name}.json`)
+  const response = await fetchWithTimeout(`${REGISTRY_BASE}/${name}.json`, {})
   if (response.status === 404) throw new Error(`Profile "${name}" not found in registry`)
   if (!response.ok) throw new Error(`Registry unreachable (${response.status})`)
   const data: unknown = await response.json()

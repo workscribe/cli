@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Usage: node scripts/linear-import.mjs
 
-const API_KEY = 'lin_api_ouyCU3Qluh6fRXeRWGgKc7NJVJibkUgxyb9znPbb'
+const API_KEY = 'lin_api_usguv1LoLJKtwCVvtLHM13B74xLBbaIPvOtqY8TY'
 const ENDPOINT = 'https://api.linear.app/graphql'
 
 const PRIORITY = { Urgent: 1, High: 2, Medium: 3, Low: 4 }
@@ -21,6 +21,38 @@ const LABEL_COLORS = {
 }
 
 const ISSUES = [
+  // ── World-class CLI polish ───────────────────────────────────────────────
+  {
+    title: '[W-01] World-class CLI quality improvements',
+    priority: 'Medium',
+    labels: ['dx', 'phase-1'],
+    description: `Audit against top-tier CLI tools (gh, stripe, vercel) identified five gaps to close. Item 6 (offline resilience) is already shipped.
+
+**1. Distribution — standalone binaries and one-liner installer**
+- Use \`pkg\` or \`caxa\` to produce self-contained macOS (arm64/x64) and Linux (x64) binaries as release artifacts
+- Add \`scripts/install.sh\` one-liner that detects platform and installs the correct binary
+- Document Homebrew tap process in \`RELEASING.md\`
+- No Node.js required for end users
+
+**2. Update notifications**
+- Async version check on each run against the npm registry, result cached in \`~/.workscribe/update-check.json\` (24 h TTL)
+- If a newer version is available, print one non-intrusive line to stderr after the command completes
+- No new runtime dependencies (use native \`fetch\`)
+
+**3. Cross-platform shell support**
+- Add \`shell/hook.fish\` and update \`detectShell()\` in \`src/cli/init.ts\` to handle fish
+- Update \`src/utils/paths.ts\` to use XDG Base Directory spec on fresh installs (\`~/.config/workscribe\`, \`~/.local/share/workscribe\`, \`~/.local/state/workscribe\`); existing \`~/.workscribe/\` dirs are kept as-is
+
+**4. Shell autocompletion**
+- Add \`workscribe completions [shell]\` command that prints a completion script for zsh / bash / fish
+- Extend \`workscribe init\` to offer installing completions immediately after the shell hook
+
+**5. Bug-report command**
+- \`workscribe bug-report\` collects workscribe version, Node version, OS/arch, redacted config, and last 100 lines of \`debug.log\`
+- Writes a \`bug-report-<timestamp>.txt\` to \`~/.workscribe/\` and prints the path
+- Prints a pre-filled GitHub issue URL so users can file a report in one step`,
+  },
+
   // ── Phase 0: Stabilize ──────────────────────────────────────────────────
   {
     title: '[F-01] DB migration system',
@@ -69,30 +101,6 @@ const ISSUES = [
 
   // ── Phase 1: Solo Polish ─────────────────────────────────────────────────
   {
-    title: '[P-01] workscribe week — weekly digest command',
-    priority: 'High',
-    labels: ['feature', 'phase-1'],
-    description: `Add a \`workscribe week\` command that generates an AI summary of Mon–today for the current week. Natural pre-standup ritual and the unit for team reporting.
-
-**Acceptance criteria**
-- \`workscribe week\` outputs markdown grouped by day
-- Supports \`--slack\` to post to configured webhook
-- Cached in \`~/.workscribe/weekly-cache/<YYYY-WW>.md\`
-- \`--fresh\` bypasses cache`,
-  },
-  {
-    title: '[P-02] Annotation support — workscribe note',
-    priority: 'High',
-    labels: ['feature', 'phase-1'],
-    description: `Add \`workscribe note "context"\` to let developers attach free-text context to the current session. AI cannot infer why you spent 3 hours on a 2-line fix — annotations fill that gap.
-
-**Acceptance criteria**
-- \`workscribe note "Fixed race condition in auth middleware"\` appends to current session
-- Notes appear in the AI prompt payload
-- Notes visible in \`workscribe sessions\` output
-- Stored in DB, not lost on session rebuild`,
-  },
-  {
     title: '[P-03] VS Code / Cursor IDE hook',
     priority: 'High',
     labels: ['feature', 'phase-1'],
@@ -111,7 +119,7 @@ const ISSUES = [
     description: `Add Google Gemini and Groq as AI providers. Reduces barrier for users without Anthropic or OpenAI accounts and adds a fast/cheap tier via Groq.
 
 **Acceptance criteria**
-- \`src/ai/providers/gemini.ts\` and \`src/ai/providers/groq.ts\` implementing \`AIProvider\`
+- \`src/ai/gemini.ts\` and \`src/ai/groq.ts\` implementing \`AIProvider\`
 - Router updated in \`src/ai/router.ts\`
 - Config and provider docs updated
 - Default models documented`,
@@ -138,20 +146,6 @@ const ISSUES = [
 - Plain-text and HTML variants
 - No email sent if no events captured`,
   },
-  {
-    title: '[P-07] Improved init onboarding UX',
-    priority: 'High',
-    labels: ['dx', 'phase-1'],
-    description: `The current \`workscribe init\` flow is functional but minimal. First-run experience directly impacts retention — developers who don't see value in the first session churn.
-
-**Acceptance criteria**
-- Clear step-by-step output with progress indicators
-- Explains what the shell hook does before installing it
-- Validates API key during init (test call to provider)
-- Prints a "what to do next" summary at the end
-- Re-run remains safe and idempotent`,
-  },
-
   // ── Phase 2: Team MVP ────────────────────────────────────────────────────
   {
     title: '[T-01] Cloud backend — user accounts and team workspaces',

@@ -1,10 +1,10 @@
 import { describe, it, expect, vi } from 'vitest'
 
-vi.mock('../../src/ai/fetch', () => ({
+vi.mock('../../src/utils/fetch', () => ({
   fetchWithTimeout: vi.fn(),
 }))
 
-import { fetchWithTimeout } from '../../src/ai/fetch'
+import { fetchWithTimeout } from '../../src/utils/fetch'
 import { postToWebhook } from '../../src/integrations/webhook'
 
 const mockFetch = fetchWithTimeout as ReturnType<typeof vi.fn>

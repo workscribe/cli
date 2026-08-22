@@ -1,7 +1,7 @@
-import type { AIProvider, DaySummaryPayload, WeekSummaryPayload } from '../types'
-import { getSystemPrompt, buildUserMessage, WEEKLY_SYSTEM_PROMPT, buildWeeklyMessage } from '../prompt'
-import { fetchWithTimeout } from '../fetch'
-import type { ProviderConfig } from './config'
+import type { AIProvider, DaySummaryPayload, WeekSummaryPayload } from './types'
+import { getSystemPrompt, buildUserMessage, WEEKLY_SYSTEM_PROMPT, buildWeeklyMessage } from './prompt'
+import { fetchWithTimeout } from '../utils/fetch'
+import type { ProviderConfig } from './provider-config'
 
 export class GenericProvider implements AIProvider {
   constructor(

@@ -208,8 +208,10 @@ export function registerProfile(program: Command): void {
       for (const entry of manifest) {
         if (activeNames.has(entry.name)) continue
         const matchedCount = toolCounts
-          .filter((tc) => entry.keywords.some((kw) => tc.tool.toLowerCase().includes(kw.toLowerCase())))
-          .reduce((sum, tc) => sum + tc.count, 0)
+          .filter((toolCount) =>
+            entry.keywords.some((keyword) => toolCount.tool.toLowerCase().includes(keyword.toLowerCase()))
+          )
+          .reduce((total, toolCount) => total + toolCount.count, 0)
         if (matchedCount >= MIN_SUGGEST_COUNT) {
           suggestions.push({ entry, count: matchedCount })
         }
@@ -218,7 +220,30 @@ export function registerProfile(program: Command): void {
       suggestions.sort((a, b) => b.count - a.count)
 
       if (suggestions.length === 0) {
-        log.plain('No profile matches found. Your commands are well covered.')
+        const activeEntries = manifest.filter((entry) => activeNames.has(entry.name))
+        const isToolCoveredByActiveProfile = (tool: string) =>
+          activeEntries.some((entry) =>
+            entry.keywords.some((keyword) => tool.toLowerCase().includes(keyword.toLowerCase()))
+          )
+        const uncoveredTools = toolCounts.filter((toolCount) => !isToolCoveredByActiveProfile(toolCount.tool))
+
+        if (uncoveredTools.length === 0) {
+          log.plain('')
+          log.plain('Your active profiles cover all unclassified commands.')
+          log.plain(chalk.dim('  Future captures will be classified correctly.'))
+          log.plain('')
+        } else {
+          log.plain('')
+          log.plain('No profile matches found for your unclassified commands.')
+          log.plain('')
+          log.plain(chalk.dim('  Top unclassified tools:'))
+          for (const { tool, count } of uncoveredTools.slice(0, 5)) {
+            log.plain(chalk.dim(`    ${tool.padEnd(24)} ${count} event${count === 1 ? '' : 's'}`))
+          }
+          log.plain('')
+          log.plain(chalk.dim('  Run workscribe events --category other to review them.'))
+          log.plain('')
+        }
         return
       }
 
@@ -231,7 +256,26 @@ export function registerProfile(program: Command): void {
         )
       }
       log.plain('')
-      log.plain(`  Run: ${chalk.cyan('workscribe profile add ' + suggestions.map((s) => s.entry.name).join(' '))}`)
+      log.plain(
+        `  Run: ${chalk.cyan('workscribe profile add ' + suggestions.map((suggestion) => suggestion.entry.name).join(' '))}`
+      )
       log.plain('')
+
+      const allCoveredEntries = [
+        ...manifest.filter((entry) => activeNames.has(entry.name)),
+        ...suggestions.map((suggestion) => suggestion.entry),
+      ]
+      const isToolCoveredAfterInstall = (tool: string) =>
+        allCoveredEntries.some((entry) =>
+          entry.keywords.some((keyword) => tool.toLowerCase().includes(keyword.toLowerCase()))
+        )
+      const stillUncovered = toolCounts.filter((toolCount) => !isToolCoveredAfterInstall(toolCount.tool)).slice(0, 5)
+      if (stillUncovered.length > 0) {
+        log.plain(chalk.dim('  Still uncovered after installing:'))
+        for (const { tool, count } of stillUncovered) {
+          log.plain(chalk.dim(`    ${tool.padEnd(24)} ${count} event${count === 1 ? '' : 's'}`))
+        }
+        log.plain('')
+      }
     })
 }
