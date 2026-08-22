@@ -13,7 +13,7 @@ _workscribe_precmd() {
   if [[ -n "$_workscribe_cmd" ]]; then
     local _raw_ms=$(( ($EPOCHREALTIME - $_workscribe_cmd_start) * 1000 ))
     local duration_ms=${_raw_ms%%.*}
-    workscribe _capture \
+    command workscribe _capture \
       --cmd "$_workscribe_cmd" \
       --cwd "$PWD" \
       --exit "$exit_code" \

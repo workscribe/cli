@@ -125,6 +125,40 @@ describe('redact', () => {
     })
   })
 
+  describe('inline env var assignments', () => {
+    it('redacts API_KEY=value before a command', () => {
+      const result = redact('API_KEY=super_secret_value npm start')
+      expect(result).toContain('[REDACTED]')
+      expect(result).not.toContain('super_secret_value')
+      expect(result).toContain('API_KEY=')
+    })
+
+    it('redacts AWS_SECRET_ACCESS_KEY=value inline', () => {
+      const result = redact('AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI curl https://api.example.com')
+      expect(result).toContain('[REDACTED]')
+      expect(result).not.toContain('wJalrXUtnFEMI')
+    })
+
+    it('redacts AUTH_TOKEN=value inline', () => {
+      const result = redact('AUTH_TOKEN=abc123 npm run deploy')
+      expect(result).toContain('[REDACTED]')
+      expect(result).not.toContain('abc123')
+      expect(result).toContain('AUTH_TOKEN=')
+    })
+
+    it('redacts DB_PASSWORD=value inline', () => {
+      const result = redact('DB_PASSWORD=hunter2 psql -U admin mydb')
+      expect(result).toContain('[REDACTED]')
+      expect(result).not.toContain('hunter2')
+    })
+
+    it('does NOT redact benign inline assignments', () => {
+      expect(redact('PORT=3000 node app.js')).toBe('PORT=3000 node app.js')
+      expect(redact('NODE_ENV=production npm start')).toBe('NODE_ENV=production npm start')
+      expect(redact('DEBUG=express:* node app.js')).toBe('DEBUG=express:* node app.js')
+    })
+  })
+
   describe('safe commands', () => {
     it('leaves normal git commands untouched', () => {
       const cmd = 'git commit -m "fix: auth bug"'

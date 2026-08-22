@@ -20,6 +20,9 @@ const BUILTIN_PATTERNS: RegExp[] = [
   /(?<=--(password|passwd|secret|token|key|api[-_]?key|auth[-_]?token)\s+)\S+/gi,
   // export VAR=VALUE where VAR looks sensitive
   /(?<=export\s+(?:[A-Z_]*(?:TOKEN|SECRET|KEY|PASSWORD|PASS|AUTH|CREDENTIAL)[A-Z_]*)=)\S+/gi,
+  // Inline assignment: VAR_WITH_SENSITIVE_KEYWORD=value cmd  (e.g. API_KEY=secret npm start)
+  // Lookbehind matches only the variable-name= prefix, so only the value is replaced
+  /(?<=[A-Z_][A-Z0-9_]*(?:TOKEN|SECRET|KEY|PASSWORD|PASS|AUTH|CREDENTIAL)[A-Z0-9_]*=)\S+/gi,
 ]
 
 export function redact(command: string, extraPatterns: string[] = []): string {

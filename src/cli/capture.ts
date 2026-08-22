@@ -2,6 +2,8 @@ import { Command } from 'commander'
 import { captureCommand } from '../capture'
 import { debugLog } from '../utils/logger'
 
+const CAPTURE_HANG_TIMEOUT_MS = 5_000
+
 export function registerCapture(program: Command): void {
   // Internal command — called by the shell hook, not by the user
   program
@@ -13,6 +15,11 @@ export function registerCapture(program: Command): void {
     .option('--duration <ms>', 'duration in milliseconds', parseInt)
     .option('--git-before <sha>', 'git HEAD SHA before this command ran')
     .action((opts) => {
+      // Prevent background process accumulation if the process hangs (e.g. SQLite locked).
+      // unref() allows a natural exit to happen immediately without waiting for the timer.
+      const hangGuard = setTimeout(() => process.exit(0), CAPTURE_HANG_TIMEOUT_MS)
+      hangGuard.unref()
+
       // Never surface errors to the terminal — this runs silently in the background
       try {
         if (!opts.cmd || !opts.cwd) return
