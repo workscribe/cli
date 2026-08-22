@@ -95,6 +95,22 @@ Examples: `fix/WOR-6-midnight-session-split`, `feat/WOR-9-weekly-digest`, `test/
 
 **Commit style:** Do not add `Co-Authored-By` trailers.
 
+## Naming conventions
+
+**No single-letter or abbreviated names anywhere** — this applies to function parameters, lambda arguments, loop variables, destructuring aliases, and catch clauses. Use the full descriptive name.
+
+```typescript
+// Wrong
+sessions.map((s) => s.repoName)
+excludedCounts.entries().map(([cat, n]) => ...)
+} catch (e) {
+
+// Correct
+sessions.map((session) => session.repoName)
+excludedCounts.entries().map(([category, count]) => ...)
+} catch (error) {
+```
+
 ## Documentation
 
 Documentation source lives in `docs/site/` in this repo and is published automatically to `workscribe.co/docs` via Mintlify on every push to `main`. The `mint.json` in that directory controls navigation and branding.

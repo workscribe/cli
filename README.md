@@ -89,6 +89,7 @@ workscribe config set ai.apiKey <your-key>
 | `workscribe summary --date 2026-05-20` | Summary for a specific date |
 | `workscribe summary --week` | Summary for the current week |
 | `workscribe summary --fresh` | Bypass cache and regenerate |
+| `workscribe summary --verbose` | Show all captured events (including those excluded from AI) |
 | `workscribe summary --slack` | Post summary to configured Slack channel |
 | `workscribe summary --webhook <url>` | Post summary to a custom webhook URL |
 | `workscribe sessions` | List detected work sessions for today |
@@ -152,6 +153,7 @@ workscribe summary --webhook https://custom.endpoint/hook                 # one-
 | `capture.includeAiderPrompt` | `true` | Set to `false` to skip reading Aider's history file for prompt context |
 | `redact.extra` | `[]` | Additional regex patterns to redact from captured commands |
 | `summary.format` | `markdown` | Output format: `markdown` or `json` |
+| `summary.includeCategories` | `[]` | Event categories to re-include in the AI prompt (e.g. `["linting"]`) |
 | `integrations.slackWebhook` | — | Slack incoming webhook URL |
 | `integrations.webhook` | — | Default webhook URL for `--webhook` |
 | `projects.<path>` | — | Display name override for a repo by absolute path |

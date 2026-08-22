@@ -22,6 +22,10 @@ export interface WorkscribeConfig {
   }
   summary: {
     format: 'markdown' | 'json'
+    // Categories re-included in the AI payload (overrides built-in exclusions).
+    // Excluded by default: exploring, other, linting.
+    // Example: ["linting"] to include lint pass/fail in summaries.
+    includeCategories?: string[]
   }
   projects?: Record<string, string> // absolute path → display name override
   integrations?: {

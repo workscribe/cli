@@ -16,7 +16,7 @@ _workscribe_precmd() {
     local now
     now=$(date +%s%3N 2>/dev/null || echo 0)
     local duration=$(( now - _workscribe_cmd_start ))
-    workscribe _capture \
+    command workscribe _capture \
       --cmd "$_workscribe_last_cmd" \
       --cwd "$PWD" \
       --exit "$exit_code" \

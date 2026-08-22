@@ -338,7 +338,7 @@ describe('getSystemPrompt', () => {
 
 describe('SYSTEM_PROMPT', () => {
   it('instructs the model to infer domain from package names', () => {
-    expect(SYSTEM_PROMPT).toContain('infer the purpose of packages from their names')
+    expect(SYSTEM_PROMPT).toContain('infer the purpose from package names')
   })
 
   it('includes concrete package→domain examples', () => {

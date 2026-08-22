@@ -22,6 +22,7 @@ import { formatForSlack, isSlackWebhookUrl } from '../integrations/slack'
 import { WEEKLY_CACHE_DIR } from '../utils/paths'
 import type { DaySummaryPayload, SessionPayload, EventPayload, WeekSummaryPayload } from '../ai/types'
 import type { EventRow } from '../db'
+import { buildExcludedSet, countExcludedEvents } from '../ai/prompt'
 
 interface SessionSummaryJson {
   project: string | null
@@ -100,6 +101,7 @@ export function registerSummary(program: Command): void {
     .option('--date <YYYY-MM-DD>', 'date to summarize (default: today)')
     .option('--week', 'summarize the current week')
     .option('--fresh', 'bypass cache and regenerate')
+    .option('--verbose', 'show all captured events including those not sent to AI')
     .option('--slack', 'post summary to Slack webhook from config')
     .option('--webhook <url>', 'post summary to a custom webhook URL')
     .action(async (opts) => {
@@ -212,14 +214,40 @@ export function registerSummary(program: Command): void {
         }
       }
 
+      const excluded = buildExcludedSet(config.summary?.includeCategories ?? [])
+      const allSessionPayloads = sessions.map((session) => sessionToPayload(session, date))
+
+      if (opts.verbose) {
+        log.plain('')
+        log.plain(chalk.bold('  Captured events (--verbose):'))
+        for (const sessionPayload of allSessionPayloads) {
+          const branch = sessionPayload.branch ? ` (${sessionPayload.branch})` : ''
+          log.plain(
+            chalk.dim(
+              `\n  ${sessionPayload.project ?? 'unknown'}${branch} — ${formatDuration(sessionPayload.durationMinutes)}`
+            )
+          )
+          for (const event of sessionPayload.events) {
+            const tag = excluded.has(event.category)
+              ? chalk.dim(`  [excluded] ${event.category}`)
+              : `  ${event.category}`
+            const hint = event.hint ? chalk.dim(` [${event.hint}]`) : ''
+            const meta = Object.keys(event.metadata).length > 0 ? chalk.dim(` ${JSON.stringify(event.metadata)}`) : ''
+            log.plain(`    ${tag}${hint}${meta}`)
+          }
+        }
+        log.plain('')
+      }
+
       log.plain('')
       log.info(`Generating summary via ${chalk.cyan(config.ai.provider)}…`)
 
       const allSummaries: string[] = []
       const jsonSessions: SessionSummaryJson[] = []
 
-      for (const session of sessions) {
-        const sessionPayload: DaySummaryPayload = { date, sessions: [sessionToPayload(session, date)] }
+      for (let index = 0; index < sessions.length; index++) {
+        const session = sessions[index]
+        const sessionPayload: DaySummaryPayload = { date, sessions: [allSessionPayloads[index]] }
         try {
           const bullets = await provider.summarize(sessionPayload)
           const project = session.repoName ?? 'unknown'
@@ -251,6 +279,15 @@ export function registerSummary(program: Command): void {
         log.plain(fullSummary)
       }
       log.plain('')
+
+      const excludedCounts = countExcludedEvents(allSessionPayloads, excluded)
+      if (excludedCounts.size > 0) {
+        const total = [...excludedCounts.values()].reduce((sum, count) => sum + count, 0)
+        const breakdown = [...excludedCounts.entries()].map(([category, count]) => `${category} ×${count}`).join(', ')
+        log.plain(chalk.dim(`  ℹ ${total} event${total === 1 ? '' : 's'} not included in summary (${breakdown})`))
+        log.plain(chalk.dim('    Use --verbose to inspect · workscribe config set summary.includeCategories to opt in'))
+        log.plain('')
+      }
 
       await handleWebhook(opts, config, fullSummary)
     })
