@@ -171,6 +171,28 @@ Events are colour-coded by category:
 
 ---
 
+## workscribe note
+
+Attach a free-text annotation to the current session.
+
+```bash
+workscribe note "Fixed race condition in auth middleware"
+workscribe note "Blocked by infra outage — picked up again after lunch"
+```
+
+The note is stored as an event in the database, timestamped now, and associated with the current git repo and branch. It groups into whatever session covers its timestamp when sessions are rebuilt.
+
+**Where notes appear:**
+
+- `workscribe sessions` — displayed indented under the matching session
+- `workscribe summary` and `workscribe week` — injected into the AI prompt before the event list so the model reads your context first, and uses it to explain the why behind the work
+
+**Removing a note:**
+
+Notes are events. Use `workscribe undo` to remove the most recently added note.
+
+---
+
 ## workscribe undo
 
 Remove the last N captured events.
