@@ -9,7 +9,9 @@ export interface AIToolEntry {
   displayName: string
   pattern: string
   hook: string | null
-  contextSource: string | null
+  contextSource: 'hook' | 'history-file' | 'sqlite' | null
+  historyFormat: 'jsonl' | 'json' | 'markdown' | 'sqlite' | null
+  securityWarning: string | null
 }
 
 const USER_REGISTRY_PATH = path.join(os.homedir(), '.workscribe', 'ai-tools.json')
@@ -29,7 +31,9 @@ export function loadAIToolRegistry(): AIToolEntry[] {
             displayName: (entry.displayName as string | undefined) ?? (entry.tool as string),
             pattern: entry.pattern as string,
             hook: (entry.hook as string | null | undefined) ?? null,
-            contextSource: (entry.contextSource as string | null | undefined) ?? null,
+            contextSource: (entry.contextSource as AIToolEntry['contextSource'] | undefined) ?? null,
+            historyFormat: (entry.historyFormat as AIToolEntry['historyFormat'] | undefined) ?? null,
+            securityWarning: (entry.securityWarning as string | null | undefined) ?? null,
           }))
       }
     }
