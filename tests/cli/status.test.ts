@@ -19,6 +19,10 @@ vi.mock('fs', () => ({
 
 vi.mock('../../src/utils/paths')
 
+vi.mock('../../src/db/alerts', () => ({
+  getPendingAlerts: vi.fn().mockReturnValue([]),
+}))
+
 import fs from 'fs'
 import { Command } from 'commander'
 import { getEventCount, getLastEvent, getEventsForDate, getRecentOtherRate } from '../../src/db'

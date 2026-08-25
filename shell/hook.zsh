@@ -23,6 +23,9 @@ _workscribe_precmd() {
     _workscribe_cmd=""
     _workscribe_git_before=""
   fi
+  if [[ -f "$HOME/.workscribe/alerts.pending" ]]; then
+    command workscribe alerts --check
+  fi
 }
 
 autoload -Uz add-zsh-hook

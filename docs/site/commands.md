@@ -271,6 +271,26 @@ workscribe status
 - Number of events captured today and total
 - Last captured event
 - Configured AI provider and model
+- Pending security alerts count (if any)
+
+---
+
+## workscribe alerts
+
+Show and manage security alerts raised when Workscribe detects a possible credential in an AI tool prompt.
+
+```bash
+workscribe alerts          # list all pending alerts
+workscribe alerts clear    # dismiss all pending alerts
+```
+
+When credentials are detected in a prompt sent to an AI tool (e.g. Claude Code), Workscribe:
+1. Stores the alert in the local database.
+2. Writes a signal file to `~/.workscribe/alerts.pending`.
+3. Displays a one-line warning before your next shell prompt.
+4. Injects a `systemMessage` into Claude's context for that turn.
+
+The `clear` subcommand marks all alerts as dismissed and removes the signal file.
 
 ---
 

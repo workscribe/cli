@@ -30,5 +30,8 @@ function _workscribe_postexec --on-event fish_postexec
         set -e _workscribe_cmd
         set -e _workscribe_git_before
     end
+    if test -f "$HOME/.workscribe/alerts.pending"
+        command workscribe alerts --check
+    end
 end
 # workscribe:hook:end

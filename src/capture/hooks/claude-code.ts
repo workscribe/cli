@@ -24,20 +24,31 @@ export const claudeCodeIntegration: AIHookIntegration = {
 
   isHookInstalled() {
     const settings = readSettings()
-    const postToolUse = ((settings.hooks as Record<string, unknown>)?.PostToolUse ?? []) as unknown[]
-    return postToolUse.some((entry) => {
-      const hooks = ((entry as Record<string, unknown>).hooks ?? []) as unknown[]
-      return hooks.some((hookItem) => {
+    const hooks = (settings.hooks ?? {}) as Record<string, unknown>
+    const postToolUse = (hooks.PostToolUse ?? []) as unknown[]
+    const hasPostToolUse = postToolUse.some((entry) => {
+      const entryHooks = ((entry as Record<string, unknown>).hooks ?? []) as unknown[]
+      return entryHooks.some((hookItem) => {
         const hook = hookItem as Record<string, unknown>
         return typeof hook.command === 'string' && hook.command.includes('workscribe _hook')
       })
     })
+    const userPromptSubmit = (hooks.UserPromptSubmit ?? []) as unknown[]
+    const hasUserPromptSubmit = userPromptSubmit.some((entry) => {
+      const entryHooks = ((entry as Record<string, unknown>).hooks ?? []) as unknown[]
+      return entryHooks.some((hookItem) => {
+        const hook = hookItem as Record<string, unknown>
+        return typeof hook.command === 'string' && hook.command.includes('workscribe _hook')
+      })
+    })
+    return hasPostToolUse && hasUserPromptSubmit
   },
 
   install() {
     const settings = readSettings()
     const existingHooks = (settings.hooks ?? {}) as Record<string, unknown>
     const existingPostToolUse = (existingHooks.PostToolUse ?? []) as unknown[]
+    const existingUserPromptSubmit = (existingHooks.UserPromptSubmit ?? []) as unknown[]
     settings.hooks = {
       ...existingHooks,
       PostToolUse: [
@@ -45,6 +56,17 @@ export const claudeCodeIntegration: AIHookIntegration = {
         {
           matcher: 'Bash',
           hooks: [{ type: 'command', command: 'workscribe _hook --source claude-code', async: true }],
+        },
+      ],
+      UserPromptSubmit: [
+        ...existingUserPromptSubmit,
+        {
+          hooks: [
+            {
+              type: 'command',
+              command: 'workscribe _hook --source claude-code --event UserPromptSubmit',
+            },
+          ],
         },
       ],
     }

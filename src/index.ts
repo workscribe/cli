@@ -22,6 +22,7 @@ import { registerNote } from './cli/note'
 import { registerWeek } from './cli/week'
 import { registerBugReport } from './cli/bug-report'
 import { registerCompletions } from './cli/completions'
+import { registerAlerts } from './cli/alerts'
 import { checkForUpdate } from './utils/update-check'
 
 checkForUpdate()
@@ -48,5 +49,6 @@ registerNote(program)
 registerWeek(program)
 registerBugReport(program)
 registerCompletions(program)
+registerAlerts(program)
 
 program.parse()
