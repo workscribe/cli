@@ -1,6 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
+import { execFileSync } from 'child_process'
 import { log } from '../utils/logger'
 import { CompletionCommand, bashCompletion, zshCompletion, fishCompletion } from '../utils/completion-scripts'
 import { WORKSCRIBE_DIR } from '../utils/paths'
@@ -60,6 +61,23 @@ export function removeHook(rcFile: string): void {
   const before = content.slice(0, blockStart).replace(/\n+$/, '\n')
   const after = content.slice(endIdx).replace(/^\n/, '')
   fs.writeFileSync(rcFile, before + after)
+}
+
+export function resolveWorkscribeBinary(): string | null {
+  try {
+    const resolved = execFileSync('which', ['workscribe'], { encoding: 'utf-8' }).trim()
+    return resolved || null
+  } catch {
+    return null
+  }
+}
+
+export function injectBinaryPath(hookContent: string, binaryPath: string): string {
+  return hookContent
+    .replace('command -v workscribe > /dev/null 2>&1 || return 0', `[[ -x "${binaryPath}" ]] || return 0`)
+    .replace('command -v workscribe &>/dev/null || return 0', `[[ -x "${binaryPath}" ]] || return 0`)
+    .replace('type -q workscribe\n    or return 0', `test -x "${binaryPath}"\n    or return 0`)
+    .replaceAll('command workscribe _capture', `"${binaryPath}" _capture`)
 }
 
 export function isCompletionsInstalled(shell: { name: string; rcFile: string }): boolean {

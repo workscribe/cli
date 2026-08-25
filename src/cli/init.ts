@@ -19,6 +19,8 @@ import {
   updateHook,
   isCompletionsInstalled,
   installCompletions,
+  resolveWorkscribeBinary,
+  injectBinaryPath,
 } from '../capture/shell-hook'
 import { AI_HOOK_INTEGRATIONS } from '../capture/hooks'
 import { getPublicCommands } from './completions'
@@ -87,6 +89,8 @@ export function registerInit(program: Command): void {
           log.warn(`Hook template not found at ${hookFile}`)
         } else {
           const hookContent = fs.readFileSync(hookFile, 'utf-8')
+          const binaryPath = resolveWorkscribeBinary()
+          const hookWithPath = binaryPath ? injectBinaryPath(hookContent, binaryPath) : hookContent
 
           // For fish: ensure conf.d directory exists before touching the file
           if (shell.name === 'fish') {
@@ -103,9 +107,9 @@ export function registerInit(program: Command): void {
             log.plain(chalk.dim('  It runs in the background and adds no latency to your terminal.'))
             log.plain(chalk.dim('  Credentials and secrets are redacted before anything is stored.'))
             log.plain('')
-            installHook(shell.rcFile, hookContent)
+            installHook(shell.rcFile, hookWithPath)
             log.success(`Shell hook installed in ${shell.rcFile}`)
-          } else if (isHookOutdated(shell.rcFile, hookContent)) {
+          } else if (isHookOutdated(shell.rcFile, hookWithPath)) {
             const { update } = await prompts({
               type: 'confirm',
               name: 'update',
@@ -113,7 +117,7 @@ export function registerInit(program: Command): void {
               initial: true,
             })
             if (update) {
-              updateHook(shell.rcFile, hookContent)
+              updateHook(shell.rcFile, hookWithPath)
               log.success(`Shell hook updated in ${shell.rcFile}`)
             } else {
               log.info('Shell hook update skipped')
