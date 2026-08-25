@@ -4,55 +4,107 @@
     "displayName": "Claude Code",
     "pattern": "^claude\\b",
     "hook": "claude-code",
-    "contextSource": "hook"
+    "contextSource": "hook",
+    "historyFormat": null,
+    "securityWarning": null
   },
   {
     "tool": "aider",
     "displayName": "Aider",
     "pattern": "^aider\\b",
     "hook": null,
-    "contextSource": "history-file"
+    "contextSource": "history-file",
+    "historyFormat": "markdown",
+    "securityWarning": null
+  },
+  {
+    "tool": "codex",
+    "displayName": "Codex CLI",
+    "pattern": "^codex\\b",
+    "hook": null,
+    "contextSource": "history-file",
+    "historyFormat": "jsonl",
+    "securityWarning": null
   },
   {
     "tool": "gemini",
-    "displayName": "Gemini",
+    "displayName": "Gemini CLI",
     "pattern": "^gemini\\b",
     "hook": null,
-    "contextSource": null
+    "contextSource": "history-file",
+    "historyFormat": "json",
+    "securityWarning": null
   },
   {
     "tool": "gh copilot",
     "displayName": "GitHub Copilot",
     "pattern": "^gh\\s+copilot\\b",
     "hook": null,
-    "contextSource": null
-  },
-  {
-    "tool": "cody",
-    "displayName": "Cody",
-    "pattern": "^cody\\b",
-    "hook": null,
-    "contextSource": null
+    "contextSource": "history-file",
+    "historyFormat": "jsonl",
+    "securityWarning": null
   },
   {
     "tool": "amazon-q",
     "displayName": "Amazon Q",
     "pattern": "^q\\s+(chat|dev)\\b",
     "hook": null,
-    "contextSource": null
+    "contextSource": "history-file",
+    "historyFormat": "json",
+    "securityWarning": null
+  },
+  {
+    "tool": "opencode",
+    "displayName": "OpenCode",
+    "pattern": "^opencode\\b",
+    "hook": null,
+    "contextSource": "sqlite",
+    "historyFormat": "sqlite",
+    "securityWarning": null
+  },
+  {
+    "tool": "kilo",
+    "displayName": "Kilo Code",
+    "pattern": "^kilo\\b",
+    "hook": null,
+    "contextSource": null,
+    "historyFormat": null,
+    "securityWarning": null
+  },
+  {
+    "tool": "grok",
+    "displayName": "Grok Build",
+    "pattern": "^grok\\b",
+    "hook": null,
+    "contextSource": null,
+    "historyFormat": null,
+    "securityWarning": "Grok Build was found to silently upload entire local git repositories — including .env files and untracked secrets — to Google Cloud Storage without user disclosure (July 2026 incident). Workscribe does not read Grok Build session files. Consider whether this tool is appropriate for use in repositories containing sensitive credentials."
   },
   {
     "tool": "continue",
     "displayName": "Continue",
     "pattern": "^continue\\b",
     "hook": null,
-    "contextSource": null
+    "contextSource": null,
+    "historyFormat": null,
+    "securityWarning": null
+  },
+  {
+    "tool": "cody",
+    "displayName": "Cody",
+    "pattern": "^cody\\b",
+    "hook": null,
+    "contextSource": null,
+    "historyFormat": null,
+    "securityWarning": null
   },
   {
     "tool": "cursor",
     "displayName": "Cursor",
     "pattern": "^cursor\\b",
     "hook": null,
-    "contextSource": null
+    "contextSource": null,
+    "historyFormat": null,
+    "securityWarning": null
   }
 ]
