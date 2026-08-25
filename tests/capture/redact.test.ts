@@ -159,6 +159,43 @@ describe('redact', () => {
     })
   })
 
+  describe('connection string URL credentials', () => {
+    it('redacts password in postgres DATABASE_URL', () => {
+      const result = redact('DATABASE_URL=postgres://user:hunter2@db-host/mydb npm run migrate')
+      expect(result).not.toContain('hunter2')
+      expect(result).toContain('postgres://user:[REDACTED]@db-host/mydb')
+    })
+
+    it('redacts password in mongodb MONGO_URI', () => {
+      const result = redact('MONGO_URI=mongodb://admin:s3cr3t@mongo:27017/mydb node app.js')
+      expect(result).not.toContain('s3cr3t')
+      expect(result).toContain('mongodb://admin:[REDACTED]@mongo:27017/mydb')
+    })
+
+    it('redacts password in redis REDIS_URL', () => {
+      const result = redact('REDIS_URL=redis://user:cachepass@redis:6379 npm start')
+      expect(result).not.toContain('cachepass')
+      expect(result).toContain('redis://user:[REDACTED]@redis:6379')
+    })
+
+    it('redacts password in exported DATABASE_URL', () => {
+      const result = redact('export DATABASE_URL=postgres://app:dbpass@prod-host/appdb')
+      expect(result).not.toContain('dbpass')
+      expect(result).toContain('postgres://app:[REDACTED]@prod-host/appdb')
+    })
+
+    it('redacts token used as password in git remote URL', () => {
+      const result = redact('git push https://user:ghp_token123@github.com/org/repo')
+      expect(result).not.toContain('ghp_token123')
+    })
+
+    it('does NOT redact URLs without embedded credentials', () => {
+      expect(redact('curl https://api.example.com/v1/data')).toBe('curl https://api.example.com/v1/data')
+      expect(redact('git clone https://github.com/org/repo')).toBe('git clone https://github.com/org/repo')
+      expect(redact('export REPO_URL=https://github.com/org/repo')).toBe('export REPO_URL=https://github.com/org/repo')
+    })
+  })
+
   describe('safe commands', () => {
     it('leaves normal git commands untouched', () => {
       const cmd = 'git commit -m "fix: auth bug"'
