@@ -10,7 +10,12 @@ vi.mock('fs', () => ({
   },
 }))
 
+vi.mock('child_process', () => ({
+  execFileSync: vi.fn(),
+}))
+
 import fs from 'fs'
+import { execFileSync } from 'child_process'
 import {
   getInstalledHookBlock,
   isHookInstalled,
@@ -18,6 +23,8 @@ import {
   installHook,
   updateHook,
   removeHook,
+  resolveWorkscribeBinary,
+  injectBinaryPath,
 } from '../../src/capture/shell-hook'
 
 const mockFs = fs as unknown as Record<string, ReturnType<typeof vi.fn>>
@@ -206,5 +213,113 @@ describe('removeHook', () => {
     expect(written).not.toContain('Do not edit this block manually')
     expect(written).toContain('# existing config')
     expect(written).toContain('# after')
+  })
+})
+
+const mockChildProcess = execFileSync as unknown as ReturnType<typeof vi.fn>
+
+describe('resolveWorkscribeBinary', () => {
+  it('returns the trimmed path when which succeeds', () => {
+    mockChildProcess.mockReturnValue('/usr/local/bin/workscribe\n')
+    expect(resolveWorkscribeBinary()).toBe('/usr/local/bin/workscribe')
+  })
+
+  it('returns null when which returns an empty string', () => {
+    mockChildProcess.mockReturnValue('')
+    expect(resolveWorkscribeBinary()).toBeNull()
+  })
+
+  it('returns null when which throws', () => {
+    mockChildProcess.mockImplementation(() => {
+      throw new Error('not found')
+    })
+    expect(resolveWorkscribeBinary()).toBeNull()
+  })
+})
+
+describe('injectBinaryPath', () => {
+  const BIN = '/home/user/.nvm/versions/node/v22.0.0/bin/workscribe'
+
+  const ZSH_HOOK = `# workscribe:hook:start
+_workscribe_preexec() {
+  _workscribe_cmd_start=$EPOCHREALTIME
+}
+
+_workscribe_precmd() {
+  local exit_code=$?
+  command -v workscribe > /dev/null 2>&1 || return 0
+  command workscribe _capture \\
+    --cmd "$_workscribe_cmd" \\
+    > /dev/null 2>&1 &!
+}
+# workscribe:hook:end`
+
+  const BASH_HOOK = `# workscribe:hook:start
+_workscribe_precmd() {
+  local exit_code=$?
+  command -v workscribe &>/dev/null || return 0
+  command workscribe _capture \\
+    --cmd "$_workscribe_last_cmd" \\
+    > /dev/null 2>&1 &
+}
+# workscribe:hook:end`
+
+  const FISH_HOOK = `# workscribe:hook:start
+function _workscribe_postexec --on-event fish_postexec
+    set -l exit_code $status
+    type -q workscribe
+    or return 0
+    if set -q _workscribe_cmd
+        command workscribe _capture \\
+            --cmd "$_workscribe_cmd" \\
+            > /dev/null 2>&1 &
+    else
+        command workscribe _capture \\
+            --cmd "$_workscribe_cmd" \\
+            > /dev/null 2>&1 &
+    end
+end
+# workscribe:hook:end`
+
+  it('replaces zsh availability check with absolute path test', () => {
+    const result = injectBinaryPath(ZSH_HOOK, BIN)
+    expect(result).not.toContain('command -v workscribe')
+    expect(result).toContain(`[[ -x "${BIN}" ]] || return 0`)
+  })
+
+  it('replaces zsh invocation with absolute path', () => {
+    const result = injectBinaryPath(ZSH_HOOK, BIN)
+    expect(result).not.toContain('command workscribe _capture')
+    expect(result).toContain(`"${BIN}" _capture`)
+  })
+
+  it('replaces bash availability check with absolute path test', () => {
+    const result = injectBinaryPath(BASH_HOOK, BIN)
+    expect(result).not.toContain('command -v workscribe')
+    expect(result).toContain(`[[ -x "${BIN}" ]] || return 0`)
+  })
+
+  it('replaces bash invocation with absolute path', () => {
+    const result = injectBinaryPath(BASH_HOOK, BIN)
+    expect(result).not.toContain('command workscribe _capture')
+    expect(result).toContain(`"${BIN}" _capture`)
+  })
+
+  it('replaces fish availability check with absolute path test', () => {
+    const result = injectBinaryPath(FISH_HOOK, BIN)
+    expect(result).not.toContain('type -q workscribe')
+    expect(result).toContain(`test -x "${BIN}"`)
+  })
+
+  it('replaces all fish invocations with absolute path', () => {
+    const result = injectBinaryPath(FISH_HOOK, BIN)
+    expect(result).not.toContain('command workscribe _capture')
+    const count = (result.match(new RegExp(`"${BIN.replace(/\//g, '\\/')}"\\ _capture`, 'g')) ?? []).length
+    expect(count).toBe(2)
+  })
+
+  it('leaves hook content unchanged when no matching patterns are present', () => {
+    const unrecognised = `# workscribe:hook:start\n_some_other_hook() {}\n# workscribe:hook:end`
+    expect(injectBinaryPath(unrecognised, BIN)).toBe(unrecognised)
   })
 })

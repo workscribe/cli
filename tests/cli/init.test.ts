@@ -33,6 +33,8 @@ vi.mock('../../src/capture/shell-hook', () => ({
   updateHook: vi.fn(),
   isCompletionsInstalled: vi.fn(),
   installCompletions: vi.fn(),
+  resolveWorkscribeBinary: vi.fn().mockReturnValue(null),
+  injectBinaryPath: vi.fn((content: string) => content),
 }))
 
 vi.mock('../../src/capture/hooks', () => ({
