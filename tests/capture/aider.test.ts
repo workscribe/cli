@@ -10,11 +10,11 @@ const mockReadFileSync = fs.readFileSync as ReturnType<typeof vi.fn>
 const SAMPLE_HISTORY = `
 # aider chat started at 2026-05-28 09:00:00
 
-> refactor the payment service to extract billing logic into a separate module
+#### refactor the payment service to extract billing logic into a separate module
 
 Some AI response here.
 
-> add tests for the new billing module
+#### add tests for the new billing module
 
 Another AI response.
 `.trim()
@@ -26,13 +26,13 @@ describe('readLastAiderPrompt', () => {
   })
 
   it('returns the only prompt when there is one message', () => {
-    mockReadFileSync.mockReturnValue('> implement OAuth2 login flow\n\nSome response.')
+    mockReadFileSync.mockReturnValue('#### implement OAuth2 login flow\n\nSome response.')
     expect(readLastAiderPrompt('/repo')).toBe('implement OAuth2 login flow')
   })
 
   it('truncates prompts longer than 200 characters', () => {
     const longPrompt = 'a'.repeat(250)
-    mockReadFileSync.mockReturnValue(`> ${longPrompt}`)
+    mockReadFileSync.mockReturnValue(`#### ${longPrompt}`)
     const result = readLastAiderPrompt('/repo')
     expect(result).toHaveLength(200)
   })
@@ -55,7 +55,7 @@ describe('readLastAiderPrompt', () => {
   })
 
   it('reads from the correct path within cwd', () => {
-    mockReadFileSync.mockReturnValue('> fix the bug')
+    mockReadFileSync.mockReturnValue('#### fix the bug')
     readLastAiderPrompt('/home/user/myproject')
     expect(mockReadFileSync).toHaveBeenCalledWith('/home/user/myproject/.aider.chat.history.md', 'utf-8')
   })
