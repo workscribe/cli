@@ -23,6 +23,9 @@ const BUILTIN_PATTERNS: RegExp[] = [
   // Inline assignment: VAR_WITH_SENSITIVE_KEYWORD=value cmd  (e.g. API_KEY=secret npm start)
   // Lookbehind matches only the variable-name= prefix, so only the value is replaced
   /(?<=[A-Z_][A-Z0-9_]*(?:TOKEN|SECRET|KEY|PASSWORD|PASS|AUTH|CREDENTIAL)[A-Z0-9_]*=)\S+/gi,
+  // Credentials embedded in connection string URLs (e.g. DATABASE_URL=postgres://user:pass@host/db)
+  // Matches the password segment between :// user : password @ — preserves scheme and host
+  /(?<=[a-zA-Z][a-zA-Z0-9+.-]*:\/\/[^:@\s/]+:)[^@\s]+(?=@)/g,
 ]
 
 export function redact(command: string, extraPatterns: string[] = []): string {

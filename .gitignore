@@ -1,5 +1,6 @@
 node_modules/
 dist/
+scripts/linear/
 bin/
 coverage/
 *.js.map
