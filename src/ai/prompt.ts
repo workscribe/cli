@@ -42,6 +42,8 @@ RULES — follow these exactly:
 
 7. Stick to what the events show. Do not infer subject matter from the branch name. Do not add details not derivable from the events.
 
+8. For code_edit events: these represent file saves from an IDE integration. Describe what was being built based on repository context (branch name, commit messages). Never list individual filenames.
+
 Maximum 5 bullets. Output ONLY the bullet points, nothing else.`
 
 export function getSystemPrompt(): string {
@@ -102,7 +104,10 @@ export function buildUserMessage(payload: DaySummaryPayload, includeCategories: 
       if (excluded.has(event.category)) continue
       const failed = event.exitCode !== null && event.exitCode !== 0 ? ' [failed]' : ''
       let key: string
-      if (event.hint) {
+      if (event.category === 'code_edit') {
+        // Strip file paths — AI should describe intent from context, not enumerate files
+        key = `code_edit${failed}`
+      } else if (event.hint) {
         key = `other  [${event.hint}]${failed}`
       } else {
         const meta = Object.keys(event.metadata).length > 0 ? ` ${JSON.stringify(event.metadata)}` : ''
@@ -180,7 +185,9 @@ export function buildWeeklyMessage(payload: WeekSummaryPayload): string {
         if (excluded.has(event.category)) continue
         const failed = event.exitCode !== null && event.exitCode !== 0 ? ' [failed]' : ''
         let key: string
-        if (event.hint) {
+        if (event.category === 'code_edit') {
+          key = `code_edit${failed}`
+        } else if (event.hint) {
           key = `other  [${event.hint}]${failed}`
         } else {
           const meta = Object.keys(event.metadata).length > 0 ? ` ${JSON.stringify(event.metadata)}` : ''

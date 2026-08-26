@@ -92,13 +92,22 @@ export function insertEvent(params: {
   branch: string | null
   category: string
   metadata: string | null
+  source: string | null
+  file_path: string | null
 }): void {
   const db = getDb()
   const stmt = db.prepare(`
-    INSERT INTO events (captured_at, command, cwd, exit_code, duration_ms, repo_name, branch, category, metadata)
-    VALUES ($captured_at, $command, $cwd, $exit_code, $duration_ms, $repo_name, $branch, $category, $metadata)
+    INSERT INTO events (captured_at, command, cwd, exit_code, duration_ms, repo_name, branch, category, metadata, source, file_path)
+    VALUES ($captured_at, $command, $cwd, $exit_code, $duration_ms, $repo_name, $branch, $category, $metadata, $source, $file_path)
   `)
   stmt.run(params)
+}
+
+export function getLastEventForFile(filePath: string, cwd: string): EventRow | undefined {
+  const db = getDb()
+  return db
+    .prepare('SELECT * FROM events WHERE file_path = $file_path AND cwd = $cwd ORDER BY id DESC LIMIT 1')
+    .get({ file_path: filePath, cwd }) as EventRow | undefined
 }
 
 export function getLastEvent(): EventRow | undefined {

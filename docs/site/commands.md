@@ -341,6 +341,32 @@ source ~/.zshrc   # or ~/.bashrc
 
 ---
 
+## workscribe _capture (IDE integration)
+
+Internal command called by shell hooks and IDE plugins. Not intended for direct use.
+
+IDE integrations call this to record a file-save or debug event without going through the shell:
+
+```bash
+workscribe _capture --type code_edit --file src/auth.ts --source vscode --cwd /path/to/repo
+workscribe _capture --type debug_start --source neovim --cwd /path/to/repo
+workscribe _capture --type task_run --source vscode --cwd /path/to/repo
+```
+
+| Option | Description |
+|---|---|
+| `--cmd <command>` | Shell command (shell hook only) |
+| `--cwd <path>` | Working directory (required) |
+| `--type <type>` | Event type — skips normalization. One of: `code_edit`, `debug_start`, `debug_end`, `task_run` |
+| `--source <source>` | Event source identifier (e.g. `vscode`, `neovim`, `jupyter`) |
+| `--file <path>` | File path for `code_edit` events |
+| `--exit <code>` | Exit code (shell hook only) |
+| `--duration <ms>` | Duration in milliseconds (shell hook only) |
+
+**Deduplication:** `code_edit` events for the same file within 30 seconds are dropped. This absorbs rapid auto-saves without creating duplicate records.
+
+---
+
 ## workscribe config
 
 View and update configuration.
