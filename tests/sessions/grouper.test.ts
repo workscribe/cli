@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { splitByIdleGap, splitByRepo, minutesBetween } from '../../src/sessions/grouper'
+import { splitByIdleGap, splitByRepo, minutesBetween, LONG_RUNNING_THRESHOLD_MS } from '../../src/sessions/grouper'
 import type { EventRow } from '../../src/db/types'
 
 // Factory: build a minimal EventRow for testing
@@ -100,6 +100,68 @@ describe('splitByIdleGap', () => {
     ]
     const groups = splitByIdleGap(events, fiveMinMs)
     expect(groups).toHaveLength(2)
+  })
+
+  it('does not split when a long-running command inflates the gap to the previous event', () => {
+    // npm test finishes at BASE+0. npm run dev starts 1 min later but runs for 90 min,
+    // so captured_at = BASE+91min. Without the fix the gap looks 91 min → false split.
+    const longRunningDurationMs = 90 * 60 * 1000
+    const events = [
+      makeEvent({ captured_at: at(BASE, 0), duration_ms: 500 }),
+      makeEvent({ captured_at: at(BASE, 91), duration_ms: longRunningDurationMs }),
+    ]
+    // effective start of second event = BASE+91min − 90min = BASE+1min → 1 min gap, no split
+    const groups = splitByIdleGap(events, IDLE_30_MIN_MS)
+    expect(groups).toHaveLength(1)
+    expect(groups[0]).toHaveLength(2)
+  })
+
+  it('still splits when genuine idle occurs after a long-running command ends', () => {
+    // npm run dev finishes at BASE+91min. User goes idle for 35 min before next command.
+    const longRunningDurationMs = 90 * 60 * 1000
+    const events = [
+      makeEvent({ captured_at: at(BASE, 91), duration_ms: longRunningDurationMs }),
+      // 35 min after dev server finished — genuine idle
+      makeEvent({ captured_at: at(BASE, 126), duration_ms: 500 }),
+    ]
+    // gap = (BASE+126min) − (BASE+91min) = 35min > 30min → real split
+    const groups = splitByIdleGap(events, IDLE_30_MIN_MS)
+    expect(groups).toHaveLength(2)
+  })
+
+  it('keeps all three events in one group when long-running command sits between two close events', () => {
+    // git status (BASE+0), npm run dev 90min (captured at BASE+91min, started BASE+1min),
+    // git commit (BASE+92min). Without fix: false split before npm run dev.
+    const longRunningDurationMs = 90 * 60 * 1000
+    const events = [
+      makeEvent({ captured_at: at(BASE, 0), duration_ms: 500 }),
+      makeEvent({ captured_at: at(BASE, 91), duration_ms: longRunningDurationMs }),
+      makeEvent({ captured_at: at(BASE, 92), duration_ms: 500 }),
+    ]
+    const groups = splitByIdleGap(events, IDLE_30_MIN_MS)
+    expect(groups).toHaveLength(1)
+    expect(groups[0]).toHaveLength(3)
+  })
+
+  it('treats null duration_ms as 0 — uses captured_at as-is', () => {
+    const events = [
+      makeEvent({ captured_at: at(BASE, 0), duration_ms: 500 }),
+      makeEvent({ captured_at: at(BASE, 5), duration_ms: null }),
+    ]
+    const groups = splitByIdleGap(events, IDLE_30_MIN_MS)
+    expect(groups).toHaveLength(1)
+  })
+
+  it('treats a command exactly at the threshold as long-running', () => {
+    // A command with duration_ms exactly equal to LONG_RUNNING_THRESHOLD_MS
+    // should have its start time used for gap calculation.
+    const events = [
+      makeEvent({ captured_at: at(BASE, 0), duration_ms: 500 }),
+      // captured at BASE+6min, ran for exactly 5min → started at BASE+1min → 1min gap
+      makeEvent({ captured_at: at(BASE, 6), duration_ms: LONG_RUNNING_THRESHOLD_MS }),
+    ]
+    const groups = splitByIdleGap(events, IDLE_30_MIN_MS)
+    expect(groups).toHaveLength(1)
   })
 })
 
