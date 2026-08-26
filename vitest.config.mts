@@ -6,6 +6,7 @@ export default defineConfig({
     include: ['tests/**/*.test.ts'],
     setupFiles: ['./tests/setup.ts'],
     clearMocks: true,
+    unstubEnvs: true,
     coverage: {
       provider: 'v8',
       include: ['src/**/*.ts'],
