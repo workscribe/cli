@@ -19,6 +19,8 @@ export function registerNote(program: Command): void {
         branch,
         category: 'note',
         metadata: JSON.stringify({ text }),
+        source: null,
+        file_path: null,
       })
       log.success(`Note saved${repoName ? ` to ${repoName}` : ''}`)
     })

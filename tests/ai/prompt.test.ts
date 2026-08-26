@@ -336,6 +336,81 @@ describe('getSystemPrompt', () => {
   })
 })
 
+// ─── code_edit events ─────────────────────────────────────────────────────────
+
+describe('code_edit events in buildUserMessage', () => {
+  it('includes code_edit events in the output', () => {
+    const msg = buildUserMessage(makePayload([{ category: 'code_edit', metadata: {} }]))
+    expect(msg).toContain('code_edit')
+  })
+
+  it('strips file path metadata from code_edit events', () => {
+    const msg = buildUserMessage(
+      makePayload([{ category: 'code_edit', metadata: { file: 'src/auth.ts', source: 'vscode' } }])
+    )
+    expect(msg).toContain('code_edit')
+    expect(msg).not.toContain('src/auth.ts')
+    expect(msg).not.toContain('"file"')
+  })
+
+  it('aggregates multiple code_edit events into one line', () => {
+    const msg = buildUserMessage(
+      makePayload([
+        { category: 'code_edit', metadata: { file: 'src/auth.ts' } },
+        { category: 'code_edit', metadata: { file: 'src/users.ts' } },
+        { category: 'code_edit', metadata: { file: 'src/tokens.ts' } },
+      ])
+    )
+    expect(msg).toContain('3x code_edit')
+    expect(msg).not.toContain('src/auth.ts')
+    expect(msg).not.toContain('src/users.ts')
+    expect(msg).not.toContain('src/tokens.ts')
+  })
+
+  it('keeps code_edit separate from other categories', () => {
+    const msg = buildUserMessage(
+      makePayload([
+        { category: 'code_edit', metadata: {} },
+        { category: 'testing', metadata: {} },
+      ])
+    )
+    expect(msg).toContain('code_edit')
+    expect(msg).toContain('testing')
+  })
+})
+
+describe('code_edit events in buildWeeklyMessage', () => {
+  it('strips metadata and emits code_edit without filenames', () => {
+    const payload: WeekSummaryPayload = {
+      weekStart: '2026-05-25',
+      weekEnd: '2026-05-25',
+      days: [
+        {
+          date: '2026-05-25',
+          sessions: [
+            {
+              date: '2026-05-25',
+              project: 'api-service',
+              branch: 'feature/auth',
+              startTime: '09:00',
+              endTime: '10:00',
+              durationMinutes: 60,
+              events: [
+                { category: 'code_edit', metadata: { file: 'src/auth.ts' }, exitCode: 0, durationMs: null },
+                { category: 'code_edit', metadata: { file: 'src/users.ts' }, exitCode: 0, durationMs: null },
+              ],
+            },
+          ],
+        },
+      ],
+    }
+    const msg = buildWeeklyMessage(payload)
+    expect(msg).toContain('2x code_edit')
+    expect(msg).not.toContain('src/auth.ts')
+    expect(msg).not.toContain('src/users.ts')
+  })
+})
+
 describe('SYSTEM_PROMPT', () => {
   it('instructs the model to infer domain from package names', () => {
     expect(SYSTEM_PROMPT).toContain('infer the purpose from package names')
@@ -350,5 +425,10 @@ describe('SYSTEM_PROMPT', () => {
 
   it('instructs the model not to guess for unfamiliar packages', () => {
     expect(SYSTEM_PROMPT).toContain('unfamiliar packages')
+  })
+
+  it('includes rule 8 for code_edit events', () => {
+    expect(SYSTEM_PROMPT).toContain('code_edit')
+    expect(SYSTEM_PROMPT).toContain('Never list individual filenames')
   })
 })

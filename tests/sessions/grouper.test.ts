@@ -15,6 +15,8 @@ function makeEvent(overrides: Partial<EventRow> & { captured_at: string }): Even
     branch: overrides.branch ?? 'main',
     category: overrides.category ?? 'testing',
     metadata: overrides.metadata ?? null,
+    source: overrides.source ?? null,
+    file_path: overrides.file_path ?? null,
   }
 }
 

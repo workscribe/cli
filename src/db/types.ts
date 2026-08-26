@@ -11,6 +11,8 @@ export interface EventRow {
   branch: string | null
   category: string
   metadata: string | null
+  source: string | null
+  file_path: string | null
 }
 
 export interface SessionRow {
