@@ -7,6 +7,7 @@ import { log } from '../utils/logger'
 import { formatDate, todayDate } from '../utils/format'
 import { getEventsForDate } from '../db'
 import { PAUSE_FLAG_PATH } from '../utils/paths'
+import { getPendingAlerts } from '../db/alerts'
 
 export function registerStatus(program: Command): void {
   program
@@ -46,6 +47,15 @@ export function registerStatus(program: Command): void {
       log.plain(
         `  Profiles     ${activeProfiles.length > 0 ? chalk.cyan(activeProfiles.join(', ')) : chalk.dim('none')}`
       )
+
+      const pendingAlerts = getPendingAlerts()
+      if (pendingAlerts.length > 0) {
+        log.plain('')
+        log.plain(
+          `  ${chalk.yellow('!')}  ${chalk.yellow(String(pendingAlerts.length))} pending security alert${pendingAlerts.length === 1 ? '' : 's'}` +
+            chalk.dim('  (run: workscribe alerts)')
+        )
+      }
 
       const { total: weekTotal, otherCount } = getRecentOtherRate(7)
       if (weekTotal > 0) {

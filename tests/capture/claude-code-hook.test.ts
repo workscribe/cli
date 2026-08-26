@@ -16,7 +16,28 @@ import { claudeCodeIntegration } from '../../src/capture/hooks/claude-code'
 
 const mockFs = fs as unknown as Record<string, ReturnType<typeof vi.fn>>
 
-const SETTINGS_WITH_HOOK = JSON.stringify({
+const SETTINGS_WITH_BOTH_HOOKS = JSON.stringify({
+  hooks: {
+    PostToolUse: [
+      {
+        matcher: 'Bash',
+        hooks: [{ type: 'command', command: 'workscribe _hook --source claude-code', async: true }],
+      },
+    ],
+    UserPromptSubmit: [
+      {
+        hooks: [
+          {
+            type: 'command',
+            command: 'workscribe _hook --source claude-code --event UserPromptSubmit',
+          },
+        ],
+      },
+    ],
+  },
+})
+
+const SETTINGS_WITH_POST_TOOL_ONLY = JSON.stringify({
   hooks: {
     PostToolUse: [
       {
@@ -56,9 +77,15 @@ describe('claudeCodeIntegration.isHookInstalled', () => {
     expect(claudeCodeIntegration.isHookInstalled()).toBe(false)
   })
 
-  it('returns true when workscribe _hook command is present', () => {
+  it('returns false when only PostToolUse is present but UserPromptSubmit is missing', () => {
     mockFs.existsSync.mockReturnValue(true)
-    mockFs.readFileSync.mockReturnValue(SETTINGS_WITH_HOOK)
+    mockFs.readFileSync.mockReturnValue(SETTINGS_WITH_POST_TOOL_ONLY)
+    expect(claudeCodeIntegration.isHookInstalled()).toBe(false)
+  })
+
+  it('returns true when both PostToolUse and UserPromptSubmit workscribe hooks are present', () => {
+    mockFs.existsSync.mockReturnValue(true)
+    mockFs.readFileSync.mockReturnValue(SETTINGS_WITH_BOTH_HOOKS)
     expect(claudeCodeIntegration.isHookInstalled()).toBe(true)
   })
 
@@ -77,6 +104,16 @@ describe('claudeCodeIntegration.install', () => {
     const written = JSON.parse(mockFs.writeFileSync.mock.calls[0][1] as string)
     expect(written.hooks.PostToolUse).toHaveLength(1)
     expect(written.hooks.PostToolUse[0].hooks[0].command).toBe('workscribe _hook --source claude-code')
+  })
+
+  it('adds UserPromptSubmit hook for secret detection', () => {
+    mockFs.existsSync.mockReturnValue(false)
+    claudeCodeIntegration.install()
+    const written = JSON.parse(mockFs.writeFileSync.mock.calls[0][1] as string)
+    expect(written.hooks.UserPromptSubmit).toHaveLength(1)
+    expect(written.hooks.UserPromptSubmit[0].hooks[0].command).toBe(
+      'workscribe _hook --source claude-code --event UserPromptSubmit'
+    )
   })
 
   it('merges with existing PostToolUse hooks without overwriting them', () => {
@@ -107,7 +144,7 @@ describe('claudeCodeIntegration.install', () => {
     expect(written.hooks.Stop[0].hooks[0].command).toBe('echo done')
   })
 
-  it('sets async: true on the installed hook', () => {
+  it('sets async: true on the PostToolUse hook', () => {
     mockFs.existsSync.mockReturnValue(false)
     claudeCodeIntegration.install()
     const written = JSON.parse(mockFs.writeFileSync.mock.calls[0][1] as string)

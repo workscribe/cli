@@ -78,6 +78,7 @@ export function injectBinaryPath(hookContent: string, binaryPath: string): strin
     .replace('command -v workscribe &>/dev/null || return 0', `[[ -x "${binaryPath}" ]] || return 0`)
     .replace('type -q workscribe\n    or return 0', `test -x "${binaryPath}"\n    or return 0`)
     .replaceAll('command workscribe _capture', `"${binaryPath}" _capture`)
+    .replaceAll('command workscribe alerts', `"${binaryPath}" alerts`)
 }
 
 export function isCompletionsInstalled(shell: { name: string; rcFile: string }): boolean {
