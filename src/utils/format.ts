@@ -48,6 +48,18 @@ export function eachDayOfRange(start: string, end: string): string[] {
   return days
 }
 
+export function timeAgo(isoString: string, now = Date.now()): string {
+  const elapsedMs = now - new Date(isoString).getTime()
+  const minutes = Math.floor(elapsedMs / 60000)
+  if (minutes < 2) return 'just now'
+  if (minutes < 60) return `${minutes} minutes ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return hours === 1 ? '1 hour ago' : `${hours} hours ago`
+  const days = Math.floor(hours / 24)
+  if (days === 1) return 'yesterday'
+  return `${days} days ago`
+}
+
 // Returns ISO week string YYYY-WW for a date
 export function isoWeekKey(dateStr: string): string {
   const d = new Date(dateStr + 'T00:00:00')
