@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.13.0](https://github.com/workscribe/cli/compare/v1.12.0...v1.13.0) (2026-08-27)
+
+### Features
+
+* add Gemini and Groq AI providers (WOR-12) ([2145968](https://github.com/workscribe/cli/commit/21459684dd1b38a7a38426bd0e51180ed6cf113d))
+* core CLI changes for IDE integration (WOR-11) ([ecd73da](https://github.com/workscribe/cli/commit/ecd73da837b4d92654aa5a53a30a0fa39b13f777))
+* **WOR-75:** resolve workscribe binary path at init time ([2b22c21](https://github.com/workscribe/cli/commit/2b22c2105499c91f75ac98ee2cfba471fa8effe0))
+* **WOR-76:** AI session secret detection with shell hook alerts ([e5fb735](https://github.com/workscribe/cli/commit/e5fb735b3ba5e897ca9a85ecac0be52d73ded278))
+* **WOR-77:** AI tool registry expansion and resolver layer ([eda9054](https://github.com/workscribe/cli/commit/eda905434bb476e9bf11be99162e87e6294c61f6))
+* workscribe context command (WOR-82) ([ced357c](https://github.com/workscribe/cli/commit/ced357cfac02baf9f3ecc45695a4f825552155f5))
+
+### Bug Fixes
+
+* session grouping v2 — multi-repo gap threshold and IDE idle reset (WOR-72) ([171b896](https://github.com/workscribe/cli/commit/171b8969b89b5bbf28aebbb3a721fffd81eb35a0))
+* **WOR-35:** correct Aider history regex to match actual #### format ([59dcd1b](https://github.com/workscribe/cli/commit/59dcd1b0a7b03587081bb8412f7afac7b046644c)), closes [#916](https://github.com/workscribe/cli/issues/916)
+* **WOR-74:** redact credentials embedded in connection string URLs ([f533a5e](https://github.com/workscribe/cli/commit/f533a5eaab879a20f2cd14c51e15f01460a18c3b))
+* **WOR-80:** version-manager-aware Node 22 upgrade message ([84f050e](https://github.com/workscribe/cli/commit/84f050ec6fd8203ffe413981d3252dc9d4a63238))
+* **WOR-81:** exclude long-running commands from idle gap calculation ([1a13029](https://github.com/workscribe/cli/commit/1a13029db8b695902b510bd2b3ed2767924dd168))
+
 ## [1.12.0](https://github.com/workscribe/cli/compare/v1.11.0...v1.12.0) (2026-08-22)
 
 ### Features
