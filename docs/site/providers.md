@@ -1,6 +1,6 @@
 ---
 title: AI Providers
-description: Configure Workscribe to work with Anthropic, OpenAI, Ollama, or any OpenAI-compatible endpoint.
+description: Configure Workscribe to work with Anthropic, OpenAI, Gemini, Groq, Ollama, or any OpenAI-compatible endpoint.
 ---
 
 # AI Providers
@@ -53,6 +53,50 @@ Get an API key at [platform.openai.com](https://platform.openai.com).
 
 ---
 
+## Google Gemini
+
+```bash
+workscribe config set ai.provider gemini
+workscribe config set ai.apiKey AIza...
+```
+
+| Setting | Value |
+|---|---|
+| Default model | `gemini-2.0-flash-lite` |
+| API key required | Yes |
+
+Override the model:
+
+```bash
+workscribe config set ai.model gemini-2.0-flash
+```
+
+Get an API key at [aistudio.google.com](https://aistudio.google.com). The API key is sent as a URL query parameter — it does not appear in request headers.
+
+---
+
+## Groq
+
+```bash
+workscribe config set ai.provider groq
+workscribe config set ai.apiKey gsk_...
+```
+
+| Setting | Value |
+|---|---|
+| Default model | `llama-3.1-8b-instant` |
+| API key required | Yes |
+
+Override the model:
+
+```bash
+workscribe config set ai.model llama-3.3-70b-versatile
+```
+
+Get an API key at [console.groq.com](https://console.groq.com). Groq's free tier is generous for summary workloads.
+
+---
+
 ## Ollama (local)
 
 Run AI summaries entirely on your machine — no API key, no external calls, fully offline.
@@ -82,13 +126,13 @@ workscribe config set ai.model mistral
 
 ## OpenAI-compatible
 
-Works with any endpoint that implements the OpenAI chat completions API — Groq, Together AI, Mistral, and others.
+Works with any endpoint that implements the OpenAI chat completions API — Together AI, Mistral, and others.
 
 ```bash
 workscribe config set ai.provider openai-compatible
 workscribe config set ai.apiKey <your-key>
-workscribe config set ai.baseUrl https://api.groq.com/openai/v1
-workscribe config set ai.model llama-3.1-70b-versatile
+workscribe config set ai.baseUrl https://api.together.xyz/v1
+workscribe config set ai.model meta-llama/Llama-3-8b-chat-hf
 ```
 
 | Setting | Value |
@@ -117,8 +161,14 @@ Run `workscribe config set ai.provider <provider>` and ensure an API key is set 
 **Ollama: connection refused**
 Make sure Ollama is running: `ollama serve`
 
-**Anthropic / OpenAI: 401 Unauthorized**
+**Anthropic / OpenAI / Groq: 401 Unauthorized**
 Check your API key: `workscribe config get ai.apiKey`
+
+**Gemini: 400 API key not valid**
+Ensure the key was created in Google AI Studio (not Google Cloud). Gemini keys start with `AIza`.
+
+**Groq: 429 rate limit**
+Groq's free tier has per-minute limits. Wait a moment and retry, or upgrade your Groq plan.
 
 **Summary quality is poor on local models**
 Try a larger model: `workscribe config set ai.model llama3:70b`. Local models with fewer than 7B parameters may produce inconsistent output.

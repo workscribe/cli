@@ -8,7 +8,7 @@ export function getProvider(config: WorkscribeConfig): AIProvider {
 
   if (!provider) {
     throw new Error(
-      'No AI provider configured.\nRun: workscribe config set ai.provider <anthropic|openai|ollama|openai-compatible>'
+      'No AI provider configured.\nRun: workscribe config set ai.provider <anthropic|openai|gemini|groq|ollama|openai-compatible>'
     )
   }
 
@@ -17,7 +17,7 @@ export function getProvider(config: WorkscribeConfig): AIProvider {
 
   if (!providerConfig) {
     throw new Error(
-      `Unknown provider: "${provider}"\nSupported providers: anthropic, openai, ollama, openai-compatible`
+      `Unknown provider: "${provider}"\nSupported providers: anthropic, openai, gemini, groq, ollama, openai-compatible`
     )
   }
 
