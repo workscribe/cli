@@ -29,18 +29,29 @@ export function splitByIdleGap(events: EventRow[], idleMs: number): EventRow[][]
   return groups
 }
 
+// A repo switch only starts a new sub-session if the gap since the last event
+// exceeds this threshold. A quick check in another repo and back should not
+// fragment the session.
+export const REPO_SWITCH_GAP_MS = 10 * 60 * 1000 // 10 minutes
+
 /**
  * Split a list of events into groups by consecutive repo_name.
- * A repo change mid-stream creates a new group.
+ * A repo change only creates a new group if the gap since the previous
+ * event is at least `gapMs` (default 0 — splits on every repo change,
+ * matching pre-WOR-72 behavior for callers that don't pass a threshold).
  */
-export function splitByRepo(events: EventRow[]): EventRow[][] {
+export function splitByRepo(events: EventRow[], gapMs = 0): EventRow[][] {
   if (events.length === 0) return []
   const groups: EventRow[][] = [[events[0]]]
 
   for (let i = 1; i < events.length; i++) {
     const prevRepo = events[i - 1].repo_name
     const currRepo = events[i].repo_name
-    if (currRepo !== prevRepo) {
+    const prevTime = new Date(events[i - 1].captured_at).getTime()
+    const currTime = new Date(events[i].captured_at).getTime()
+    const gap = currTime - prevTime
+
+    if (currRepo !== prevRepo && gap >= gapMs) {
       groups.push([events[i]])
     } else {
       groups[groups.length - 1].push(events[i])
