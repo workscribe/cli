@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { splitByIdleGap, splitByRepo, minutesBetween, LONG_RUNNING_THRESHOLD_MS } from '../../src/sessions/grouper'
+import {
+  splitByIdleGap,
+  splitByRepo,
+  minutesBetween,
+  LONG_RUNNING_THRESHOLD_MS,
+  REPO_SWITCH_GAP_MS,
+} from '../../src/sessions/grouper'
 import type { EventRow } from '../../src/db/types'
 
 // Factory: build a minimal EventRow for testing
@@ -165,6 +171,43 @@ describe('splitByIdleGap', () => {
     const groups = splitByIdleGap(events, IDLE_30_MIN_MS)
     expect(groups).toHaveLength(1)
   })
+
+  describe('IDE events (WOR-72)', () => {
+    it('an IDE file save event shortly after a shell command does not trigger a false split', () => {
+      const events = [
+        makeEvent({ captured_at: at(BASE, 0), source: null }), // shell command
+        makeEvent({ captured_at: at(BASE, 3), source: 'vscode', category: 'code_edit', file_path: 'src/auth.ts' }),
+      ]
+      const groups = splitByIdleGap(events, IDLE_30_MIN_MS)
+      expect(groups).toHaveLength(1)
+      expect(groups[0]).toHaveLength(2)
+    })
+
+    it('an IDE file save event resets the idle timer the same way a shell command does — genuine idle before it still splits', () => {
+      const events = [
+        makeEvent({ captured_at: at(BASE, 0), source: null }), // shell command
+        // 40 minutes of silence, then a file save — genuine idle gap, source doesn't exempt it
+        makeEvent({ captured_at: at(BASE, 40), source: 'vscode', category: 'code_edit', file_path: 'src/auth.ts' }),
+      ]
+      const groups = splitByIdleGap(events, IDLE_30_MIN_MS)
+      expect(groups).toHaveLength(2)
+    })
+
+    it('combined terminal and IDE events group identically regardless of source — no source-based discrimination', () => {
+      const events = [
+        makeEvent({ captured_at: at(BASE, 0), source: null }), // shell
+        makeEvent({ captured_at: at(BASE, 2), source: 'vscode', category: 'code_edit', file_path: 'src/auth.ts' }), // IDE
+        makeEvent({ captured_at: at(BASE, 4), source: null }), // shell
+        makeEvent({ captured_at: at(BASE, 6), source: 'vscode', category: 'code_edit', file_path: 'src/token.ts' }), // IDE
+        // 35-minute idle gap after the last IDE event — genuine break
+        makeEvent({ captured_at: at(BASE, 41), source: null }), // shell, new session
+      ]
+      const groups = splitByIdleGap(events, IDLE_30_MIN_MS)
+      expect(groups).toHaveLength(2)
+      expect(groups[0]).toHaveLength(4)
+      expect(groups[1]).toHaveLength(1)
+    })
+  })
 })
 
 describe('splitByRepo', () => {
@@ -221,6 +264,68 @@ describe('splitByRepo', () => {
       makeEvent({ captured_at: at(BASE, 5), repo_name: 'api' }),
     ]
     expect(splitByRepo(events)).toHaveLength(2)
+  })
+
+  it('with no gapMs argument, still splits on every repo change regardless of how close together — default behavior is unchanged', () => {
+    const events = [
+      makeEvent({ captured_at: at(BASE, 0), repo_name: 'api' }),
+      makeEvent({ captured_at: at(BASE, 0.1), repo_name: 'frontend' }), // 6 seconds later
+    ]
+    expect(splitByRepo(events)).toHaveLength(2)
+  })
+
+  describe('with a gapMs threshold (WOR-72)', () => {
+    it('does not split when the repo changes but the gap is under the threshold — a quick dip into another repo and back stays one session', () => {
+      const events = [
+        makeEvent({ captured_at: at(BASE, 0), repo_name: 'frontend' }),
+        makeEvent({ captured_at: at(BASE, 1), repo_name: 'api-service' }), // 1 min gap
+        makeEvent({ captured_at: at(BASE, 2), repo_name: 'frontend' }), // 1 min gap
+      ]
+      const groups = splitByRepo(events, REPO_SWITCH_GAP_MS)
+      expect(groups).toHaveLength(1)
+      expect(groups[0]).toHaveLength(3)
+    })
+
+    it('splits when the repo changes and the gap exceeds the threshold — a genuine move to a different body of work', () => {
+      const events = [
+        makeEvent({ captured_at: at(BASE, 0), repo_name: 'frontend' }),
+        makeEvent({ captured_at: at(BASE, 5), repo_name: 'frontend' }),
+        // 45-minute gap before switching to api-service — a real context switch
+        makeEvent({ captured_at: at(BASE, 50), repo_name: 'api-service' }),
+        makeEvent({ captured_at: at(BASE, 55), repo_name: 'api-service' }),
+      ]
+      const groups = splitByRepo(events, REPO_SWITCH_GAP_MS)
+      expect(groups).toHaveLength(2)
+      expect(groups[0]).toHaveLength(2)
+      expect(groups[1]).toHaveLength(2)
+    })
+
+    it('splits exactly at the threshold boundary', () => {
+      const events = [
+        makeEvent({ captured_at: at(BASE, 0), repo_name: 'api' }),
+        makeEvent({ captured_at: at(BASE, 10), repo_name: 'frontend' }), // exactly 10 min
+      ]
+      const groups = splitByRepo(events, REPO_SWITCH_GAP_MS)
+      expect(groups).toHaveLength(2)
+    })
+
+    it('does not split when the gap is 1ms under the threshold', () => {
+      const events = [
+        makeEvent({ captured_at: new Date(BASE).toISOString(), repo_name: 'api' }),
+        makeEvent({ captured_at: new Date(BASE + REPO_SWITCH_GAP_MS - 1).toISOString(), repo_name: 'frontend' }),
+      ]
+      const groups = splitByRepo(events, REPO_SWITCH_GAP_MS)
+      expect(groups).toHaveLength(1)
+    })
+
+    it('does not split same-repo events regardless of gapMs — the threshold only applies to actual repo changes', () => {
+      const events = [
+        makeEvent({ captured_at: at(BASE, 0), repo_name: 'api' }),
+        makeEvent({ captured_at: at(BASE, 45), repo_name: 'api' }), // large gap, same repo
+      ]
+      const groups = splitByRepo(events, REPO_SWITCH_GAP_MS)
+      expect(groups).toHaveLength(1)
+    })
   })
 })
 

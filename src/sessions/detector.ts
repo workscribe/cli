@@ -8,7 +8,7 @@ import {
   getEventsBySessionId,
 } from '../db'
 import { readConfig } from '../config'
-import { splitByIdleGap, splitByRepo, minutesBetween } from './grouper'
+import { splitByIdleGap, splitByRepo, minutesBetween, REPO_SWITCH_GAP_MS } from './grouper'
 
 export interface Session {
   id: number
@@ -67,7 +67,7 @@ function buildSessions(date: string, events: EventRow[], savedSummaries: Map<str
   for (const group of timeGroups) {
     if (group.length === 0) continue
 
-    const repoGroups = splitByRepo(group)
+    const repoGroups = splitByRepo(group, REPO_SWITCH_GAP_MS)
 
     for (const repoGroup of repoGroups) {
       if (repoGroup.length === 0) continue
