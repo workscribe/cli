@@ -103,6 +103,41 @@ export function insertEvent(params: {
   stmt.run(params)
 }
 
+export function getRecentSessionsByRepo(repoName: string, limit: number): SessionRow[] {
+  const db = getDb()
+  return db
+    .prepare('SELECT * FROM sessions WHERE repo_name = $repo_name ORDER BY started_at DESC LIMIT $limit')
+    .all({ repo_name: repoName, limit }) as unknown as SessionRow[]
+}
+
+export function getLastSessionTouchingFile(filePath: string): SessionRow | undefined {
+  const db = getDb()
+  return db
+    .prepare(
+      `SELECT s.* FROM sessions s
+       INNER JOIN session_events se ON se.session_id = s.id
+       INNER JOIN events e ON e.id = se.event_id
+       WHERE e.file_path = $file_path
+       ORDER BY s.started_at DESC
+       LIMIT 1`
+    )
+    .get({ file_path: filePath }) as SessionRow | undefined
+}
+
+export function getSessionBranch(sessionId: number): string | null {
+  const db = getDb()
+  const row = db
+    .prepare(
+      `SELECT e.branch FROM events e
+       INNER JOIN session_events se ON se.event_id = e.id
+       WHERE se.session_id = $session_id AND e.branch IS NOT NULL
+       ORDER BY e.captured_at DESC
+       LIMIT 1`
+    )
+    .get({ session_id: sessionId }) as { branch: string } | undefined
+  return row?.branch ?? null
+}
+
 export function getLastEventForFile(filePath: string, cwd: string): EventRow | undefined {
   const db = getDb()
   return db

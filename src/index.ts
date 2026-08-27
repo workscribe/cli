@@ -23,6 +23,7 @@ import { registerWeek } from './cli/week'
 import { registerBugReport } from './cli/bug-report'
 import { registerCompletions } from './cli/completions'
 import { registerAlerts } from './cli/alerts'
+import { registerContext } from './cli/context'
 import { checkForUpdate } from './utils/update-check'
 
 checkForUpdate()
@@ -50,5 +51,6 @@ registerWeek(program)
 registerBugReport(program)
 registerCompletions(program)
 registerAlerts(program)
+registerContext(program)
 
 program.parse()

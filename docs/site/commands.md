@@ -258,6 +258,31 @@ workscribe export --output ~/Desktop/standup.md
 
 ---
 
+## workscribe context
+
+Surface the last session for the current repo — at the moment you need it, not at end of day.
+
+```bash
+workscribe context
+workscribe context --file src/auth.ts
+```
+
+| Option | Description |
+|---|---|
+| `--file <path>` | Show the last session that touched this file (requires IDE integration) |
+
+**Without `--file`:** shows the most recent session for the current git repo — date, duration, branch, event count, and the AI-generated summary if one exists.
+
+**With `--file`:** narrows to the most recent session that included a `code_edit` event for that path. Useful in IDE integrations (VS Code status bar, Neovim statusline) to surface "last worked on: 2 days ago" when opening a file.
+
+**If no summary exists** for the session, the output includes the command to generate one:
+
+```
+  No summary — run: workscribe summary 2026-08-25
+```
+
+---
+
 ## workscribe status
 
 Show capture status and event counts.
