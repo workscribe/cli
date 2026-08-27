@@ -13,7 +13,7 @@ export class GenericProvider implements AIProvider {
   ) {}
 
   private async call(system: string, userMsg: string, maxTokens: number): Promise<string> {
-    const response = await fetchWithTimeout(this.config.chatUrl(this.baseUrl), {
+    const response = await fetchWithTimeout(this.config.chatUrl(this.baseUrl, this.apiKey, this.model), {
       method: 'POST',
       headers: this.config.headers(this.apiKey),
       body: JSON.stringify(this.config.buildChatBody(this.model, system, userMsg, maxTokens)),
@@ -34,7 +34,7 @@ export class GenericProvider implements AIProvider {
 
   async validate(): Promise<void> {
     const isPost = this.config.validateMethod === 'POST'
-    const response = await fetchWithTimeout(this.config.validateUrl(this.baseUrl), {
+    const response = await fetchWithTimeout(this.config.validateUrl(this.baseUrl, this.apiKey, this.model), {
       method: this.config.validateMethod,
       headers: isPost ? this.config.headers(this.apiKey) : undefined,
       body:

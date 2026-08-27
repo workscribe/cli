@@ -3,8 +3,9 @@ export interface ProviderConfig {
   defaultBaseUrl: string
   dailyTokens: number
   weeklyTokens: number
-  chatUrl: (baseUrl: string) => string
-  validateUrl: (baseUrl: string) => string
+  // apiKey and model are provided for providers that embed them in the URL (e.g. Gemini)
+  chatUrl: (baseUrl: string, apiKey: string, model: string) => string
+  validateUrl: (baseUrl: string, apiKey: string, model: string) => string
   validateMethod: 'GET' | 'POST'
   headers: (apiKey: string) => Record<string, string>
   buildChatBody: (model: string, system: string, userMsg: string, maxTokens: number) => object
@@ -104,5 +105,60 @@ export const PROVIDER_CONFIGS: Record<string, ProviderConfig> = {
     chatError: (status, body) => `Ollama error ${status}: ${body}. Is Ollama running? Try: ollama serve`,
     validateError: (_status, _body, baseUrl) =>
       `Ollama is not reachable at ${baseUrl}. Is it running? Try: ollama serve`,
+  },
+
+  gemini: {
+    defaultModel: 'gemini-2.0-flash-lite',
+    defaultBaseUrl: 'https://generativelanguage.googleapis.com/v1beta',
+    dailyTokens: 1024,
+    weeklyTokens: 1024,
+    // API key and model are embedded in the URL — not in headers
+    chatUrl: (baseUrl, apiKey, model) => `${baseUrl}/models/${model}:generateContent?key=${apiKey}`,
+    validateUrl: (baseUrl, apiKey, model) => `${baseUrl}/models/${model}:generateContent?key=${apiKey}`,
+    validateMethod: 'POST',
+    headers: () => ({ 'Content-Type': 'application/json' }),
+    buildChatBody: (_model, system, userMsg, maxTokens) => ({
+      system_instruction: { parts: [{ text: system }] },
+      contents: [{ role: 'user', parts: [{ text: userMsg }] }],
+      generationConfig: { maxOutputTokens: maxTokens, temperature: 0.3 },
+    }),
+    buildValidateBody: () => ({
+      contents: [{ role: 'user', parts: [{ text: '.' }] }],
+      generationConfig: { maxOutputTokens: 1 },
+    }),
+    parseText: (json) => {
+      const data = json as { candidates: Array<{ content: { parts: Array<{ text: string }> } }> }
+      return data.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+    },
+    chatError: (status, body) => `Gemini API error ${status}: ${body}`,
+    validateError: (status, body) => `Gemini API error ${status}: ${body}`,
+  },
+
+  groq: {
+    defaultModel: 'llama-3.1-8b-instant',
+    defaultBaseUrl: 'https://api.groq.com/openai/v1',
+    dailyTokens: 1024,
+    weeklyTokens: 1024,
+    chatUrl: (baseUrl) => `${baseUrl}/chat/completions`,
+    validateUrl: (baseUrl) => `${baseUrl}/models`,
+    validateMethod: 'GET',
+    headers: (apiKey) => ({
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    }),
+    buildChatBody: (model, system, userMsg, maxTokens) => ({
+      model,
+      messages: [
+        { role: 'system', content: system },
+        { role: 'user', content: userMsg },
+      ],
+      max_tokens: maxTokens,
+    }),
+    parseText: (json) => {
+      const data = json as { choices: Array<{ message: { content: string } }> }
+      return data.choices?.[0]?.message?.content ?? ''
+    },
+    chatError: (status, body) => `Groq API error ${status}: ${body}`,
+    validateError: (status, body) => `Groq API error ${status}: ${body}`,
   },
 }
