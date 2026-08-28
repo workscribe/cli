@@ -49,6 +49,18 @@ workscribe config set session.idleTimeout 20
 
 ---
 
+## Git
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `git.qualifyRepoName` | boolean | `false` | Use `owner/repo` instead of bare `repo` for `repo_name`. Bare names are nicer for the common case of one repo per name, but if you work across repos whose bare names collide — for example an org that names its repos after the tool each one targets — turn this on so sessions attribute correctly. |
+
+```bash
+workscribe config set git.qualifyRepoName true
+```
+
+---
+
 ## Capture
 
 | Key | Type | Default | Description |

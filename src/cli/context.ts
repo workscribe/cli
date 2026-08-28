@@ -3,6 +3,7 @@ import { Command } from 'commander'
 import chalk from 'chalk'
 import { getRecentSessionsByRepo, getLastSessionTouchingFile, getSessionBranch } from '../db'
 import { getGitContext } from '../capture/git'
+import { readConfig } from '../config'
 import { formatDuration, timeAgo } from '../utils/format'
 import { log } from '../utils/logger'
 import type { SessionRow } from '../db/types'
@@ -80,7 +81,7 @@ export function registerContext(program: Command): void {
         return
       }
 
-      const { repoName } = getGitContext(process.cwd())
+      const { repoName } = getGitContext(process.cwd(), null, readConfig().git.qualifyRepoName)
       if (!repoName) {
         if (opts.json) log.plain(JSON.stringify(null))
         else log.plain('  Not in a git repository. Run workscribe context from a project directory.')
