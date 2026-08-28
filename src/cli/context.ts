@@ -7,6 +7,30 @@ import { formatDuration, timeAgo } from '../utils/format'
 import { log } from '../utils/logger'
 import type { SessionRow } from '../db/types'
 
+export interface SessionContextJson {
+  date: string
+  startedAt: string
+  endedAt: string
+  timeAgo: string
+  durationMinutes: number
+  branch: string | null
+  eventCount: number
+  summary: string | null
+}
+
+function toContextJson(session: SessionRow): SessionContextJson {
+  return {
+    date: session.date,
+    startedAt: session.started_at,
+    endedAt: session.ended_at,
+    timeAgo: timeAgo(session.started_at),
+    durationMinutes: (new Date(session.ended_at).getTime() - new Date(session.started_at).getTime()) / 60000,
+    branch: getSessionBranch(session.id),
+    eventCount: session.event_count,
+    summary: session.summary,
+  }
+}
+
 function printSessionContext(session: SessionRow, heading: string): void {
   const ago = timeAgo(session.started_at)
   const branch = getSessionBranch(session.id)
@@ -38,12 +62,18 @@ export function registerContext(program: Command): void {
     .command('context')
     .description('Show the last session for the current repo')
     .option('--file <path>', 'narrow to last session that touched this file')
+    .option('--json', 'output as JSON instead of formatted text — null when no session is found')
     .action((opts) => {
       if (opts.file) {
         const normalizedFile = path.normalize(opts.file)
         const session = getLastSessionTouchingFile(normalizedFile)
         if (!session) {
-          log.plain(`  No sessions found touching ${normalizedFile}`)
+          if (opts.json) log.plain(JSON.stringify(null))
+          else log.plain(`  No sessions found touching ${normalizedFile}`)
+          return
+        }
+        if (opts.json) {
+          log.plain(JSON.stringify(toContextJson(session)))
           return
         }
         printSessionContext(session, `Last session touching ${path.basename(normalizedFile)}`)
@@ -52,16 +82,22 @@ export function registerContext(program: Command): void {
 
       const { repoName } = getGitContext(process.cwd())
       if (!repoName) {
-        log.plain('  Not in a git repository. Run workscribe context from a project directory.')
+        if (opts.json) log.plain(JSON.stringify(null))
+        else log.plain('  Not in a git repository. Run workscribe context from a project directory.')
         return
       }
 
       const sessions = getRecentSessionsByRepo(repoName, 1)
       if (sessions.length === 0) {
-        log.plain(`  No sessions found for ${repoName}`)
+        if (opts.json) log.plain(JSON.stringify(null))
+        else log.plain(`  No sessions found for ${repoName}`)
         return
       }
 
+      if (opts.json) {
+        log.plain(JSON.stringify(toContextJson(sessions[0])))
+        return
+      }
       printSessionContext(sessions[0], `Last session on ${repoName}`)
     })
 }
