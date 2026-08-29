@@ -11,6 +11,14 @@ export interface WorkscribeConfig {
   session: {
     idleTimeout: number // minutes
   }
+  git: {
+    // When true, repo_name is "owner/repo" instead of bare "repo". Off by
+    // default — bare names are nicer for the common case of one repo per
+    // name. Turn on if you work across repos whose bare names collide
+    // (e.g. an org that names plugin repos after the tool they target:
+    // workscribe/vscode, workscribe/nvim, ...).
+    qualifyRepoName: boolean
+  }
   capture: {
     ignore: string[]
     aiTools: boolean
@@ -43,6 +51,9 @@ const DEFAULTS: WorkscribeConfig = {
   },
   session: {
     idleTimeout: 30,
+  },
+  git: {
+    qualifyRepoName: false,
   },
   capture: {
     ignore: ['cd', 'ls', 'll', 'la', 'ls -la', 'ls -l', 'ls -a', 'pwd', 'clear', 'exit', 'history', 'man'],

@@ -265,21 +265,40 @@ Surface the last session for the current repo — at the moment you need it, not
 ```bash
 workscribe context
 workscribe context --file src/auth.ts
+workscribe context --file src/auth.ts --json
 ```
 
 | Option | Description |
 |---|---|
 | `--file <path>` | Show the last session that touched this file (requires IDE integration) |
+| `--json` | Output structured JSON instead of formatted text — `null` when no session is found |
 
 **Without `--file`:** shows the most recent session for the current git repo — date, duration, branch, event count, and the AI-generated summary if one exists.
 
 **With `--file`:** narrows to the most recent session that included a `code_edit` event for that path. Useful in IDE integrations (VS Code status bar, Neovim statusline) to surface "last worked on: 2 days ago" when opening a file.
 
-**If no summary exists** for the session, the output includes the command to generate one:
+**If no summary exists** for the session, the default text output includes the command to generate one:
 
 ```
   No summary — run: workscribe summary 2026-08-25
 ```
+
+**`--json` output shape**, intended for IDE integrations that need to render this themselves rather than parse formatted text:
+
+```json
+{
+  "date": "2026-08-20",
+  "startedAt": "2026-08-20T10:00:00.000Z",
+  "endedAt": "2026-08-20T12:14:00.000Z",
+  "timeAgo": "3 days ago",
+  "durationMinutes": 134,
+  "branch": "feature/auth",
+  "eventCount": 42,
+  "summary": "Implemented authentication middleware." // or null if no summary has been generated yet
+}
+```
+
+Prints the bare JSON value `null` (not an object) when no matching session exists.
 
 ---
 

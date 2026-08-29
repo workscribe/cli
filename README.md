@@ -148,6 +148,7 @@ workscribe summary --webhook https://custom.endpoint/hook                 # one-
 | `ai.model` | provider default | Model name override |
 | `ai.baseUrl` | — | Base URL for `openai-compatible` providers |
 | `session.idleTimeout` | `30` | Minutes of inactivity before a new session starts |
+| `git.qualifyRepoName` | `false` | Use `owner/repo` instead of bare `repo` for `repo_name` — helpful if you work across repos whose bare names collide (e.g. an org that names its repos after the tool each one targets) |
 | `capture.ignore` | common shell builtins | Commands to exclude from capture |
 | `capture.aiTools` | `true` | Set to `false` to disable all AI session capture |
 | `capture.includeAiderPrompt` | `true` | Set to `false` to skip reading Aider's history file for prompt context |

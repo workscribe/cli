@@ -7,7 +7,20 @@ export interface GitContext {
   branch: string | null
 }
 
-function nameFromRemote(root: string): string | null {
+// Handles SSH (git@host:owner/repo.git), HTTPS (https://host/owner/repo.git),
+// and bare git:// / ssh:// forms uniformly by normalizing the SSH scp-like
+// syntax's first ':' to '/' (but not the '://' in URLs with a real scheme),
+// then splitting on '/'.
+function parseOwnerAndRepo(url: string): { owner: string; repo: string } | null {
+  const normalized = url.trim().replace(/^[^/]+:(?!\/\/)/, (match) => match.replace(':', '/'))
+  const segments = normalized.split('/').filter(Boolean)
+  if (segments.length < 2) return null
+  const repo = segments[segments.length - 1].replace(/\.git$/, '')
+  const owner = segments[segments.length - 2]
+  return owner && repo ? { owner, repo } : null
+}
+
+function nameFromRemote(root: string, qualifyWithOwner: boolean): string | null {
   try {
     const url = execSync('git remote get-url origin', {
       cwd: root,
@@ -16,8 +29,9 @@ function nameFromRemote(root: string): string | null {
     })
       .toString()
       .trim()
-    const match = url.match(/\/([^/]+?)(?:\.git)?$/)
-    return match ? match[1] : null
+    const parsed = parseOwnerAndRepo(url)
+    if (!parsed) return null
+    return qualifyWithOwner ? `${parsed.owner}/${parsed.repo}` : parsed.repo
   } catch {
     return null
   }
@@ -34,7 +48,7 @@ function nameFromPackageJson(root: string): string | null {
   }
 }
 
-export function getGitContext(cwd: string, nameOverride?: string | null): GitContext {
+export function getGitContext(cwd: string, nameOverride?: string | null, qualifyRepoName = false): GitContext {
   try {
     const root = execSync('git rev-parse --show-toplevel', {
       cwd,
@@ -44,7 +58,8 @@ export function getGitContext(cwd: string, nameOverride?: string | null): GitCon
       .toString()
       .trim()
 
-    const repoName = nameOverride ?? nameFromRemote(root) ?? nameFromPackageJson(root) ?? path.basename(root)
+    const repoName =
+      nameOverride ?? nameFromRemote(root, qualifyRepoName) ?? nameFromPackageJson(root) ?? path.basename(root)
 
     let branch: string | null = null
     try {

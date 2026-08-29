@@ -74,6 +74,52 @@ describe('getGitContext — remote URL', () => {
   })
 })
 
+describe('getGitContext — qualifyRepoName', () => {
+  it('returns bare repo name by default (qualifyRepoName not passed)', () => {
+    mockExecSync.mockImplementation((cmd: string) => {
+      if (cmd === 'git rev-parse --show-toplevel') return Buffer.from('/home/user/vscode\n')
+      if (cmd === 'git branch --show-current') return Buffer.from('main\n')
+      if (cmd === 'git remote get-url origin') return Buffer.from('https://github.com/workscribe/vscode.git\n')
+      throw new Error(`unexpected: ${cmd}`)
+    })
+    const { repoName } = getGitContext('/home/user/vscode')
+    expect(repoName).toBe('vscode')
+  })
+
+  it('returns owner/repo when qualifyRepoName is true (HTTPS remote)', () => {
+    mockExecSync.mockImplementation((cmd: string) => {
+      if (cmd === 'git rev-parse --show-toplevel') return Buffer.from('/home/user/vscode\n')
+      if (cmd === 'git branch --show-current') return Buffer.from('main\n')
+      if (cmd === 'git remote get-url origin') return Buffer.from('https://github.com/workscribe/vscode.git\n')
+      throw new Error(`unexpected: ${cmd}`)
+    })
+    const { repoName } = getGitContext('/home/user/vscode', null, true)
+    expect(repoName).toBe('workscribe/vscode')
+  })
+
+  it('returns owner/repo when qualifyRepoName is true (SSH remote)', () => {
+    mockExecSync.mockImplementation((cmd: string) => {
+      if (cmd === 'git rev-parse --show-toplevel') return Buffer.from('/home/user/vscode\n')
+      if (cmd === 'git branch --show-current') return Buffer.from('main\n')
+      if (cmd === 'git remote get-url origin') return Buffer.from('git@github.com:workscribe/vscode.git\n')
+      throw new Error(`unexpected: ${cmd}`)
+    })
+    const { repoName } = getGitContext('/home/user/vscode', null, true)
+    expect(repoName).toBe('workscribe/vscode')
+  })
+
+  it('nameOverride still wins over qualifyRepoName', () => {
+    mockExecSync.mockImplementation((cmd: string) => {
+      if (cmd === 'git rev-parse --show-toplevel') return Buffer.from('/home/user/vscode\n')
+      if (cmd === 'git branch --show-current') return Buffer.from('main\n')
+      if (cmd === 'git remote get-url origin') return Buffer.from('https://github.com/workscribe/vscode.git\n')
+      throw new Error(`unexpected: ${cmd}`)
+    })
+    const { repoName } = getGitContext('/home/user/vscode', 'my-override', true)
+    expect(repoName).toBe('my-override')
+  })
+})
+
 describe('getGitContext — package.json fallback', () => {
   it('uses package.json name when remote fails', () => {
     setupGitRoot('/home/user/chronicle')

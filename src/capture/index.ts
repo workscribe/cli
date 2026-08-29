@@ -43,7 +43,7 @@ export function captureCommand(opts: {
 
     const command = opts.command ?? opts.file ?? opts.type
     const nameOverride = config.projects?.[cwd] ?? null
-    const { repoName, branch } = getGitContext(cwd, nameOverride)
+    const { repoName, branch } = getGitContext(cwd, nameOverride, config.git.qualifyRepoName)
 
     insertEvent({
       captured_at: new Date().toISOString(),
