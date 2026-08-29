@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.14.0](https://github.com/workscribe/cli/compare/v1.13.0...v1.14.0) (2026-08-29)
+
+### Features
+
+* add `--json` output to `workscribe context` ([8212c72](https://github.com/workscribe/cli/commit/8212c7202cb0f6645dfe0dbfbba4678dd41a1bcb))
+* add `git.qualifyRepoName` to disambiguate repos with colliding names ([68f4601](https://github.com/workscribe/cli/commit/68f4601fc7d572c582df7eba85ca21f46a22448f))
+
 ## [1.13.0](https://github.com/workscribe/cli/compare/v1.12.0...v1.13.0) (2026-08-27)
 
 ### Features
