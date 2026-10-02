@@ -23,12 +23,17 @@ vi.mock('../../src/db/alerts', () => ({
   getPendingAlerts: vi.fn().mockReturnValue([]),
 }))
 
+vi.mock('../../src/capture/hooks/claude-code', () => ({
+  checkHookHealth: vi.fn().mockReturnValue({ installed: false, pinned: true, confirmedBroken: null }),
+}))
+
 import fs from 'fs'
 import { Command } from 'commander'
 import { getEventCount, getLastEvent, getEventsForDate, getRecentOtherRate } from '../../src/db'
 import { readConfig } from '../../src/config'
 import { log } from '../../src/utils/logger'
 import { registerStatus } from '../../src/cli/status'
+import { checkHookHealth } from '../../src/capture/hooks/claude-code'
 
 const mockFs = fs as unknown as Record<string, ReturnType<typeof vi.fn>>
 const mockGetEventCount = getEventCount as ReturnType<typeof vi.fn>
@@ -37,6 +42,7 @@ const mockGetEventsForDate = getEventsForDate as ReturnType<typeof vi.fn>
 const mockGetRecentOtherRate = getRecentOtherRate as ReturnType<typeof vi.fn>
 const mockReadConfig = readConfig as ReturnType<typeof vi.fn>
 const mockLog = log as Record<string, ReturnType<typeof vi.fn>>
+const mockCheckHookHealth = checkHookHealth as ReturnType<typeof vi.fn>
 
 const BASE_CONFIG = {
   ai: { provider: 'anthropic', apiKey: 'sk-test', model: null },
@@ -58,6 +64,7 @@ beforeEach(() => {
   mockGetRecentOtherRate.mockReturnValue({ total: 100, otherCount: 10 })
   mockReadConfig.mockReturnValue(BASE_CONFIG)
   mockFs.existsSync.mockReturnValue(false)
+  mockCheckHookHealth.mockReturnValue({ installed: false, pinned: true, confirmedBroken: null })
 })
 
 describe('workscribe status', () => {
@@ -149,6 +156,36 @@ describe('workscribe status', () => {
       await makeProgram().parseAsync(['status'], { from: 'user' })
       const calls = (mockLog.plain as ReturnType<typeof vi.fn>).mock.calls.flat().join(' ')
       expect(calls).not.toContain('uncategorised')
+    })
+  })
+
+  describe('Claude Code hook health', () => {
+    it('shows no warning when no hook is installed', async () => {
+      mockCheckHookHealth.mockReturnValue({ installed: false, pinned: true, confirmedBroken: null })
+      await makeProgram().parseAsync(['status'], { from: 'user' })
+      const calls = (mockLog.plain as ReturnType<typeof vi.fn>).mock.calls.flat().join(' ')
+      expect(calls).not.toContain('Claude Code hook')
+    })
+
+    it('shows no warning when the installed hook is pinned', async () => {
+      mockCheckHookHealth.mockReturnValue({ installed: true, pinned: true, confirmedBroken: null })
+      await makeProgram().parseAsync(['status'], { from: 'user' })
+      const calls = (mockLog.plain as ReturnType<typeof vi.fn>).mock.calls.flat().join(' ')
+      expect(calls).not.toContain('Claude Code hook')
+    })
+
+    it('shows a "failing right now" warning when unpinned and confirmed broken', async () => {
+      mockCheckHookHealth.mockReturnValue({ installed: true, pinned: false, confirmedBroken: true })
+      await makeProgram().parseAsync(['status'], { from: 'user' })
+      expect(mockLog.plain).toHaveBeenCalledWith(expect.stringContaining('is failing right now'))
+      expect(mockLog.plain).toHaveBeenCalledWith(expect.stringContaining('workscribe init'))
+    })
+
+    it('shows a softer "can silently break" warning when unpinned but currently working', async () => {
+      mockCheckHookHealth.mockReturnValue({ installed: true, pinned: false, confirmedBroken: false })
+      await makeProgram().parseAsync(['status'], { from: 'user' })
+      expect(mockLog.plain).toHaveBeenCalledWith(expect.stringContaining('can silently break'))
+      expect(mockLog.plain).toHaveBeenCalledWith(expect.stringContaining('workscribe init'))
     })
   })
 

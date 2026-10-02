@@ -239,6 +239,7 @@ describe('resolveWorkscribeBinary', () => {
 
 describe('injectBinaryPath', () => {
   const BIN = '/home/user/.nvm/versions/node/v22.0.0/bin/workscribe'
+  const NODE = '/home/user/.nvm/versions/node/v22.0.0/bin/node'
 
   const ZSH_HOOK = `# workscribe:hook:start
 _workscribe_preexec() {
@@ -282,44 +283,46 @@ end
 # workscribe:hook:end`
 
   it('replaces zsh availability check with absolute path test', () => {
-    const result = injectBinaryPath(ZSH_HOOK, BIN)
+    const result = injectBinaryPath(ZSH_HOOK, BIN, NODE)
     expect(result).not.toContain('command -v workscribe')
     expect(result).toContain(`[[ -x "${BIN}" ]] || return 0`)
   })
 
-  it('replaces zsh invocation with absolute path', () => {
-    const result = injectBinaryPath(ZSH_HOOK, BIN)
+  it('replaces zsh invocation with pinned node and binary path', () => {
+    const result = injectBinaryPath(ZSH_HOOK, BIN, NODE)
     expect(result).not.toContain('command workscribe _capture')
-    expect(result).toContain(`"${BIN}" _capture`)
+    expect(result).toContain(`"${NODE}" "${BIN}" _capture`)
   })
 
   it('replaces bash availability check with absolute path test', () => {
-    const result = injectBinaryPath(BASH_HOOK, BIN)
+    const result = injectBinaryPath(BASH_HOOK, BIN, NODE)
     expect(result).not.toContain('command -v workscribe')
     expect(result).toContain(`[[ -x "${BIN}" ]] || return 0`)
   })
 
-  it('replaces bash invocation with absolute path', () => {
-    const result = injectBinaryPath(BASH_HOOK, BIN)
+  it('replaces bash invocation with pinned node and binary path', () => {
+    const result = injectBinaryPath(BASH_HOOK, BIN, NODE)
     expect(result).not.toContain('command workscribe _capture')
-    expect(result).toContain(`"${BIN}" _capture`)
+    expect(result).toContain(`"${NODE}" "${BIN}" _capture`)
   })
 
   it('replaces fish availability check with absolute path test', () => {
-    const result = injectBinaryPath(FISH_HOOK, BIN)
+    const result = injectBinaryPath(FISH_HOOK, BIN, NODE)
     expect(result).not.toContain('type -q workscribe')
     expect(result).toContain(`test -x "${BIN}"`)
   })
 
-  it('replaces all fish invocations with absolute path', () => {
-    const result = injectBinaryPath(FISH_HOOK, BIN)
+  it('replaces all fish invocations with pinned node and binary path', () => {
+    const result = injectBinaryPath(FISH_HOOK, BIN, NODE)
     expect(result).not.toContain('command workscribe _capture')
-    const count = (result.match(new RegExp(`"${BIN.replace(/\//g, '\\/')}"\\ _capture`, 'g')) ?? []).length
+    const escapedNode = NODE.replace(/\//g, '\\/')
+    const escapedBin = BIN.replace(/\//g, '\\/')
+    const count = (result.match(new RegExp(`"${escapedNode}"\\ "${escapedBin}"\\ _capture`, 'g')) ?? []).length
     expect(count).toBe(2)
   })
 
   it('leaves hook content unchanged when no matching patterns are present', () => {
     const unrecognised = `# workscribe:hook:start\n_some_other_hook() {}\n# workscribe:hook:end`
-    expect(injectBinaryPath(unrecognised, BIN)).toBe(unrecognised)
+    expect(injectBinaryPath(unrecognised, BIN, NODE)).toBe(unrecognised)
   })
 })
