@@ -8,6 +8,7 @@ import { formatDate, todayDate } from '../utils/format'
 import { getEventsForDate } from '../db'
 import { PAUSE_FLAG_PATH } from '../utils/paths'
 import { getPendingAlerts } from '../db/alerts'
+import { checkHookHealth } from '../capture/hooks/claude-code'
 
 export function registerStatus(program: Command): void {
   program
@@ -55,6 +56,21 @@ export function registerStatus(program: Command): void {
           `  ${chalk.yellow('!')}  ${chalk.yellow(String(pendingAlerts.length))} pending security alert${pendingAlerts.length === 1 ? '' : 's'}` +
             chalk.dim('  (run: workscribe alerts)')
         )
+      }
+
+      const hookHealth = checkHookHealth()
+      if (hookHealth.installed && !hookHealth.pinned) {
+        log.plain('')
+        if (hookHealth.confirmedBroken) {
+          log.plain(
+            `  ${chalk.yellow('⚠')}  Claude Code hook is using an unpinned command and is failing right now — Claude Code activity is not being captured.`
+          )
+        } else {
+          log.plain(
+            `  ${chalk.yellow('⚠')}  Claude Code hook is using an unpinned command, which can silently break if your default Node version changes.`
+          )
+        }
+        log.plain(chalk.dim('     Run workscribe init to repair it'))
       }
 
       const { total: weekTotal, otherCount } = getRecentOtherRate(7)

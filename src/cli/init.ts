@@ -90,7 +90,7 @@ export function registerInit(program: Command): void {
         } else {
           const hookContent = fs.readFileSync(hookFile, 'utf-8')
           const binaryPath = resolveWorkscribeBinary()
-          const hookWithPath = binaryPath ? injectBinaryPath(hookContent, binaryPath) : hookContent
+          const hookWithPath = binaryPath ? injectBinaryPath(hookContent, binaryPath, process.execPath) : hookContent
 
           // For fish: ensure conf.d directory exists before touching the file
           if (shell.name === 'fish') {

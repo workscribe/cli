@@ -72,13 +72,23 @@ export function resolveWorkscribeBinary(): string | null {
   }
 }
 
-export function injectBinaryPath(hookContent: string, binaryPath: string): string {
+/**
+ * nodePath pins the Node interpreter alongside the workscribe script path.
+ * Without it, workscribe's own shebang (`#!/usr/bin/env -S node ...`) still
+ * dynamically resolves `node` via whatever PATH is active in the shell at
+ * capture time — so a hardcoded binaryPath alone doesn't protect against a
+ * stale/wrong default Node version in that shell, only against the
+ * workscribe script itself moving. nodePath should be process.execPath,
+ * captured at `workscribe init` time when it's guaranteed to be 22+.
+ */
+export function injectBinaryPath(hookContent: string, binaryPath: string, nodePath: string): string {
+  const pinnedInvocation = `"${nodePath}" "${binaryPath}"`
   return hookContent
     .replace('command -v workscribe > /dev/null 2>&1 || return 0', `[[ -x "${binaryPath}" ]] || return 0`)
     .replace('command -v workscribe &>/dev/null || return 0', `[[ -x "${binaryPath}" ]] || return 0`)
     .replace('type -q workscribe\n    or return 0', `test -x "${binaryPath}"\n    or return 0`)
-    .replaceAll('command workscribe _capture', `"${binaryPath}" _capture`)
-    .replaceAll('command workscribe alerts', `"${binaryPath}" alerts`)
+    .replaceAll('command workscribe _capture', `${pinnedInvocation} _capture`)
+    .replaceAll('command workscribe alerts', `${pinnedInvocation} alerts`)
 }
 
 export function isCompletionsInstalled(shell: { name: string; rcFile: string }): boolean {
