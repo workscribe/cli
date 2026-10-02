@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.14.1](https://github.com/workscribe/cli/compare/v1.14.0...v1.14.1) (2026-10-02)
+
+### Bug Fixes
+
+* pin node interpreter alongside binary path in both hook mechanisms ([139561b](https://github.com/workscribe/cli/commit/139561bdac317fd5c91e3b4d6bfe4433f0ad67ab))
+* run the Node version guard before anything can load node:sqlite ([4b52657](https://github.com/workscribe/cli/commit/4b526578e699097ea41eccdd0e90276963646633))
+
 ## [1.14.0](https://github.com/workscribe/cli/compare/v1.13.0...v1.14.0) (2026-08-29)
 
 ### Features
