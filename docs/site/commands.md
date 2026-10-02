@@ -275,7 +275,7 @@ workscribe context --file src/auth.ts --json
 
 **Without `--file`:** shows the most recent session for the current git repo — date, duration, branch, event count, and the AI-generated summary if one exists.
 
-**With `--file`:** narrows to the most recent session that included a `code_edit` event for that path. Useful in IDE integrations (VS Code status bar, Neovim statusline) to surface "last worked on: 2 days ago" when opening a file.
+**With `--file`:** narrows to the most recent session that included a `code_edit` event for that path. This is what powers the [VS Code extension](https://marketplace.visualstudio.com/items?itemName=workscribe.workscribe)'s status bar "last worked on" indicator — surfacing "3 days ago" when you switch to a file you haven't touched recently. Neovim and other editor integrations aren't built yet.
 
 **If no summary exists** for the session, the default text output includes the command to generate one:
 
