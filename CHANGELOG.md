@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.14.2](https://github.com/workscribe/cli/compare/v1.14.1...v1.14.2) (2026-10-03)
+
+### Bug Fixes
+
+* register zsh completion via compdef and stop duplicate rc-file inserts ([0df8645](https://github.com/workscribe/cli/commit/0df86456fe0c9a8da980f2d285b89917c6c71b51)), closes [#compdef](https://github.com/workscribe/cli/issues/compdef)
+
 ## [1.14.1](https://github.com/workscribe/cli/compare/v1.14.0...v1.14.1) (2026-10-02)
 
 ### Bug Fixes
