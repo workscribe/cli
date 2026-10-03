@@ -44,7 +44,7 @@ ${commandList}
       ;;
   esac
 }
-_workscribe`
+compdef _workscribe workscribe`
 }
 
 export function fishCompletion(commands: CompletionCommand[]): string {
