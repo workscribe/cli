@@ -11,6 +11,7 @@ const FISH_COMPLETIONS_DIR = path.join(os.homedir(), '.config', 'fish', 'complet
 const HOOK_START = '# workscribe:hook:start'
 const HOOK_END = '# workscribe:hook:end'
 const HOOK_PREAMBLE = '# Workscribe — developer work journal'
+const COMPLETIONS_MARKER = '# Workscribe completions'
 
 export function getInstalledHookBlock(rcFile: string): string | null {
   if (!fs.existsSync(rcFile)) return null
@@ -96,7 +97,7 @@ export function isCompletionsInstalled(shell: { name: string; rcFile: string }):
     return fs.existsSync(path.join(FISH_COMPLETIONS_DIR, 'workscribe.fish'))
   }
   try {
-    return fs.readFileSync(shell.rcFile, 'utf-8').includes('workscribe completions')
+    return fs.readFileSync(shell.rcFile, 'utf-8').includes(COMPLETIONS_MARKER)
   } catch {
     return false
   }
@@ -112,10 +113,16 @@ export function installCompletions(shell: { name: string; rcFile: string }, comm
     const script = shell.name === 'zsh' ? zshCompletion(commands) : bashCompletion(commands)
     const cacheFile = path.join(WORKSCRIBE_DIR, `completion.${shell.name}`)
     fs.writeFileSync(cacheFile, script, { mode: 0o644 })
-    const sourceLine =
-      shell.name === 'zsh'
-        ? `\n# Workscribe completions\nautoload -Uz compinit && compinit\nsource "${cacheFile}"\n`
-        : `\n# Workscribe completions\nsource "${cacheFile}"\n`
-    fs.appendFileSync(shell.rcFile, sourceLine)
+    // installCompletions can be called more than once (e.g. isCompletionsInstalled
+    // raced with a concurrent init, or a caller re-runs it to refresh the cache
+    // file). The rcFile append must stay idempotent so repeated calls never grow
+    // duplicate source lines.
+    if (!isCompletionsInstalled(shell)) {
+      const sourceLine =
+        shell.name === 'zsh'
+          ? `\n${COMPLETIONS_MARKER}\nautoload -Uz compinit && compinit\nsource "${cacheFile}"\n`
+          : `\n${COMPLETIONS_MARKER}\nsource "${cacheFile}"\n`
+      fs.appendFileSync(shell.rcFile, sourceLine)
+    }
   }
 }
