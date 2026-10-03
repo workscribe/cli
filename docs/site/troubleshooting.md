@@ -56,6 +56,24 @@ workscribe _capture --cmd "your command" --cwd "$PWD" --exit 0
 
 ---
 
+## Tab completion isn't working
+
+Shell completions are a snapshot taken at the time you ran `workscribe init` — upgrading the npm package doesn't update an already-installed `~/.workscribe/completion.*` file on its own. If completions stop working or are missing commands after an upgrade, refresh the cache file directly:
+
+```bash
+workscribe completions zsh > ~/.workscribe/completion.zsh    # or bash / fish
+```
+
+Then reload your shell:
+
+```bash
+source ~/.zshrc   # or ~/.bashrc
+```
+
+You can also re-run `workscribe init` and accept the completions prompt again — as of v1.14.2 this is safe to repeat and won't duplicate lines in your rc file.
+
+---
+
 ## "No activity captured for today"
 
 Either no events have been captured yet, or all commands ran were on the ignore list. Check:
