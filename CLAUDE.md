@@ -93,7 +93,7 @@ Examples: `fix/WOR-6-midnight-session-split`, `feat/WOR-9-weekly-digest`, `test/
 
 **PR description must include** `Closes WOR-<N>` so Linear marks the issue Done on merge.
 
-**Commit style:** Do not add `Co-Authored-By` trailers.
+**Commit style:** Do not add `Co-Authored-By` trailers. Commit messages are linted (`commitlint`, Conventional Commits) via a Husky `commit-msg` hook. When the current branch has a ticket number (`<type>/<TICKET>-...`), a `prepare-commit-msg` hook auto-appends a `Closes <TICKET>` footer to the commit message — no manual step needed. Branches without a ticket number are exempt from this check.
 
 ## Naming conventions
 
