@@ -7,7 +7,7 @@ description: How Workscribe handles your data and what never leaves your machine
 
 ## What stays local
 
-Everything. All captured data is stored in `~/.workscribe/` on your machine. Nothing is written to any remote server except what you explicitly send to your AI provider when you run `workscribe summary`.
+Everything you capture. All captured data is stored in `~/.workscribe/` on your machine. Nothing is written to any remote server except what you explicitly send to your AI provider when you run `workscribe summary`, and a small anonymous install ping — on by default, see below.
 
 | Location | Contents |
 |---|---|
@@ -17,6 +17,27 @@ Everything. All captured data is stored in `~/.workscribe/` on your machine. Not
 | `~/.workscribe/weekly-cache/` | Cached weekly summaries |
 
 Both the database and config file are written with `0600` permissions (owner read/write only).
+
+---
+
+## Anonymous install telemetry
+
+Workscribe sends a small anonymous ping on startup, at most once every 24 hours per install — on by default.
+
+**Sent:**
+- A randomly generated install ID — not tied to your identity, your repos, or any account
+- CLI version
+- OS platform
+- Node.js version
+
+**Never sent:** commands, events, sessions, or summaries — nothing from the "What gets redacted" or "What is sent to your AI provider" sections below.
+
+Telemetry does not run for the background shell-hook process that captures each command (`_capture`/`_hook`) — only for commands you run directly, and never more than once in a 24-hour window.
+
+**Opt out:**
+```bash
+workscribe config set telemetry.enabled false
+```
 
 ---
 
@@ -84,7 +105,7 @@ If you want zero external data transmission, use Ollama:
 workscribe config set ai.provider ollama
 ```
 
-With Ollama, `workscribe summary` never makes an external network request. Everything runs on your machine.
+With Ollama, `workscribe summary` never makes an external network request for your summary data. The anonymous install ping (see above) still runs unless you disable it — add `workscribe config set telemetry.enabled false` for fully offline operation.
 
 ---
 
