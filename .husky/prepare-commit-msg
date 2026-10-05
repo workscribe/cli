@@ -1,0 +1,24 @@
+#!/usr/bin/env sh
+
+COMMIT_MSG_FILE="$1"
+COMMIT_SOURCE="$2"
+
+# Only for plain commits (-m, editor) — skip merge/squash/amend, where
+# rewriting the message isn't appropriate.
+if [ -n "$COMMIT_SOURCE" ] && [ "$COMMIT_SOURCE" != "message" ]; then
+  exit 0
+fi
+
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+AFTER_TYPE=$(echo "$BRANCH" | cut -d'/' -f2)
+TICKET=$(echo "$AFTER_TYPE" | grep -oE '^[A-Z]+-[0-9]+')
+
+if [ -z "$TICKET" ]; then
+  exit 0
+fi
+
+if grep -q "Closes $TICKET" "$COMMIT_MSG_FILE"; then
+  exit 0
+fi
+
+printf '\nCloses %s\n' "$TICKET" >> "$COMMIT_MSG_FILE"

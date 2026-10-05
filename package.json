@@ -44,6 +44,8 @@
     "prompts": "^2.4.2"
   },
   "devDependencies": {
+    "@commitlint/cli": "^21.2.3",
+    "@commitlint/config-conventional": "^21.2.3",
     "@release-it/conventional-changelog": "^11.0.0",
     "@types/node": "^22.0.0",
     "@types/prompts": "^2.4.9",
