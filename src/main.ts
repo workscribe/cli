@@ -22,12 +22,19 @@ import { registerCompletions, HIDDEN_COMMANDS } from './cli/completions'
 import { registerAlerts } from './cli/alerts'
 import { registerContext } from './cli/context'
 import { checkForUpdate } from './utils/update-check'
+import { ensureTelemetryFallback } from './config'
 
 // _capture/_hook fire on every shell command as a detached background process
-// that must never add latency — skip the update check (and, later, telemetry)
+// that must never add latency — skip the update check and telemetry
 // outright for those, rather than relying on the cache alone.
-if (!HIDDEN_COMMANDS.has(process.argv[2])) {
+const invokedCommand = process.argv[2]
+if (!HIDDEN_COMMANDS.has(invokedCommand)) {
   checkForUpdate()
+  // init handles its own telemetry disclosure via an interactive prompt —
+  // the silent fallback is only for users who skip init entirely.
+  if (invokedCommand !== 'init') {
+    ensureTelemetryFallback()
+  }
 }
 
 const program = new Command()
