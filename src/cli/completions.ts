@@ -5,7 +5,7 @@ import { CompletionCommand, bashCompletion, zshCompletion, fishCompletion } from
 export type { CompletionCommand }
 export { bashCompletion, zshCompletion, fishCompletion }
 
-const HIDDEN_COMMANDS = new Set(['_capture', '_hook'])
+export const HIDDEN_COMMANDS = new Set(['_capture', '_hook'])
 
 export function getPublicCommands(program: Command): CompletionCommand[] {
   return program.commands
