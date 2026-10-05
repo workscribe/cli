@@ -18,12 +18,17 @@ import { registerProfile } from './cli/profile'
 import { registerNote } from './cli/note'
 import { registerWeek } from './cli/week'
 import { registerBugReport } from './cli/bug-report'
-import { registerCompletions } from './cli/completions'
+import { registerCompletions, HIDDEN_COMMANDS } from './cli/completions'
 import { registerAlerts } from './cli/alerts'
 import { registerContext } from './cli/context'
 import { checkForUpdate } from './utils/update-check'
 
-checkForUpdate()
+// _capture/_hook fire on every shell command as a detached background process
+// that must never add latency — skip the update check (and, later, telemetry)
+// outright for those, rather than relying on the cache alone.
+if (!HIDDEN_COMMANDS.has(process.argv[2])) {
+  checkForUpdate()
+}
 
 const program = new Command()
 
