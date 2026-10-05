@@ -1,3 +1,4 @@
+import crypto from 'crypto'
 import fs from 'fs'
 import { CONFIG_PATH } from '../utils/paths'
 
@@ -96,6 +97,17 @@ export function writeConfig(config: WorkscribeConfig): void {
   } catch {
     /* ignore */
   }
+}
+
+// Generates and persists telemetry.installId on first use. Covers both a
+// fresh install and an existing user upgrading — deepMerge already backfills
+// the telemetry key itself, this just fills in the empty installId.
+export function ensureInstallId(config: WorkscribeConfig): string {
+  if (config.telemetry.installId) return config.telemetry.installId
+
+  const installId = crypto.randomUUID()
+  writeConfig({ ...config, telemetry: { ...config.telemetry, installId } })
+  return installId
 }
 
 export function getConfigValue(config: WorkscribeConfig, key: string): unknown {
