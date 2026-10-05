@@ -18,17 +18,14 @@ import { registerProfile } from './cli/profile'
 import { registerNote } from './cli/note'
 import { registerWeek } from './cli/week'
 import { registerBugReport } from './cli/bug-report'
-import { registerCompletions, HIDDEN_COMMANDS } from './cli/completions'
+import { registerCompletions, shouldRunStartupChecks } from './cli/completions'
 import { registerAlerts } from './cli/alerts'
 import { registerContext } from './cli/context'
 import { checkForUpdate, pingTelemetry } from './utils/update-check'
 import { ensureTelemetryFallback } from './config'
 
-// _capture/_hook fire on every shell command as a detached background process
-// that must never add latency — skip the update check and telemetry
-// outright for those, rather than relying on the cache alone.
 const invokedCommand = process.argv[2]
-if (!HIDDEN_COMMANDS.has(invokedCommand)) {
+if (shouldRunStartupChecks(invokedCommand)) {
   checkForUpdate()
   // init handles its own telemetry disclosure via an interactive prompt —
   // the silent fallback is only for users who skip init entirely. Must run

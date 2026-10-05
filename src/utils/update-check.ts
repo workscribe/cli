@@ -1,7 +1,14 @@
 import fs from 'fs'
 import os from 'os'
 import { UPDATE_CHECK_PATH } from './paths'
-import { readConfig } from '../config'
+import { readConfig, WorkscribeConfig } from '../config'
+
+export interface TelemetryPayload {
+  installId: string
+  cliVersion: string
+  platform: string
+  nodeVersion: string
+}
 
 declare const __WORKSCRIBE_VERSION__: string
 
@@ -66,6 +73,15 @@ export function checkForUpdate(): void {
   }
 }
 
+export function buildTelemetryPayload(config: WorkscribeConfig): TelemetryPayload {
+  return {
+    installId: config.telemetry.installId,
+    cliVersion: __WORKSCRIBE_VERSION__,
+    platform: os.platform(),
+    nodeVersion: process.version,
+  }
+}
+
 export function pingTelemetry(): void {
   const config = readConfig()
   if (!config.telemetry.enabled || !config.telemetry.installId) return
@@ -77,12 +93,7 @@ export function pingTelemetry(): void {
   fetch('https://workscribe.co/api/telemetry/ping', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      installId: config.telemetry.installId,
-      cliVersion: __WORKSCRIBE_VERSION__,
-      platform: os.platform(),
-      nodeVersion: process.version,
-    }),
+    body: JSON.stringify(buildTelemetryPayload(config)),
   })
     .then(() => writeCache({ lastTelemetryPing: now }))
     .catch(() => {
