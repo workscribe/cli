@@ -1,5 +1,6 @@
 import crypto from 'crypto'
 import fs from 'fs'
+import path from 'path'
 import { CONFIG_PATH } from '../utils/paths'
 
 export interface WorkscribeConfig {
@@ -90,6 +91,11 @@ export function readConfig(): WorkscribeConfig {
 }
 
 export function writeConfig(config: WorkscribeConfig): void {
+  // Previously safe to assume — writeConfig was only ever called after `init`
+  // created the data directories, or by `config set` where init had already
+  // run. CLI-05's fallback can now call this as the very first filesystem
+  // touch for a user who skipped init entirely, so it can't assume the dir exists.
+  fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true, mode: 0o700 })
   fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), { encoding: 'utf-8', mode: 0o600 })
   // Enforce permissions on existing files (mode only applies on creation above)
   try {
@@ -108,6 +114,22 @@ export function ensureInstallId(config: WorkscribeConfig): string {
   const installId = crypto.randomUUID()
   writeConfig({ ...config, telemetry: { ...config.telemetry, installId } })
   return installId
+}
+
+// Fallback for users who skip `init` entirely — which is exactly what an
+// existing user upgrading will typically do, since they never re-run it.
+// Presence of installId is the only state tracked; no separate "notice
+// shown" flag is needed since this is a no-op once installId is set.
+export function ensureTelemetryFallback(): void {
+  const config = readConfig()
+  if (config.telemetry.installId) return
+
+  config.telemetry.enabled = true
+  config.telemetry.installId = ensureInstallId(config)
+
+  process.stderr.write(
+    '\n  Workscribe collects anonymous install stats (install ID, CLI version, platform, Node version).\n  Opt out: workscribe config set telemetry.enabled false\n\n'
+  )
 }
 
 export function getConfigValue(config: WorkscribeConfig, key: string): unknown {
