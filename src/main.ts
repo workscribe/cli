@@ -21,7 +21,7 @@ import { registerBugReport } from './cli/bug-report'
 import { registerCompletions, HIDDEN_COMMANDS } from './cli/completions'
 import { registerAlerts } from './cli/alerts'
 import { registerContext } from './cli/context'
-import { checkForUpdate } from './utils/update-check'
+import { checkForUpdate, pingTelemetry } from './utils/update-check'
 import { ensureTelemetryFallback } from './config'
 
 // _capture/_hook fire on every shell command as a detached background process
@@ -31,10 +31,14 @@ const invokedCommand = process.argv[2]
 if (!HIDDEN_COMMANDS.has(invokedCommand)) {
   checkForUpdate()
   // init handles its own telemetry disclosure via an interactive prompt —
-  // the silent fallback is only for users who skip init entirely.
+  // the silent fallback is only for users who skip init entirely. Must run
+  // before pingTelemetry() — otherwise a user's very first command would
+  // generate the installId but the ping already read the old empty config
+  // moments earlier, delaying the first ping to the next invocation.
   if (invokedCommand !== 'init') {
     ensureTelemetryFallback()
   }
+  pingTelemetry()
 }
 
 const program = new Command()
