@@ -5,7 +5,7 @@ import os from 'os'
 import prompts from 'prompts'
 import chalk from 'chalk'
 import { CONFIG_PATH, PROFILES_DIR, REQUIRED_DIRS } from '../utils/paths'
-import { readConfig, writeConfig } from '../config'
+import { readConfig, writeConfig, ensureInstallId } from '../config'
 import { detectProfilesForDirectory } from '../profiles/loader'
 import { installProfile, cacheManifest } from '../profiles/fetcher'
 import { getDb } from '../db'
@@ -71,8 +71,25 @@ export function registerInit(program: Command): void {
 
       // ── Step 2: Database ──────────────────────────────────────────────────────
       step(2, TOTAL_STEPS, 'Initialising database')
+      const config = readConfig()
       getDb()
       log.success('Database ready')
+
+      // ── Telemetry (part of setup, no separate step) ────────────────────────────
+      log.plain('')
+      log.plain(chalk.dim('  Workscribe can send anonymous install stats: a random install ID,'))
+      log.plain(chalk.dim('  CLI version, OS platform, and Node.js version. No command, event, or'))
+      log.plain(chalk.dim('  summary data is ever sent. Opt out anytime:'))
+      log.plain(chalk.dim('  workscribe config set telemetry.enabled false'))
+      log.plain('')
+      const { telemetryEnabled } = await prompts({
+        type: 'confirm',
+        name: 'telemetryEnabled',
+        message: 'Send anonymous install stats?',
+        initial: true,
+      })
+      config.telemetry.enabled = telemetryEnabled
+      config.telemetry.installId = ensureInstallId(config)
 
       // ── Step 3: Shell hook + completions ──────────────────────────────────────
       step(3, TOTAL_STEPS, 'Installing shell hook')
@@ -181,7 +198,6 @@ export function registerInit(program: Command): void {
       }
 
       // Profile detection (part of environment scan, no separate step)
-      const config = readConfig()
       try {
         await cacheManifest()
         const detected = detectProfilesForDirectory(process.cwd())
