@@ -16,6 +16,7 @@ vi.mock('../../src/db', () => ({ getDb: vi.fn() }))
 vi.mock('../../src/config', () => ({
   readConfig: vi.fn(),
   writeConfig: vi.fn(),
+  ensureInstallId: vi.fn(),
 }))
 
 vi.mock('../../src/utils/paths', () => ({
@@ -78,16 +79,18 @@ vi.mock('prompts', () => ({ default: vi.fn() }))
 import fs from 'fs'
 import { Command } from 'commander'
 import prompts from 'prompts'
-import { readConfig } from '../../src/config'
+import { readConfig, ensureInstallId } from '../../src/config'
 import { isHookInstalled, installHook, isCompletionsInstalled } from '../../src/capture/shell-hook'
 import { AI_HOOK_INTEGRATIONS } from '../../src/capture/hooks'
 import { getProvider } from '../../src/ai/router'
 import { log } from '../../src/utils/logger'
 import { registerInit } from '../../src/cli/init'
+import { createTestConfig } from '../helpers/config'
 
 const mockFs = fs as unknown as Record<string, ReturnType<typeof vi.fn>>
 const mockPrompts = prompts as ReturnType<typeof vi.fn>
 const mockReadConfig = readConfig as ReturnType<typeof vi.fn>
+const mockEnsureInstallId = ensureInstallId as ReturnType<typeof vi.fn>
 const mockIsHookInstalled = isHookInstalled as ReturnType<typeof vi.fn>
 const mockInstallHook = installHook as ReturnType<typeof vi.fn>
 const mockIsCompletionsInstalled = isCompletionsInstalled as ReturnType<typeof vi.fn>
@@ -96,13 +99,46 @@ const mockLog = log as Record<string, ReturnType<typeof vi.fn>>
 const claudeIntegration = AI_HOOK_INTEGRATIONS['claude-code'] as Record<string, ReturnType<typeof vi.fn>>
 const aiderIntegration = AI_HOOK_INTEGRATIONS['aider'] as Record<string, ReturnType<typeof vi.fn>>
 
-const BASE_CONFIG = { ai: { provider: 'anthropic', apiKey: 'sk-test', model: null }, session: { idleTimeout: 30 } }
+// init.ts mutates config in place (ai.provider, telemetry.*) — always generate
+// a fresh object per test rather than sharing one, or mutations from one test
+// (e.g. answering the telemetry prompt with false) would leak into the next.
+const noProviderConfig = () => createTestConfig({ ai: { provider: '', apiKey: '', model: '', baseUrl: '' } })
 
 function makeProgram() {
   const program = new Command()
   program.exitOverride()
   registerInit(program)
   return program
+}
+
+// prompts() is called many times across one `init` run (telemetry, shell hook,
+// completions, per-AI-tool, AI provider, apiKey, retry, ...) — routing by the
+// prompt's `name` rather than call position means adding a new prompt anywhere
+// in the flow (as CLI-04 just did) can't silently shift every other test's
+// positional mockResolvedValueOnce queue out of sync. Pass an array per name
+// for tests that need a different answer on each successive call to that name
+// (e.g. two different AI tools both prompting `install`); a single-value array
+// repeats forever.
+function mockPromptAnswers(overrides: Record<string, unknown[]> = {}) {
+  const defaults: Record<string, unknown[]> = {
+    telemetryEnabled: [true],
+    update: [true],
+    installComps: [true],
+    install: [false],
+    provider: ['anthropic'],
+    apiKey: ['sk-test-123'],
+    baseUrl: ['https://example.com'],
+    retry: [false],
+  }
+  const queues: Record<string, unknown[]> = {}
+  for (const name of Object.keys(defaults)) {
+    queues[name] = [...(overrides[name] ?? defaults[name])]
+  }
+  mockPrompts.mockImplementation(async (options: { name: string }) => {
+    const queue = queues[options.name] ?? []
+    const value = queue.length > 1 ? queue.shift() : queue[0]
+    return { [options.name]: value }
+  })
 }
 
 beforeEach(() => {
@@ -116,10 +152,14 @@ beforeEach(() => {
   mockIsHookInstalled.mockReturnValue(true)
 
   // AI provider already configured — skips provider prompt
-  mockReadConfig.mockReturnValue(BASE_CONFIG)
+  mockReadConfig.mockReturnValue(createTestConfig())
 
-  // Reset prompts to avoid "once" queue and default value leaking across tests
+  mockEnsureInstallId.mockImplementation(
+    (config: { telemetry: { installId: string } }) => config.telemetry.installId || 'generated-install-id'
+  )
+
   mockPrompts.mockReset()
+  mockPromptAnswers()
 
   // All hookable tools: not installed by default — each test overrides as needed
   claudeIntegration.isInstalled.mockReturnValue(false)
@@ -166,7 +206,7 @@ describe('workscribe init — AI tool hook integration', () => {
     it('prompts with initial: false (opt-in default)', async () => {
       claudeIntegration.isInstalled.mockReturnValue(true)
       claudeIntegration.isHookInstalled.mockReturnValue(false)
-      mockPrompts.mockResolvedValue({ install: false })
+      mockPromptAnswers({ install: [false] })
       await makeProgram().parseAsync(['init'], { from: 'user' })
       expect(mockPrompts).toHaveBeenCalledWith(expect.objectContaining({ name: 'install', initial: false }))
     })
@@ -174,7 +214,7 @@ describe('workscribe init — AI tool hook integration', () => {
     it('installs hook and logs success when user opts in', async () => {
       claudeIntegration.isInstalled.mockReturnValue(true)
       claudeIntegration.isHookInstalled.mockReturnValue(false)
-      mockPrompts.mockResolvedValue({ install: true })
+      mockPromptAnswers({ install: [true] })
       await makeProgram().parseAsync(['init'], { from: 'user' })
       expect(claudeIntegration.install).toHaveBeenCalledOnce()
       expect(mockLog.success).toHaveBeenCalledWith(expect.stringContaining('session hook installed'))
@@ -183,7 +223,7 @@ describe('workscribe init — AI tool hook integration', () => {
     it('logs skipped and does not install when user declines', async () => {
       claudeIntegration.isInstalled.mockReturnValue(true)
       claudeIntegration.isHookInstalled.mockReturnValue(false)
-      mockPrompts.mockResolvedValue({ install: false })
+      mockPromptAnswers({ install: [false] })
       await makeProgram().parseAsync(['init'], { from: 'user' })
       expect(claudeIntegration.install).not.toHaveBeenCalled()
       expect(mockLog.info).toHaveBeenCalledWith(expect.stringContaining('skipped'))
@@ -196,7 +236,7 @@ describe('workscribe init — AI tool hook integration', () => {
       claudeIntegration.isHookInstalled.mockReturnValue(false)
       aiderIntegration.isInstalled.mockReturnValue(true)
       aiderIntegration.isHookInstalled.mockReturnValue(false)
-      mockPrompts.mockResolvedValue({ install: true })
+      mockPromptAnswers({ install: [true] })
       await makeProgram().parseAsync(['init'], { from: 'user' })
       const installPromptCalls = mockPrompts.mock.calls.filter(
         (call) => (call[0] as Record<string, unknown>).name === 'install'
@@ -209,9 +249,7 @@ describe('workscribe init — AI tool hook integration', () => {
       claudeIntegration.isHookInstalled.mockReturnValue(false)
       aiderIntegration.isInstalled.mockReturnValue(true)
       aiderIntegration.isHookInstalled.mockReturnValue(false)
-      mockPrompts
-        .mockResolvedValueOnce({ install: true }) // Claude Code — yes
-        .mockResolvedValueOnce({ install: false }) // Aider — no
+      mockPromptAnswers({ install: [true, false] }) // Claude Code — yes, Aider — no
       await makeProgram().parseAsync(['init'], { from: 'user' })
       expect(claudeIntegration.install).toHaveBeenCalledOnce()
       expect(aiderIntegration.install).not.toHaveBeenCalled()
@@ -272,13 +310,14 @@ describe('workscribe init — API key validation (AC-3)', () => {
     ai: { provider: '', apiKey: '', model: null },
     session: { idleTimeout: 30 },
     capture: { profiles: [] },
+    telemetry: { enabled: true, installId: 'existing-install-id' },
   })
 
   it('calls validate() after a key is entered for a key-based provider', async () => {
     mockReadConfig.mockReturnValue(noProviderConfig())
     const mockValidate = vi.fn().mockResolvedValue(undefined)
     mockGetProvider.mockReturnValue({ validate: mockValidate })
-    mockPrompts.mockResolvedValueOnce({ provider: 'anthropic' }).mockResolvedValueOnce({ apiKey: 'sk-test-123' })
+    mockPromptAnswers({ provider: ['anthropic'], apiKey: ['sk-test-123'] })
     await makeProgram().parseAsync(['init'], { from: 'user' })
     expect(mockValidate).toHaveBeenCalled()
   })
@@ -286,7 +325,7 @@ describe('workscribe init — API key validation (AC-3)', () => {
   it('logs success when validation passes', async () => {
     mockReadConfig.mockReturnValue(noProviderConfig())
     mockGetProvider.mockReturnValue({ validate: vi.fn().mockResolvedValue(undefined) })
-    mockPrompts.mockResolvedValueOnce({ provider: 'anthropic' }).mockResolvedValueOnce({ apiKey: 'sk-test-123' })
+    mockPromptAnswers({ provider: ['anthropic'], apiKey: ['sk-test-123'] })
     await makeProgram().parseAsync(['init'], { from: 'user' })
     expect(mockLog.success).toHaveBeenCalledWith(expect.stringContaining('verified'))
   })
@@ -294,10 +333,7 @@ describe('workscribe init — API key validation (AC-3)', () => {
   it('logs a warning and prompts to save anyway when validation fails', async () => {
     mockReadConfig.mockReturnValue(noProviderConfig())
     mockGetProvider.mockReturnValue({ validate: vi.fn().mockRejectedValue(new Error('401 Unauthorized')) })
-    mockPrompts
-      .mockResolvedValueOnce({ provider: 'anthropic' })
-      .mockResolvedValueOnce({ apiKey: 'bad-key' })
-      .mockResolvedValueOnce({ retry: false })
+    mockPromptAnswers({ provider: ['anthropic'], apiKey: ['bad-key'], retry: [false] })
     await makeProgram().parseAsync(['init'], { from: 'user' })
     expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining('Validation failed'))
     expect(mockPrompts).toHaveBeenCalledWith(expect.objectContaining({ name: 'retry' }))
@@ -308,10 +344,7 @@ describe('workscribe init — API key validation (AC-3)', () => {
     const mockWriteConfig = writeConfig as ReturnType<typeof vi.fn>
     mockReadConfig.mockReturnValue(noProviderConfig())
     mockGetProvider.mockReturnValue({ validate: vi.fn().mockRejectedValue(new Error('401')) })
-    mockPrompts
-      .mockResolvedValueOnce({ provider: 'anthropic' })
-      .mockResolvedValueOnce({ apiKey: 'bad-key' })
-      .mockResolvedValueOnce({ retry: true })
+    mockPromptAnswers({ provider: ['anthropic'], apiKey: ['bad-key'], retry: [true] })
     await makeProgram().parseAsync(['init'], { from: 'user' })
     expect(mockWriteConfig).toHaveBeenCalled()
   })
@@ -320,7 +353,7 @@ describe('workscribe init — API key validation (AC-3)', () => {
     mockReadConfig.mockReturnValue(noProviderConfig())
     const mockValidate = vi.fn().mockResolvedValue(undefined)
     mockGetProvider.mockReturnValue({ validate: mockValidate })
-    mockPrompts.mockResolvedValueOnce({ provider: 'ollama' })
+    mockPromptAnswers({ provider: ['ollama'] })
     await makeProgram().parseAsync(['init'], { from: 'user' })
     expect(mockPrompts).not.toHaveBeenCalledWith(expect.objectContaining({ name: 'apiKey' }))
     expect(mockValidate).toHaveBeenCalled()
@@ -339,10 +372,57 @@ describe('workscribe init — what to do next (AC-4)', () => {
       ai: { provider: '', apiKey: '', model: null as null },
       session: { idleTimeout: 30 },
       capture: { profiles: [] },
+      telemetry: { enabled: true, installId: 'existing-install-id' },
     })
-    mockPrompts.mockResolvedValueOnce({ provider: 'skip' })
+    mockPromptAnswers({ provider: ['skip'] })
     await makeProgram().parseAsync(['init'], { from: 'user' })
     const allOutput = (mockLog.plain as ReturnType<typeof vi.fn>).mock.calls.flat().join('\n')
     expect(allOutput).toContain('workscribe config set ai.provider')
+  })
+})
+
+describe('workscribe init — telemetry disclosure (CLI-04)', () => {
+  it('prompts with initial: true (opt-out-by-default policy)', async () => {
+    await makeProgram().parseAsync(['init'], { from: 'user' })
+    expect(mockPrompts).toHaveBeenCalledWith(expect.objectContaining({ name: 'telemetryEnabled', initial: true }))
+  })
+
+  it('discloses the four fields collected and the opt-out command', async () => {
+    await makeProgram().parseAsync(['init'], { from: 'user' })
+    const allOutput = (mockLog.plain as ReturnType<typeof vi.fn>).mock.calls.flat().join('\n')
+    expect(allOutput).toContain('install ID')
+    expect(allOutput).toContain('CLI version')
+    expect(allOutput).toContain('platform')
+    expect(allOutput).toContain('Node.js version')
+    expect(allOutput).toContain('workscribe config set telemetry.enabled false')
+  })
+
+  it('writes telemetry.enabled per the prompt answer', async () => {
+    mockPromptAnswers({ telemetryEnabled: [false] })
+    await makeProgram().parseAsync(['init'], { from: 'user' })
+    // config.telemetry.enabled is set before ensureInstallId(config) is called,
+    // so the argument it received reflects the prompt answer.
+    expect(mockEnsureInstallId).toHaveBeenCalledWith(
+      expect.objectContaining({ telemetry: expect.objectContaining({ enabled: false }) })
+    )
+  })
+
+  it('calls ensureInstallId and persists the returned id onto config, not just on disk', async () => {
+    // Uses the AI-provider-success path (not the default mocked flow) because
+    // that's the one place in this suite that triggers a real writeConfig(config)
+    // call we can inspect — ensureInstallId's own internal write is mocked away,
+    // so this is the only way to catch a regression where the returned id isn't
+    // synced back onto the in-memory config object before a later writeConfig call.
+    mockReadConfig.mockReturnValue(noProviderConfig())
+    mockEnsureInstallId.mockReturnValue('brand-new-id')
+    mockGetProvider.mockReturnValue({ validate: vi.fn().mockResolvedValue(undefined) })
+    mockPromptAnswers({ provider: ['anthropic'], apiKey: ['sk-test-123'] })
+    const { writeConfig } = await import('../../src/config')
+    const mockWriteConfig = writeConfig as ReturnType<typeof vi.fn>
+    await makeProgram().parseAsync(['init'], { from: 'user' })
+    expect(mockEnsureInstallId).toHaveBeenCalled()
+    expect(mockWriteConfig).toHaveBeenCalledWith(
+      expect.objectContaining({ telemetry: expect.objectContaining({ installId: 'brand-new-id' }) })
+    )
   })
 })
