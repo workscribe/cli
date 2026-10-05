@@ -40,6 +40,10 @@ export interface WorkscribeConfig {
     slackWebhook?: string
     webhook?: string
   }
+  telemetry: {
+    enabled: boolean
+    installId: string
+  }
 }
 
 const DEFAULTS: WorkscribeConfig = {
@@ -66,6 +70,10 @@ const DEFAULTS: WorkscribeConfig = {
   },
   summary: {
     format: 'markdown',
+  },
+  telemetry: {
+    enabled: true,
+    installId: '',
   },
 }
 
