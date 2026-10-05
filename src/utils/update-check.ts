@@ -1,5 +1,7 @@
 import fs from 'fs'
+import os from 'os'
 import { UPDATE_CHECK_PATH } from './paths'
+import { readConfig } from '../config'
 
 declare const __WORKSCRIBE_VERSION__: string
 
@@ -8,6 +10,7 @@ const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000
 interface UpdateCache {
   lastChecked: number
   latestVersion: string
+  lastTelemetryPing?: number
 }
 
 function readCache(): UpdateCache | null {
@@ -18,9 +21,13 @@ function readCache(): UpdateCache | null {
   }
 }
 
-function writeCache(cache: UpdateCache): void {
+// Merges with whatever's already on disk rather than overwriting — checkForUpdate()
+// and pingTelemetry() each own one field in the same cache file and must not
+// silently wipe out the other's value when they write.
+function writeCache(updates: Partial<UpdateCache>): void {
   try {
-    fs.writeFileSync(UPDATE_CHECK_PATH, JSON.stringify(cache), { mode: 0o600 })
+    const current = readCache() ?? {}
+    fs.writeFileSync(UPDATE_CHECK_PATH, JSON.stringify({ ...current, ...updates }), { mode: 0o600 })
   } catch {
     // Not critical — silently skip if the data dir doesn't exist yet
   }
@@ -57,4 +64,28 @@ export function checkForUpdate(): void {
         // Network unavailable — will retry next run
       })
   }
+}
+
+export function pingTelemetry(): void {
+  const config = readConfig()
+  if (!config.telemetry.enabled || !config.telemetry.installId) return
+
+  const cache = readCache()
+  const now = Date.now()
+  if (cache?.lastTelemetryPing && now - cache.lastTelemetryPing <= CHECK_INTERVAL_MS) return
+
+  fetch('https://workscribe.co/api/telemetry/ping', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      installId: config.telemetry.installId,
+      cliVersion: __WORKSCRIBE_VERSION__,
+      platform: os.platform(),
+      nodeVersion: process.version,
+    }),
+  })
+    .then(() => writeCache({ lastTelemetryPing: now }))
+    .catch(() => {
+      // Network unavailable — will retry next run
+    })
 }
