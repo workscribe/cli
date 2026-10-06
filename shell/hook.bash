@@ -26,9 +26,12 @@ _workscribe_precmd() {
     _workscribe_last_cmd=""
     _workscribe_git_before=""
   fi
-  if [[ -f "$HOME/.workscribe/alerts.pending" ]]; then
+  # Skip the alert check on the first precmd: it fires before the shell has
+  # finished initializing, and that output gets mistaken for a startup error.
+  if [[ -n "$_workscribe_primed" ]] && [[ -f "$HOME/.workscribe/alerts.pending" ]]; then
     command workscribe alerts --check
   fi
+  _workscribe_primed=1
 }
 
 trap '_workscribe_preexec' DEBUG

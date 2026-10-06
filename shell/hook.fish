@@ -30,8 +30,11 @@ function _workscribe_postexec --on-event fish_postexec
         set -e _workscribe_cmd
         set -e _workscribe_git_before
     end
-    if test -f "$HOME/.workscribe/alerts.pending"
+    # Skip the alert check on the first postexec: it fires before the shell
+    # has finished initializing, and that output gets mistaken for a startup error.
+    if set -q _workscribe_primed; and test -f "$HOME/.workscribe/alerts.pending"
         command workscribe alerts --check
     end
+    set -g _workscribe_primed 1
 end
 # workscribe:hook:end
