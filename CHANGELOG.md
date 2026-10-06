@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.15.1](https://github.com/workscribe/cli/compare/v1.15.0...v1.15.1) (2026-10-06)
+
+### Bug Fixes
+
+* stop alert check from firing during shell init ([74166be](https://github.com/workscribe/cli/commit/74166be45b4808682847d767672b7140e9cd3bc6))
+
 ## [1.14.2](https://github.com/workscribe/cli/compare/v1.14.1...v1.14.2) (2026-10-03)
 
 ### Bug Fixes
