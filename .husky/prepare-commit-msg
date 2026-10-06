@@ -11,7 +11,7 @@ fi
 
 BRANCH=$(git rev-parse --abbrev-ref HEAD)
 AFTER_TYPE=$(echo "$BRANCH" | cut -d'/' -f2)
-TICKET=$(echo "$AFTER_TYPE" | grep -oE '^[A-Z]+-[0-9]+')
+TICKET=$(echo "$AFTER_TYPE" | grep -oE '^[A-Z]+-[0-9]+' || true)
 
 if [ -z "$TICKET" ]; then
   exit 0
