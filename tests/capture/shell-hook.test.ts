@@ -291,7 +291,7 @@ end
   it('replaces zsh invocation with pinned node and binary path', () => {
     const result = injectBinaryPath(ZSH_HOOK, BIN, NODE)
     expect(result).not.toContain('command workscribe _capture')
-    expect(result).toContain(`"${NODE}" "${BIN}" _capture`)
+    expect(result).toContain(`"${NODE}" --disable-warning=ExperimentalWarning "${BIN}" _capture`)
   })
 
   it('replaces bash availability check with absolute path test', () => {
@@ -303,7 +303,7 @@ end
   it('replaces bash invocation with pinned node and binary path', () => {
     const result = injectBinaryPath(BASH_HOOK, BIN, NODE)
     expect(result).not.toContain('command workscribe _capture')
-    expect(result).toContain(`"${NODE}" "${BIN}" _capture`)
+    expect(result).toContain(`"${NODE}" --disable-warning=ExperimentalWarning "${BIN}" _capture`)
   })
 
   it('replaces fish availability check with absolute path test', () => {
@@ -317,7 +317,11 @@ end
     expect(result).not.toContain('command workscribe _capture')
     const escapedNode = NODE.replace(/\//g, '\\/')
     const escapedBin = BIN.replace(/\//g, '\\/')
-    const count = (result.match(new RegExp(`"${escapedNode}"\\ "${escapedBin}"\\ _capture`, 'g')) ?? []).length
+    const count = (
+      result.match(
+        new RegExp(`"${escapedNode}"\\ --disable-warning=ExperimentalWarning\\ "${escapedBin}"\\ _capture`, 'g')
+      ) ?? []
+    ).length
     expect(count).toBe(2)
   })
 
