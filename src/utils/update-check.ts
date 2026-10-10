@@ -2,6 +2,7 @@ import fs from 'fs'
 import os from 'os'
 import { UPDATE_CHECK_PATH } from './paths'
 import { readConfig, WorkscribeConfig } from '../config'
+import { debugLog } from './logger'
 
 export interface TelemetryPayload {
   installId: string
@@ -95,8 +96,17 @@ export function pingTelemetry(): void {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(buildTelemetryPayload(config)),
   })
-    .then(() => writeCache({ lastTelemetryPing: now }))
-    .catch(() => {
-      // Network unavailable — will retry next run
+    .then((response) => {
+      // fetch() only rejects on network failure — a 4xx/5xx still resolves,
+      // so without this check a server-side outage would silently look like
+      // a successful ping and get throttled for a full day.
+      if (!response.ok) {
+        debugLog('pingTelemetry', new Error(`Ping failed with HTTP ${response.status}`))
+        return
+      }
+      writeCache({ lastTelemetryPing: now })
+    })
+    .catch((error) => {
+      debugLog('pingTelemetry', error)
     })
 }
