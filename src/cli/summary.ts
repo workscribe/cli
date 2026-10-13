@@ -7,7 +7,7 @@ import { getOrBuildSessions } from '../sessions/detector'
 import { getProvider } from '../ai/router'
 import { readConfig } from '../config'
 import { updateSessionSummary } from '../db'
-import { log } from '../utils/logger'
+import { log, debugLog } from '../utils/logger'
 import {
   todayDate,
   parseDate,
@@ -151,23 +151,31 @@ export function registerSummary(program: Command): void {
         log.plain('')
         log.info(`Generating weekly summary via ${chalk.cyan(config.ai.provider)}…`)
 
+        let summary: string
         try {
-          const summary = provider.summarizeWeek
+          summary = provider.summarizeWeek
             ? await provider.summarizeWeek(payload)
             : await provider.summarize({ date: today, sessions: weeklyDays.flatMap((day) => day.sessions) })
-
-          log.plain('')
-          log.plain(summary)
-          log.plain('')
-
-          fs.mkdirSync(WEEKLY_CACHE_DIR, { recursive: true })
-          fs.writeFileSync(cacheFile, summary, { encoding: 'utf-8', mode: 0o600 })
-
-          await handleWebhook(opts, config, summary)
         } catch (error) {
           log.error(`Weekly summary failed [${config.ai.provider}]: ${(error as Error).message}`)
           process.exit(1)
         }
+
+        log.plain('')
+        log.plain(summary)
+        log.plain('')
+
+        // Caching is a best-effort optimisation, not the point of the command —
+        // the summary above already succeeded and was shown, so a disk issue
+        // here must not report the whole command as failed.
+        try {
+          fs.mkdirSync(WEEKLY_CACHE_DIR, { recursive: true })
+          fs.writeFileSync(cacheFile, summary, { encoding: 'utf-8', mode: 0o600 })
+        } catch (error) {
+          debugLog('weekly-summary-cache', error)
+        }
+
+        await handleWebhook(opts, config, summary)
         return
       }
 

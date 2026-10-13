@@ -28,7 +28,6 @@ function makeProgram() {
 }
 
 beforeEach(() => {
-  vi.clearAllMocks()
   mockGetPendingAlerts.mockReturnValue([])
   mockClearAlerts.mockReturnValue(0)
   mockHasPendingAlerts.mockReturnValue(false)

@@ -21,7 +21,6 @@ function makeProgram() {
 }
 
 beforeEach(() => {
-  vi.clearAllMocks()
   mockGetGitContext.mockReturnValue({ repoName: 'my-app', branch: 'main' })
 })
 

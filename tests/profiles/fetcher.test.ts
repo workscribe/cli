@@ -38,7 +38,6 @@ function jsonResponse(data: unknown, status = 200) {
 }
 
 beforeEach(() => {
-  vi.clearAllMocks()
   mockFs.existsSync.mockReturnValue(true)
 })
 

@@ -35,7 +35,7 @@ import { getProvider } from '../../src/ai/router'
 import { readConfig } from '../../src/config'
 import { postToWebhook } from '../../src/integrations/webhook'
 import { isSlackWebhookUrl, formatForSlack } from '../../src/integrations/slack'
-import { log } from '../../src/utils/logger'
+import { log, debugLog } from '../../src/utils/logger'
 import { registerWeek } from '../../src/cli/week'
 
 const mockFs = fs as unknown as Record<string, ReturnType<typeof vi.fn>>
@@ -46,6 +46,7 @@ const mockPostToWebhook = postToWebhook as ReturnType<typeof vi.fn>
 const mockIsSlackWebhookUrl = isSlackWebhookUrl as ReturnType<typeof vi.fn>
 const mockFormatForSlack = formatForSlack as ReturnType<typeof vi.fn>
 const mockLog = log as Record<string, ReturnType<typeof vi.fn>>
+const mockDebugLog = debugLog as ReturnType<typeof vi.fn>
 
 const FAKE_SESSION = {
   repoName: 'my-app',
@@ -70,7 +71,6 @@ function makeProgram() {
 }
 
 beforeEach(() => {
-  vi.clearAllMocks()
   mockReadConfig.mockReturnValue(BASE_CONFIG)
   mockGetOrBuildSessions.mockReturnValue([FAKE_SESSION])
   mockGetProvider.mockReturnValue({ summarizeWeek: vi.fn().mockResolvedValue('# Week summary\n- Shipped a fix') })
@@ -152,5 +152,21 @@ describe('workscribe week', () => {
     await makeProgram().parseAsync(['week', '--slack'], { from: 'user' })
     expect(mockPostToWebhook).not.toHaveBeenCalled()
     expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining('integrations.slackWebhook'))
+  })
+
+  it('still shows the digest and exits cleanly when the cache write fails', async () => {
+    mockFs.mkdirSync.mockImplementation(() => {
+      throw new Error('EACCES: permission denied')
+    })
+
+    const program = makeProgram()
+    await program.parseAsync(['week'], { from: 'user' })
+
+    expect(mockLog.plain).toHaveBeenCalledWith(expect.stringContaining('Week summary'))
+    expect(mockLog.error).not.toHaveBeenCalled()
+    expect(mockDebugLog).toHaveBeenCalledWith(
+      'weekly-digest-cache',
+      expect.objectContaining({ message: expect.stringContaining('EACCES') })
+    )
   })
 })
