@@ -75,7 +75,6 @@ function makeProgram() {
 }
 
 beforeEach(() => {
-  vi.clearAllMocks()
   mockReadConfig.mockReturnValue({ ...BASE_CONFIG, capture: { profiles: [] } })
   mockFs.existsSync.mockReturnValue(false)
   mockReadCachedManifest.mockReturnValue(MANIFEST)

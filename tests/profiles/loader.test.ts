@@ -40,7 +40,6 @@ const FLUTTER_PROFILE = {
 }
 
 beforeEach(() => {
-  vi.clearAllMocks()
   mockReadConfig.mockReturnValue({ capture: { profiles: [] } })
   mockFs.existsSync.mockReturnValue(false)
   mockReadCachedManifest.mockReturnValue(null)

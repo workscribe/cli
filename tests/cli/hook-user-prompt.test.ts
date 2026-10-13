@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 
 vi.mock('../../src/capture', () => ({ captureCommand: vi.fn() }))
 vi.mock('../../src/config', () => ({ readConfig: vi.fn(() => ({ capture: { aiTools: true } })) }))
@@ -39,10 +39,6 @@ function withStdin(payload: string, fn: () => Promise<void>): Promise<void> {
 
   return promise
 }
-
-beforeEach(() => {
-  vi.clearAllMocks()
-})
 
 // ─── parseUserPromptPayload ────────────────────────────────────────────────────
 
