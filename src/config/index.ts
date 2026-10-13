@@ -2,6 +2,7 @@ import crypto from 'crypto'
 import fs from 'fs'
 import path from 'path'
 import { CONFIG_PATH } from '../utils/paths'
+import { debugLog } from '../utils/logger'
 
 export interface WorkscribeConfig {
   ai: {
@@ -121,15 +122,23 @@ export function ensureInstallId(config: WorkscribeConfig): string {
 // Presence of installId is the only state tracked; no separate "notice
 // shown" flag is needed since this is a no-op once installId is set.
 export function ensureTelemetryFallback(): void {
-  const config = readConfig()
-  if (config.telemetry.installId) return
+  // Unlike init's explicit telemetry step, this runs unannounced ahead of
+  // every command — it must never throw, however it fails, or a disk issue
+  // (read-only $HOME, full disk, a locked-down CI sandbox) would crash the
+  // user's actual command before it even starts.
+  try {
+    const config = readConfig()
+    if (config.telemetry.installId) return
 
-  config.telemetry.enabled = true
-  config.telemetry.installId = ensureInstallId(config)
+    config.telemetry.enabled = true
+    config.telemetry.installId = ensureInstallId(config)
 
-  process.stderr.write(
-    '\n  Workscribe collects anonymous install stats (install ID, CLI version, platform, Node version).\n  Opt out: workscribe config set telemetry.enabled false\n\n'
-  )
+    process.stderr.write(
+      '\n  Workscribe collects anonymous install stats (install ID, CLI version, platform, Node version).\n  Opt out: workscribe config set telemetry.enabled false\n\n'
+    )
+  } catch (error) {
+    debugLog('ensureTelemetryFallback', error)
+  }
 }
 
 export function getConfigValue(config: WorkscribeConfig, key: string): unknown {
