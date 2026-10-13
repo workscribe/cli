@@ -23,6 +23,7 @@ import { registerAlerts } from './cli/alerts'
 import { registerContext } from './cli/context'
 import { checkForUpdate, pingTelemetry } from './utils/update-check'
 import { ensureTelemetryFallback } from './config'
+import { log } from './utils/logger'
 
 const invokedCommand = process.argv[2]
 if (shouldRunStartupChecks(invokedCommand)) {
@@ -63,4 +64,13 @@ registerCompletions(program)
 registerAlerts(program)
 registerContext(program)
 
-program.parse()
+// parseAsync (not parse) so a throw from either a sync or an async action
+// handler — e.g. getDb() failing to create its data directory — surfaces
+// here as a rejection instead of either an uncaught-exception stack trace
+// (sync actions) or an unhandled-rejection crash (async actions). _capture
+// and _hook already catch everything internally and never throw this far,
+// so this only ever engages for explicit user commands.
+program.parseAsync().catch((error: unknown) => {
+  log.error(error instanceof Error ? error.message : String(error))
+  process.exit(1)
+})

@@ -12,7 +12,14 @@ export function getDb(): DatabaseSync {
 
   // Ensure ~/.workscribe/ exists
   if (!fs.existsSync(WORKSCRIBE_DIR)) {
-    fs.mkdirSync(WORKSCRIBE_DIR, { recursive: true })
+    try {
+      fs.mkdirSync(WORKSCRIBE_DIR, { recursive: true })
+    } catch (error) {
+      // Rethrown as a clean, actionable message — callers reaching this
+      // (explicit commands, or _capture/_hook's own try/catch) otherwise
+      // only see a raw native stack trace with the real cause buried in it.
+      throw new Error(`Could not create data directory ${WORKSCRIBE_DIR}: ${(error as Error).message}`)
+    }
   }
 
   // Don't assign to _db until after migrations succeed — if applyMigrations
