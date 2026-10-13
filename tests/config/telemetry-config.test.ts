@@ -37,9 +37,7 @@ describe('telemetry config defaults (CLI-01)', () => {
 
   it('backfills telemetry for an existing config predating the telemetry key', () => {
     mockFs.existsSync.mockReturnValue(true)
-    const preTelemetryConfig = createTestConfig()
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    delete (preTelemetryConfig as any).telemetry
+    const { telemetry: _telemetry, ...preTelemetryConfig } = createTestConfig()
     mockFs.readFileSync.mockReturnValue(JSON.stringify(preTelemetryConfig))
 
     const config = readConfig()
@@ -56,6 +54,30 @@ describe('telemetry config defaults (CLI-01)', () => {
     const config = readConfig()
 
     expect(config.telemetry).toEqual({ enabled: false, installId: 'already-set' })
+  })
+
+  it('does not share nested object references across calls when no config file exists', () => {
+    const first = readConfig()
+    first.telemetry.enabled = false
+    first.telemetry.installId = 'mutated'
+
+    const second = readConfig()
+
+    expect(second.telemetry).toEqual({ enabled: true, installId: '' })
+  })
+
+  it('does not leak a mutation into DEFAULTS for a key missing from an on-disk config', () => {
+    mockFs.existsSync.mockReturnValue(true)
+    const { telemetry: _telemetry, ...preTelemetryConfig } = createTestConfig()
+    mockFs.readFileSync.mockReturnValue(JSON.stringify(preTelemetryConfig))
+
+    const first = readConfig()
+    first.telemetry.enabled = false
+    first.telemetry.installId = 'mutated'
+
+    const second = readConfig()
+
+    expect(second.telemetry).toEqual({ enabled: true, installId: '' })
   })
 })
 

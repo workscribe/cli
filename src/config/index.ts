@@ -81,13 +81,13 @@ const DEFAULTS: WorkscribeConfig = {
 }
 
 export function readConfig(): WorkscribeConfig {
-  if (!fs.existsSync(CONFIG_PATH)) return { ...DEFAULTS }
+  if (!fs.existsSync(CONFIG_PATH)) return deepMerge(DEFAULTS, {})
   try {
     const raw = fs.readFileSync(CONFIG_PATH, 'utf-8')
     const parsed = JSON.parse(raw)
     return deepMerge(DEFAULTS, parsed)
   } catch {
-    return { ...DEFAULTS }
+    return deepMerge(DEFAULTS, {})
   }
 }
 
@@ -172,7 +172,14 @@ export function setConfigValue(config: WorkscribeConfig, key: string, value: str
 }
 
 function deepMerge<T extends object>(defaults: T, overrides: Partial<T>): T {
-  const result = { ...defaults }
+  // structuredClone, not a shallow spread — any key overrides doesn't touch
+  // (e.g. a config file written before a newer top-level key existed) must
+  // still be an independent copy, not a shared reference back into the
+  // caller's `defaults` object. A shallow spread here previously let any
+  // caller that mutates a nested field on the returned config (e.g.
+  // ensureTelemetryFallback) silently corrupt the module-level DEFAULTS
+  // singleton for the rest of the process.
+  const result = structuredClone(defaults)
   for (const key of Object.keys(overrides) as (keyof T)[]) {
     const val = overrides[key]
     if (val !== null && typeof val === 'object' && !Array.isArray(val) && typeof defaults[key] === 'object') {
