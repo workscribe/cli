@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.15.3](https://github.com/workscribe/cli/compare/v1.15.2...v1.15.3) (2026-10-13)
+
+### Bug Fixes
+
+* deepMerge shares nested object references with DEFAULTS instead of cloning ([790ebc0](https://github.com/workscribe/cli/commit/790ebc0f56936249ab2595c2770d8d71874154b5))
+* raw crash on disk errors in getDb() and any other command ([b15898e](https://github.com/workscribe/cli/commit/b15898e495bfc880c33fe30832a52e23fba00907))
+
 ## [1.15.2](https://github.com/workscribe/cli/compare/v1.15.1...v1.15.2) (2026-10-13)
 
 ### Bug Fixes
