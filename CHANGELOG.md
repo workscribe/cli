@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.15.2](https://github.com/workscribe/cli/compare/v1.15.1...v1.15.2) (2026-10-13)
+
+### Bug Fixes
+
+* don't let a disk-write failure in ensureTelemetryFallback crash the CLI ([19f705e](https://github.com/workscribe/cli/commit/19f705e0d85427f15387202d93ea25715df565e7))
+* don't mark telemetry ping successful on a non-2xx response ([8779be0](https://github.com/workscribe/cli/commit/8779be045131eab54867c540bbbe4cfd7d0935d9))
+* don't report weekly summary/digest as failed when only the cache or webhook step fails ([1060ad2](https://github.com/workscribe/cli/commit/1060ad2df4713cd01a2a0c4b4631d4431d000fe1))
+
 ## [1.15.1](https://github.com/workscribe/cli/compare/v1.15.0...v1.15.1) (2026-10-06)
 
 ### Bug Fixes
