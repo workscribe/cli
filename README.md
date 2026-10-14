@@ -1,5 +1,9 @@
 # Workscribe
 
+[![npm version](https://img.shields.io/npm/v/@workscribe/cli)](https://www.npmjs.com/package/@workscribe/cli)
+[![npm downloads](https://img.shields.io/npm/dw/@workscribe/cli)](https://www.npmjs.com/package/@workscribe/cli)
+[![license](https://img.shields.io/npm/l/@workscribe/cli)](https://www.npmjs.com/package/@workscribe/cli)
+
 > Your work, automatically documented.
 
 [Workscribe](https://workscribe.co) is a CLI tool that passively captures your terminal activity and transforms it into readable daily work summaries — without you having to write anything.
