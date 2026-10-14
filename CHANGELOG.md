@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.15.6](https://github.com/workscribe/cli/compare/v1.15.5...v1.15.6) (2026-10-14)
+
+### Bug Fixes
+
+* retry version-consistency check instead of failing on a race ([8665996](https://github.com/workscribe/cli/commit/8665996568d1b19d4556b55c7139ef25f038f1e7))
+
 ## [1.15.5](https://github.com/workscribe/cli/compare/v1.15.4...v1.15.5) (2026-10-14)
 
 ## [1.15.3](https://github.com/workscribe/cli/compare/v1.15.2...v1.15.3) (2026-10-13)
