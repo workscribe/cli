@@ -158,6 +158,13 @@ export function getLastEvent(): EventRow | undefined {
   return stmt.get() as EventRow | undefined
 }
 
+export function getLastEventForCwd(cwd: string): EventRow | undefined {
+  const db = getDb()
+  return db.prepare('SELECT * FROM events WHERE cwd = $cwd ORDER BY id DESC LIMIT 1').get({ cwd }) as
+    | EventRow
+    | undefined
+}
+
 export function getEventsForDate(date: string): EventRow[] {
   const db = getDb()
   const stmt = db.prepare(`
