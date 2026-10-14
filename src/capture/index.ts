@@ -1,5 +1,5 @@
 import fs from 'fs'
-import { insertEvent, getLastEvent, getLastEventForFile } from '../db'
+import { insertEvent, getLastEvent, getLastEventForFile, getLastEventForCwd } from '../db'
 import { redact } from './redact'
 import { getGitContext } from './git'
 import { getCommitsSince } from './git-snapshot'
@@ -7,7 +7,7 @@ import { readLastAiderPrompt } from './aider'
 import { normalizeCommand } from '../normalize/patterns'
 import { readConfig } from '../config'
 import { shouldFilter, isDuplicate } from './filter'
-import { IDE_DEDUP_WINDOW_MS } from './ide'
+import { IDE_DEDUP_WINDOW_MS, TASK_RUN_DEDUP_WINDOW_MS } from './ide'
 import { PAUSE_FLAG_PATH } from '../utils/paths'
 import { loadAIToolRegistry } from '../config/registry'
 
@@ -38,6 +38,16 @@ export function captureCommand(opts: {
       if (lastForFile) {
         const lastTime = new Date(lastForFile.captured_at).getTime()
         if (Date.now() - lastTime < IDE_DEDUP_WINDOW_MS) return
+      }
+    }
+
+    // A shell task running in a hooked terminal already got captured with a
+    // real category by the shell hook — skip the generic duplicate.
+    if (opts.type === 'task_run') {
+      const lastForCwd = getLastEventForCwd(cwd)
+      if (lastForCwd && !lastForCwd.source) {
+        const lastTime = new Date(lastForCwd.captured_at).getTime()
+        if (Date.now() - lastTime < TASK_RUN_DEDUP_WINDOW_MS) return
       }
     }
 

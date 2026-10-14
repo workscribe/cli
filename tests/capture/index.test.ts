@@ -5,6 +5,8 @@ vi.mock('fs', () => ({ default: { existsSync: vi.fn() } }))
 vi.mock('../../src/db', () => ({
   insertEvent: vi.fn(),
   getLastEvent: vi.fn(),
+  getLastEventForFile: vi.fn(),
+  getLastEventForCwd: vi.fn(),
 }))
 
 vi.mock('../../src/config', () => ({ readConfig: vi.fn() }))
@@ -35,7 +37,7 @@ vi.mock('../../src/config/registry', () => ({
 vi.mock('../../src/utils/paths', () => ({ PAUSE_FLAG_PATH: '/home/user/.workscribe/paused' }))
 
 import fs from 'fs'
-import { insertEvent, getLastEvent } from '../../src/db'
+import { insertEvent, getLastEvent, getLastEventForCwd } from '../../src/db'
 import { readConfig } from '../../src/config'
 import { normalizeCommand } from '../../src/normalize/patterns'
 import { shouldFilter, isDuplicate } from '../../src/capture/filter'
@@ -53,11 +55,13 @@ const mockIsDuplicate = isDuplicate as ReturnType<typeof vi.fn>
 const mockRedact = redact as ReturnType<typeof vi.fn>
 const mockGetGitContext = getGitContext as ReturnType<typeof vi.fn>
 const mockGetLastEvent = getLastEvent as ReturnType<typeof vi.fn>
+const mockGetLastEventForCwd = getLastEventForCwd as ReturnType<typeof vi.fn>
 const mockReadLastAiderPrompt = readLastAiderPrompt as ReturnType<typeof vi.fn>
 
 const BASE_CONFIG = {
   capture: { ignore: [], aiTools: true, includeAiderPrompt: true },
   redact: { extra: [] },
+  git: { qualifyRepoName: false },
   projects: {},
 }
 
@@ -67,6 +71,7 @@ beforeEach(() => {
   mockShouldFilter.mockReturnValue(false)
   mockIsDuplicate.mockReturnValue(false)
   mockGetLastEvent.mockReturnValue(undefined)
+  mockGetLastEventForCwd.mockReturnValue(undefined)
   mockRedact.mockImplementation((cmd: string) => cmd)
   mockGetGitContext.mockReturnValue({ repoName: 'myapp', branch: 'main' })
   mockNormalize.mockReturnValue({ category: 'shipping', metadata: {} })
@@ -168,5 +173,53 @@ describe('captureCommand — hint passthrough for other events', () => {
     const stored = JSON.parse(mockInsertEvent.mock.calls[0][0].metadata)
     expect(stored.hint).toBeUndefined()
     expect(stored.tool).toBeUndefined()
+  })
+})
+
+describe('captureCommand — task_run cross-source dedup', () => {
+  it('skips task_run when a shell-sourced event landed for this cwd moments ago', () => {
+    mockGetLastEventForCwd.mockReturnValue({
+      cwd: '/repo',
+      source: null,
+      captured_at: new Date().toISOString(),
+    })
+    captureCommand({ cwd: '/repo', exitCode: null, durationMs: null, type: 'task_run', source: 'vscode' })
+    expect(mockInsertEvent).not.toHaveBeenCalled()
+  })
+
+  it('still inserts task_run when the last event for this cwd was IDE-sourced, not shell', () => {
+    mockGetLastEventForCwd.mockReturnValue({
+      cwd: '/repo',
+      source: 'vscode',
+      captured_at: new Date().toISOString(),
+    })
+    captureCommand({ cwd: '/repo', exitCode: null, durationMs: null, type: 'task_run', source: 'vscode' })
+    expect(mockInsertEvent).toHaveBeenCalledOnce()
+  })
+
+  it('still inserts task_run when the shell-sourced event is outside the dedup window', () => {
+    mockGetLastEventForCwd.mockReturnValue({
+      cwd: '/repo',
+      source: null,
+      captured_at: new Date(Date.now() - 60_000).toISOString(),
+    })
+    captureCommand({ cwd: '/repo', exitCode: null, durationMs: null, type: 'task_run', source: 'vscode' })
+    expect(mockInsertEvent).toHaveBeenCalledOnce()
+  })
+
+  it('still inserts task_run when there is no prior event for this cwd', () => {
+    mockGetLastEventForCwd.mockReturnValue(undefined)
+    captureCommand({ cwd: '/repo', exitCode: null, durationMs: null, type: 'task_run', source: 'vscode' })
+    expect(mockInsertEvent).toHaveBeenCalledOnce()
+  })
+
+  it('does not apply this dedup to other IDE event types', () => {
+    mockGetLastEventForCwd.mockReturnValue({
+      cwd: '/repo',
+      source: null,
+      captured_at: new Date().toISOString(),
+    })
+    captureCommand({ cwd: '/repo', exitCode: null, durationMs: null, type: 'debug_start', source: 'vscode' })
+    expect(mockInsertEvent).toHaveBeenCalledOnce()
   })
 })
