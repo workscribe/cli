@@ -120,11 +120,12 @@ workscribe config set ai.apiKey <your-key>
 
 ## Privacy
 
-- All captured data is stored locally in `~/.workscribe/` — nothing is written anywhere else
+- All captured activity data is stored locally in `~/.workscribe/` — nothing is written anywhere else
 - Credentials are redacted before any event is written to disk (tokens, API keys, passwords, JWTs)
-- Nothing is sent to any remote server except your configured AI provider, only when you run `workscribe summary`
+- Your captured activity (commands, sessions) is never sent anywhere except your configured AI provider, and only when you run `workscribe summary`
 - The AI provider receives structured event categories (e.g. `test_run`, `code_commit`) — never raw commands, file contents, or file paths
-- Use Ollama to keep everything fully on-device with zero external data transmission
+- Use Ollama to keep that data fully on-device with zero external transmission
+- Separately, Workscribe sends an anonymous install ping (a random ID, CLI version, OS platform, Node version — no activity data, ever) to `workscribe.co`, disclosed during `workscribe init`. Opt out anytime: `workscribe config set telemetry.enabled false`
 
 ## Configuration
 
