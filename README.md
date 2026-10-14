@@ -2,7 +2,7 @@
 
 > Your work, automatically documented.
 
-Workscribe is a CLI tool that passively captures your terminal activity and transforms it into readable daily work summaries — without you having to write anything.
+[Workscribe](https://workscribe.co) is a CLI tool that passively captures your terminal activity and transforms it into readable daily work summaries — without you having to write anything.
 
 ```
 $ workscribe summary
@@ -16,6 +16,8 @@ $ workscribe summary
 - Restarted staging environment and verified deployment stability
 - Investigated and resolved Docker networking issue in compose setup
 ```
+
+**[Full documentation →](https://workscribe.mintlify.site)** — commands, configuration, AI providers, troubleshooting. This README covers getting started; everything else lives there and is kept current as the product changes.
 
 ## How it works
 
@@ -56,7 +58,7 @@ The [Workscribe VS Code extension](https://marketplace.visualstudio.com/items?it
 If the CLI is still installed:
 
 ```bash
-workscribe uninstall        # removes shell hooks, optionally deletes ~/.workscribe/
+workscribe uninstall        # removes shell hooks, optionally deletes local data
 npm uninstall -g @workscribe/cli
 ```
 
@@ -68,129 +70,48 @@ If you've already removed the binary and still see `_workscribe_precmd` errors i
 
 ## AI providers
 
-Workscribe works with any of these — switch at any time via config:
-
-| Provider | Config value | Requires |
-|---|---|---|
-| Anthropic (Claude) | `anthropic` | API key |
-| OpenAI | `openai` | API key |
-| Ollama (local) | `ollama` | Ollama running locally — free, offline |
-| OpenAI-compatible | `openai-compatible` | API key + base URL (Groq, Together, Mistral…) |
+Anthropic, OpenAI, Gemini, Groq, Ollama (fully offline), or any OpenAI-compatible endpoint.
 
 ```bash
-workscribe config set ai.provider ollama      # switch to local
-workscribe config set ai.provider anthropic   # switch to Anthropic
+workscribe config set ai.provider anthropic
 workscribe config set ai.apiKey <your-key>
 ```
 
+**[Provider setup, defaults, and model overrides →](https://workscribe.mintlify.site/providers)**
+
 ## Commands
+
+A few of the most common:
 
 | Command | Description |
 |---|---|
-| `workscribe init` | Set up Workscribe, install shell hooks, configure AI provider |
-| `workscribe uninstall` | Remove shell hooks and optionally delete all local data |
 | `workscribe summary` | Generate today's work summary |
-| `workscribe summary --date 2026-05-20` | Summary for a specific date |
-| `workscribe summary --week` | Summary for the current week |
-| `workscribe summary --fresh` | Bypass cache and regenerate |
-| `workscribe summary --verbose` | Show all captured events (including those excluded from AI) |
-| `workscribe summary --slack` | Post summary to configured Slack channel |
-| `workscribe summary --webhook <url>` | Post summary to a custom webhook URL |
-| `workscribe sessions` | List detected work sessions for today |
-| `workscribe sessions --date 2026-05-20` | Sessions for a specific date |
-| `workscribe events` | List captured events for today |
-| `workscribe events --date 2026-05-20` | Events for a specific date |
-| `workscribe events --limit 20` | Show only the most recent N events |
-| `workscribe export` | Save today's summary as a markdown file |
-| `workscribe export --date 2026-05-20` | Export summary for a specific date |
-| `workscribe export --output <path>` | Write to a custom file path |
+| `workscribe week` | Generate this week's digest |
 | `workscribe status` | Check capture is active and show event counts |
-| `workscribe undo` | Remove the last captured event |
-| `workscribe undo -n 5` | Remove the last 5 captured events |
-| `workscribe undo --dry-run` | Preview what would be removed without deleting |
-| `workscribe clear` | Delete all captured events for today |
-| `workscribe clear --date 2026-05-20` | Delete all events for a specific date |
-| `workscribe clear --dry-run` | Preview what would be cleared without deleting |
-| `workscribe clear --yes` | Skip the confirmation prompt |
-| `workscribe pause` | Pause capture temporarily |
-| `workscribe resume` | Resume capture after a pause |
-| `workscribe config` | View current configuration |
-| `workscribe config get KEY` | Print a single config value |
-| `workscribe config set KEY VALUE` | Update a config value |
+| `workscribe config` | View or update configuration |
+
+**[Full command reference →](https://workscribe.mintlify.site/commands)** — every command and every flag.
 
 ## Privacy
 
-- All captured activity data is stored locally in `~/.workscribe/` — nothing is written anywhere else
+- All captured activity data is stored locally on your machine — nothing is written anywhere else
 - Credentials are redacted before any event is written to disk (tokens, API keys, passwords, JWTs)
 - Your captured activity (commands, sessions) is never sent anywhere except your configured AI provider, and only when you run `workscribe summary`
-- The AI provider receives structured event categories (e.g. `test_run`, `code_commit`) — never raw commands, file contents, or file paths
 - Use Ollama to keep that data fully on-device with zero external transmission
-- Separately, Workscribe sends an anonymous install ping (a random ID, CLI version, OS platform, Node version — no activity data, ever) to `workscribe.co`, disclosed during `workscribe init`. Opt out anytime: `workscribe config set telemetry.enabled false`
+- Separately, Workscribe sends an anonymous install ping (a random ID, CLI version, OS platform, Node version — no activity data, ever), disclosed during `workscribe init`. Opt out anytime: `workscribe config set telemetry.enabled false`
+
+**[Full privacy & security details →](https://workscribe.mintlify.site/privacy)**
 
 ## Configuration
 
 ```bash
-workscribe config set session.idleTimeout 20       # minutes before a new session starts (default: 30)
-workscribe config set ai.model gpt-4o              # override the default model for your provider
-workscribe config set redact.extra "MY_PATTERN"    # add a custom redaction regex
-workscribe config set summary.format json          # output summary as JSON instead of markdown
-workscribe config set capture.ignore "mycommand"   # suppress a command from being captured
-
-# Override the display name for a local clone whose folder name differs from the repo
-workscribe config set projects./Users/me/sandbox/myrepo actual-repo-name
-
-# Post summaries to Slack or a custom webhook
+workscribe config set ai.provider anthropic
+workscribe config set session.idleTimeout 20
 workscribe config set integrations.slackWebhook https://hooks.slack.com/services/...
-workscribe config set integrations.webhook https://custom.endpoint/hook   # persistent default webhook
 workscribe summary --slack
-workscribe summary --webhook https://custom.endpoint/hook                 # one-off override
 ```
 
-| Config key | Default | Description |
-|---|---|---|
-| `ai.provider` | — | AI provider: `anthropic`, `openai`, `ollama`, `openai-compatible` |
-| `ai.apiKey` | — | API key for the configured provider |
-| `ai.model` | provider default | Model name override |
-| `ai.baseUrl` | — | Base URL for `openai-compatible` providers |
-| `session.idleTimeout` | `30` | Minutes of inactivity before a new session starts |
-| `git.qualifyRepoName` | `false` | Use `owner/repo` instead of bare `repo` for `repo_name` — helpful if you work across repos whose bare names collide (e.g. an org that names its repos after the tool each one targets) |
-| `capture.ignore` | common shell builtins | Commands to exclude from capture |
-| `capture.aiTools` | `true` | Set to `false` to disable all AI session capture |
-| `capture.includeAiderPrompt` | `true` | Set to `false` to skip reading Aider's history file for prompt context |
-| `redact.extra` | `[]` | Additional regex patterns to redact from captured commands |
-| `summary.format` | `markdown` | Output format: `markdown` or `json` |
-| `summary.includeCategories` | `[]` | Event categories to re-include in the AI prompt (e.g. `["linting"]`) |
-| `integrations.slackWebhook` | — | Slack incoming webhook URL |
-| `integrations.webhook` | — | Default webhook URL for `--webhook` |
-| `projects.<path>` | — | Display name override for a repo by absolute path |
-
-## Slack integration
-
-Post your daily or weekly summary directly to a Slack channel:
-
-```bash
-workscribe summary --slack
-workscribe summary --week --slack
-```
-
-**Setup:**
-
-1. Go to [api.slack.com/apps](https://api.slack.com/apps) → **Create New App** → **From scratch**
-2. Name your app, select your workspace, and click **Create App**
-3. In the left sidebar under **Features**, click **Incoming Webhooks**
-4. Toggle **Activate Incoming Webhooks** to On
-5. Click **Add New Webhook to Workspace**, choose a channel, and click **Allow**
-6. Copy the webhook URL and run:
-
-```bash
-workscribe config set integrations.slackWebhook https://hooks.slack.com/services/...
-```
-
-Works on all Slack plans including free. No admin role required.
-
-Summaries posted to Slack are automatically formatted — headings are bolded, bullets converted to `•`, and your OS username is prepended so recipients know who sent it in shared channels. Custom `--webhook` URLs receive the raw markdown output unchanged.
-
-Config is stored at `~/.workscribe/config.json`.
+**[Full configuration reference →](https://workscribe.mintlify.site/configuration)** — every key, Slack setup, webhooks, and more.
 
 ## Debug mode
 
@@ -199,6 +120,8 @@ If capture isn't working, set `WORKSCRIBE_DEBUG=1` to write errors to `~/.worksc
 ```bash
 WORKSCRIBE_DEBUG=1 workscribe status
 ```
+
+**[Troubleshooting →](https://workscribe.mintlify.site/troubleshooting)**
 
 ## License
 
