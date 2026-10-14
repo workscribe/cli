@@ -2,6 +2,28 @@
   "name": "@workscribe/cli",
   "version": "1.15.5",
   "description": "Passive developer work journal — automatic terminal activity summaries",
+  "homepage": "https://workscribe.co",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/workscribe/cli"
+  },
+  "bugs": {
+    "url": "https://github.com/workscribe/cli/issues"
+  },
+  "keywords": [
+    "cli",
+    "developer-tools",
+    "terminal",
+    "journal",
+    "work-journal",
+    "standup",
+    "productivity",
+    "ai",
+    "summary",
+    "git",
+    "time-tracking",
+    "shell"
+  ],
   "type": "commonjs",
   "bin": {
     "workscribe": "dist/index.js"
@@ -28,13 +50,6 @@
   "files": [
     "dist",
     "shell"
-  ],
-  "keywords": [
-    "developer-tools",
-    "journal",
-    "terminal",
-    "productivity",
-    "standup"
   ],
   "author": "Mark Edomwande",
   "license": "MIT",
