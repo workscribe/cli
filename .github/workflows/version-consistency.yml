@@ -1,10 +1,9 @@
 name: Version Consistency
 
-# Catches the failure mode behind two incidents (v1.15.0, v1.15.4): a local
-# release-it run where `npm publish` succeeds but a later step (git commit,
-# tag, or push) fails, leaving npm ahead of git with nothing to retry except
-# starting over. Runs on every push to main (catches it on the next merge)
-# and hourly (catches it even with no merges in between).
+# Catches npm/git drift (v1.15.0, v1.15.4 incidents): a release-it run where
+# npm publish succeeds but a later git step fails. Retries before failing —
+# npm publish and the git push aren't atomic, so a few seconds of mismatch
+# right after a real release is normal, not drift.
 
 on:
   push:
@@ -23,17 +22,23 @@ jobs:
 
       - name: Compare npm, package.json, and the latest git tag
         run: |
-          NPM_VERSION=$(npm view @workscribe/cli version)
+          MAX_ATTEMPTS=5
+          DELAY_SECONDS=15
           PACKAGE_VERSION=$(node -p "require('./package.json').version")
-          LATEST_TAG=$(git tag --sort=-v:refname | head -1 | sed 's/^v//')
 
-          echo "npm registry (latest): $NPM_VERSION"
-          echo "package.json on main:  $PACKAGE_VERSION"
-          echo "latest git tag:        v$LATEST_TAG"
+          for attempt in $(seq 1 "$MAX_ATTEMPTS"); do
+            git fetch origin --tags --quiet
+            NPM_VERSION=$(npm view @workscribe/cli version)
+            LATEST_TAG=$(git tag --sort=-v:refname | head -1 | sed 's/^v//')
 
-          if [ "$NPM_VERSION" != "$PACKAGE_VERSION" ] || [ "$NPM_VERSION" != "$LATEST_TAG" ]; then
-            echo "::error::Version drift detected — npm ($NPM_VERSION), package.json ($PACKAGE_VERSION), and the latest git tag (v$LATEST_TAG) don't all agree. See PR #43/#51 for the reconciliation playbook."
-            exit 1
-          fi
+            if [ "$NPM_VERSION" = "$PACKAGE_VERSION" ] && [ "$NPM_VERSION" = "$LATEST_TAG" ]; then
+              echo "✓ npm, package.json, and git tags all agree on $NPM_VERSION"
+              exit 0
+            fi
 
-          echo "✓ npm, package.json, and git tags all agree on $NPM_VERSION"
+            echo "Attempt $attempt/$MAX_ATTEMPTS: npm=$NPM_VERSION package.json=$PACKAGE_VERSION tag=v$LATEST_TAG — retrying in ${DELAY_SECONDS}s"
+            sleep "$DELAY_SECONDS"
+          done
+
+          echo "::error::Version drift detected after $MAX_ATTEMPTS retries — npm ($NPM_VERSION), package.json ($PACKAGE_VERSION), and the latest git tag (v$LATEST_TAG) don't all agree. See PR #43/#51 for the reconciliation playbook."
+          exit 1
