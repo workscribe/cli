@@ -47,6 +47,10 @@ source ~/.zshrc   # or restart your terminal
 
 `workscribe init` walks you through choosing an AI provider, installs the shell hook, and offers to install a Claude Code session capture hook if Claude Code is detected. Safe to re-run — updates outdated hooks and skips steps already complete.
 
+## Also capturing in your editor?
+
+The [Workscribe VS Code extension](https://marketplace.visualstudio.com/items?itemName=workscribe.workscribe) feeds file saves, debug sessions, and test/build runs into the same summary — activity pure terminal capture misses entirely. It also adds a status bar item that surfaces the last summary for a file you haven't touched in 24+ hours. Uses this CLI under the hood; no separate setup beyond installing it.
+
 ## Uninstalling
 
 If the CLI is still installed:
