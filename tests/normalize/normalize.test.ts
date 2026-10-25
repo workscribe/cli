@@ -22,6 +22,15 @@ describe('normalizeCommand', () => {
       expect(result.metadata.message).toBe('fix: auth bug')
     })
 
+    it('keeps an apostrophe inside a double-quoted commit message', () => {
+      expect(normalize(`git commit -m "fix: don't redirect"`).metadata.message).toBe("fix: don't redirect")
+      expect(normalize(`git commit -m 'say "hi"'`).metadata.message).toBe('say "hi"')
+    })
+
+    it('takes one word for an unquoted commit message and ignores the flags after it', () => {
+      expect(normalize('git commit -m wip --no-verify').metadata.message).toBe('wip')
+    })
+
     it('classifies git commit with no message flag', () => {
       expect(category('git commit --amend')).toBe('shipping')
     })
