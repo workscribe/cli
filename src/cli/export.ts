@@ -5,31 +5,9 @@ import { getOrBuildSessions } from '../sessions/detector'
 import { getProvider } from '../ai/router'
 import { readConfig } from '../config'
 import { log } from '../utils/logger'
-import { todayDate, parseDate, formatDate } from '../utils/format'
+import { todayDate, parseDate } from '../utils/format'
 import { EXPORTS_DIR } from '../utils/paths'
-import type { DaySummaryPayload, SessionPayload, EventPayload } from '../ai/types'
-import type { EventRow } from '../db'
-
-function eventRowToPayload(row: EventRow): EventPayload {
-  let metadata: Record<string, unknown> = {}
-  try {
-    if (row.metadata) metadata = JSON.parse(row.metadata)
-  } catch {
-    /* ignore */
-  }
-  const payload: EventPayload = {
-    category: row.category,
-    metadata,
-    exitCode: row.exit_code,
-    durationMs: row.duration_ms,
-  }
-  if (row.category === 'other' && typeof metadata.hint === 'string') {
-    payload.hint = metadata.hint
-    const { hint: _h, tool: _t, ...rest } = metadata
-    payload.metadata = rest
-  }
-  return payload
-}
+import { buildDayPayload } from '../summary/payload'
 
 export function registerExport(program: Command): void {
   program
@@ -37,13 +15,13 @@ export function registerExport(program: Command): void {
     .description('Export work summary as a markdown file')
     .option('--date <YYYY-MM-DD>', 'date to export (default: today)')
     .option('--output <path>', 'output file path (default: ~/.workscribe/exports/)')
-    .action(async (opts) => {
+    .action(async (options) => {
       let date = todayDate()
-      if (opts.date) {
+      if (options.date) {
         try {
-          date = parseDate(opts.date)
-        } catch (e) {
-          log.error((e as Error).message)
+          date = parseDate(options.date)
+        } catch (error) {
+          log.error((error as Error).message)
           process.exit(1)
         }
       }
@@ -58,27 +36,17 @@ export function registerExport(program: Command): void {
       let provider
       try {
         provider = getProvider(config)
-      } catch (e) {
-        log.error((e as Error).message)
+      } catch (error) {
+        log.error((error as Error).message)
         process.exit(1)
       }
 
-      const sessionPayloads: SessionPayload[] = sessions.map((session) => ({
-        date,
-        project: session.repoName,
-        branch: session.events[0]?.branch ?? null,
-        startTime: formatDate(session.startedAt),
-        endTime: formatDate(session.endedAt),
-        durationMinutes: session.durationMinutes,
-        events: session.events.map(eventRowToPayload),
-      }))
-
-      const payload: DaySummaryPayload = { date, sessions: sessionPayloads }
+      const payload = buildDayPayload(date, sessions)
 
       log.info(`Generating summary via ${config.ai.provider}…`)
       const summary = await provider.summarize(payload)
 
-      const outputPath = opts.output ?? path.join(EXPORTS_DIR, `workscribe-${date}.md`)
+      const outputPath = options.output ?? path.join(EXPORTS_DIR, `workscribe-${date}.md`)
 
       if (!fs.existsSync(EXPORTS_DIR)) fs.mkdirSync(EXPORTS_DIR, { recursive: true, mode: 0o700 })
 
