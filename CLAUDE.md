@@ -63,6 +63,7 @@ Tests import from these pure modules directly. Never import from `src/db/index.t
 | `src/capture/` | `index.ts` orchestrates capture; `filter.ts` noise/dedup; `redact.ts` credential scrubbing; `git.ts` repo context |
 | `src/normalize/patterns.ts` | Ordered rule array — first match wins. Add new categories here |
 | `src/sessions/` | `detector.ts` orchestrates DB read/write; `grouper.ts` contains pure grouping logic |
+| `src/summary/` | Shared by `summary`/`week`/`export`: `payload.ts` builds AI payloads from sessions (pure); `weekly.ts` runs the weekly flow and its cache; `webhook.ts` posts finished summaries. No barrel — import by module path |
 | `src/ai/` | `types.ts` interfaces; `prompt.ts` system prompt + payload serializer; `router.ts` provider selection; `providers/` one file per provider |
 | `src/config/index.ts` | Read/write `~/.workscribe/config.json`; `setConfigValue` coerces strings to number/boolean |
 | `src/db/index.ts` | SQLite connection singleton, migrations, typed query functions |

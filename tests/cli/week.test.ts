@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, onTestFinished } from 'vitest'
 
 vi.mock('../../src/db', () => ({ updateSessionSummary: vi.fn() }))
 vi.mock('../../src/sessions/detector', () => ({ getOrBuildSessions: vi.fn() }))
@@ -116,6 +116,19 @@ describe('workscribe week', () => {
     await makeProgram().parseAsync(['week', '--fresh'], { from: 'user' })
     const provider = mockGetProvider.mock.results[0].value
     expect(provider.summarizeWeek).toHaveBeenCalled()
+  })
+
+  it('logs the provider error and exits when the digest fails', async () => {
+    mockGetProvider.mockReturnValue({ summarizeWeek: vi.fn().mockRejectedValue(new Error('connection refused')) })
+
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never)
+    onTestFinished(() => exitSpy.mockRestore())
+
+    await makeProgram().parseAsync(['week'], { from: 'user' })
+
+    expect(mockLog.error).toHaveBeenCalledWith('Weekly digest failed [anthropic]: connection refused')
+    expect(exitSpy).toHaveBeenCalledWith(1)
+    expect(mockFs.writeFileSync).not.toHaveBeenCalled()
   })
 
   it('falls back to provider.summarize when summarizeWeek is not available', async () => {
