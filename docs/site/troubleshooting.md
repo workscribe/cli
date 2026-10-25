@@ -117,11 +117,29 @@ workscribe config set ai.model llama3:70b
 
 ---
 
-## "AI provider not configured"
+## Summary uses bullets instead of AI prose
+
+With no AI configured, Workscribe uses the offline `template` engine — summaries are built from your captured activity rather than written by a model. That's expected. For AI-written summaries, configure Ollama or a cloud provider:
 
 ```bash
-workscribe config set ai.provider anthropic   # or openai, ollama
+workscribe config set summary.engine ollama   # local, on-device
+# or
+workscribe config set ai.provider anthropic   # or openai, gemini, groq
 workscribe config set ai.apiKey <your-key>
+```
+
+Run `workscribe summary --fresh` afterwards to regenerate today's summary with the new engine.
+
+---
+
+## "summary.engine is "provider" but ai.provider is not set"
+
+`summary.engine` was set to `provider` without a provider to use. Either set one, or let Workscribe pick the engine:
+
+```bash
+workscribe config set ai.provider anthropic
+# or
+workscribe config set summary.engine template
 ```
 
 ---

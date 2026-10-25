@@ -1,9 +1,15 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.mock('../../src/db', () => ({
   getRecentSessionsByRepo: vi.fn(),
   getLastSessionTouchingFile: vi.fn(),
   getSessionBranch: vi.fn(),
+  getSessionSummaries: vi.fn(),
+  getEventsBySessionId: vi.fn(),
+}))
+
+vi.mock('../../src/config', () => ({
+  readConfig: vi.fn(),
 }))
 
 vi.mock('../../src/capture/git', () => ({
@@ -11,7 +17,15 @@ vi.mock('../../src/capture/git', () => ({
 }))
 
 import { Command } from 'commander'
-import { getRecentSessionsByRepo, getLastSessionTouchingFile, getSessionBranch } from '../../src/db'
+import {
+  getRecentSessionsByRepo,
+  getLastSessionTouchingFile,
+  getSessionBranch,
+  getSessionSummaries,
+  getEventsBySessionId,
+} from '../../src/db'
+import { readConfig } from '../../src/config'
+import { createTestConfig } from '../helpers/config'
 import { getGitContext } from '../../src/capture/git'
 import { log } from '../../src/utils/logger'
 import { registerContext } from '../../src/cli/context'
@@ -20,6 +34,9 @@ const mockGetRecentSessionsByRepo = getRecentSessionsByRepo as ReturnType<typeof
 const mockGetLastSessionTouchingFile = getLastSessionTouchingFile as ReturnType<typeof vi.fn>
 const mockGetSessionBranch = getSessionBranch as ReturnType<typeof vi.fn>
 const mockGetGitContext = getGitContext as ReturnType<typeof vi.fn>
+const mockGetSessionSummaries = getSessionSummaries as ReturnType<typeof vi.fn>
+const mockGetEventsBySessionId = getEventsBySessionId as ReturnType<typeof vi.fn>
+const mockReadConfig = readConfig as ReturnType<typeof vi.fn>
 const mockLog = log as Record<string, ReturnType<typeof vi.fn>>
 
 const SAMPLE_SESSION = {
@@ -31,6 +48,31 @@ const SAMPLE_SESSION = {
   event_count: 42,
   summary: 'Implemented authentication middleware.',
 }
+
+function storedSummary(engine: string, text: string, createdAt = '2026-08-20T13:00:00.000Z') {
+  return { session_key: 'myapp|2026-08-20T10:00:00.000Z', engine, text, created_at: createdAt }
+}
+
+const COMMIT_EVENT = {
+  id: 7,
+  captured_at: '2026-08-20T11:00:00.000Z',
+  command: 'git commit -m "add auth middleware"',
+  cwd: '/Users/dev/myapp',
+  exit_code: 0,
+  duration_ms: 40,
+  repo_name: 'myapp',
+  branch: 'feature/auth',
+  category: 'shipping',
+  metadata: '{"message":"add auth middleware"}',
+  source: 'shell',
+  file_path: null,
+}
+
+beforeEach(() => {
+  mockReadConfig.mockReturnValue(createTestConfig())
+  mockGetSessionSummaries.mockReturnValue([storedSummary('provider', 'Implemented authentication middleware.')])
+  mockGetEventsBySessionId.mockReturnValue([COMMIT_EVENT])
+})
 
 function makeProgram() {
   const program = new Command()
@@ -69,15 +111,29 @@ describe('workscribe context --file', () => {
       expect(mockLog.plain).toHaveBeenCalledWith('null')
     })
 
-    it('includes null summary when the session has no cached summary yet', async () => {
+    it('falls back to a template summary when nothing has been stored yet', async () => {
       mockGetLastSessionTouchingFile.mockReturnValue({ ...SAMPLE_SESSION, summary: null })
       mockGetSessionBranch.mockReturnValue(null)
+      mockGetSessionSummaries.mockReturnValue([])
 
       await makeProgram().parseAsync(['context', '--file', 'src/auth.ts', '--json'], { from: 'user' })
 
       const parsed = JSON.parse(mockLog.plain.mock.calls[0][0] as string)
-      expect(parsed.summary).toBeNull()
+      expect(parsed.summary).toBe('## myapp (feature/auth) — 2h 14m\n- Committed: add auth middleware')
       expect(parsed.branch).toBeNull()
+    })
+
+    it('prefers a skill summary over a provider one, and either over the template', async () => {
+      mockGetLastSessionTouchingFile.mockReturnValue(SAMPLE_SESSION)
+      mockGetSessionSummaries.mockReturnValue([
+        storedSummary('template', 'template text'),
+        storedSummary('skill', 'skill text'),
+        storedSummary('provider', 'provider text'),
+      ])
+
+      await makeProgram().parseAsync(['context', '--file', 'src/auth.ts', '--json'], { from: 'user' })
+
+      expect(JSON.parse(mockLog.plain.mock.calls[0][0] as string).summary).toBe('skill text')
     })
   })
 

@@ -4,7 +4,8 @@ import { describe, it, expect, vi, beforeEach, onTestFinished } from 'vitest'
 // transitively load node:sqlite (Node 22+ only). Mock them before importing
 // the module under test so the import chain never reaches node:sqlite.
 vi.mock('../../src/db', () => ({
-  updateSessionSummary: vi.fn(),
+  getSessionSummaries: vi.fn(() => []),
+  saveSessionSummary: vi.fn(),
 }))
 
 vi.mock('../../src/sessions/detector', () => ({
@@ -59,7 +60,7 @@ import fs from 'fs'
 import { getOrBuildSessions } from '../../src/sessions/detector'
 import { getProvider } from '../../src/ai/router'
 import { readConfig } from '../../src/config'
-import { updateSessionSummary } from '../../src/db'
+import { getSessionSummaries, saveSessionSummary } from '../../src/db'
 import { postToWebhook } from '../../src/integrations/webhook'
 import { isSlackWebhookUrl } from '../../src/integrations/slack'
 import { log, debugLog } from '../../src/utils/logger'
@@ -69,7 +70,8 @@ const mockFs = fs as unknown as Record<string, ReturnType<typeof vi.fn>>
 const mockGetOrBuildSessions = getOrBuildSessions as ReturnType<typeof vi.fn>
 const mockGetProvider = getProvider as ReturnType<typeof vi.fn>
 const mockReadConfig = readConfig as ReturnType<typeof vi.fn>
-const mockUpdateSessionSummary = updateSessionSummary as ReturnType<typeof vi.fn>
+const mockGetSessionSummaries = getSessionSummaries as ReturnType<typeof vi.fn>
+const mockSaveSessionSummary = saveSessionSummary as ReturnType<typeof vi.fn>
 const mockPostToWebhook = postToWebhook as ReturnType<typeof vi.fn>
 const mockIsSlackWebhookUrl = isSlackWebhookUrl as ReturnType<typeof vi.fn>
 const mockLog = log as Record<string, ReturnType<typeof vi.fn>>
@@ -176,6 +178,10 @@ describe('workscribe summary (daily)', () => {
     branch: 'main',
   }
 
+  function cachedRow(engine: string, text: string) {
+    return { session_key: 'my-app|2026-08-17T09:00:00.000Z', engine, text, created_at: '2026-08-17T10:00:00.000Z' }
+  }
+
   function mockSummarize(bullets = '- Shipped a fix') {
     const summarize = vi.fn().mockResolvedValue(bullets)
     mockGetProvider.mockReturnValue({ summarize })
@@ -185,6 +191,7 @@ describe('workscribe summary (daily)', () => {
   beforeEach(() => {
     mockReadConfig.mockReturnValue(BASE_CONFIG)
     mockGetOrBuildSessions.mockReturnValue([{ ...FAKE_SESSION, id: 1 }])
+    mockGetSessionSummaries.mockReturnValue([])
   })
 
   it('summarizes each session separately and caches the result', async () => {
@@ -215,8 +222,16 @@ describe('workscribe summary (daily)', () => {
         },
       ],
     })
-    expect(mockUpdateSessionSummary).toHaveBeenCalledWith(1, '## my-app (main) — 1h\n- Shipped a fix')
-    expect(mockUpdateSessionSummary).toHaveBeenCalledWith(2, '## api (main) — 1h\n- Shipped a fix')
+    expect(mockSaveSessionSummary).toHaveBeenCalledWith(
+      'my-app|2026-08-17T09:00:00.000Z',
+      'provider',
+      '## my-app (main) — 1h\n- Shipped a fix'
+    )
+    expect(mockSaveSessionSummary).toHaveBeenCalledWith(
+      'api|2026-08-17T09:00:00.000Z',
+      'provider',
+      '## api (main) — 1h\n- Shipped a fix'
+    )
     expect(mockLog.plain).toHaveBeenCalledWith(expect.stringContaining('## my-app (main) — 1h'))
   })
 
@@ -237,7 +252,7 @@ describe('workscribe summary (daily)', () => {
   })
 
   it('serves cached summaries without calling the provider', async () => {
-    mockGetOrBuildSessions.mockReturnValue([{ ...FAKE_SESSION, id: 1, summary: '## my-app — 1h\n- Cached work' }])
+    mockGetSessionSummaries.mockReturnValue([cachedRow('provider', '## my-app — 1h\n- Cached work')])
     const summarize = mockSummarize()
 
     await makeProgram().parseAsync(['summary'], { from: 'user' })
@@ -248,7 +263,7 @@ describe('workscribe summary (daily)', () => {
   })
 
   it('regenerates cached summaries when --fresh is passed', async () => {
-    mockGetOrBuildSessions.mockReturnValue([{ ...FAKE_SESSION, id: 1, summary: '## my-app — 1h\n- Cached work' }])
+    mockGetSessionSummaries.mockReturnValue([cachedRow('provider', '## my-app — 1h\n- Cached work')])
     const summarize = mockSummarize()
 
     await makeProgram().parseAsync(['summary', '--fresh'], { from: 'user' })
@@ -276,6 +291,53 @@ describe('workscribe summary (daily)', () => {
     await makeProgram().parseAsync(['summary', '--webhook', 'https://example.com/hook'], { from: 'user' })
 
     expect(mockPostToWebhook).toHaveBeenCalledWith('https://example.com/hook', '## my-app (main) — 1h\n- Shipped a fix')
+  })
+
+  it('serves a 1.x summary to a provider config', async () => {
+    mockGetSessionSummaries.mockReturnValue([cachedRow('legacy', '## my-app — 1h\n- From 1.x')])
+    const summarize = mockSummarize()
+
+    await makeProgram().parseAsync(['summary'], { from: 'user' })
+
+    expect(summarize).not.toHaveBeenCalled()
+    expect(mockLog.plain).toHaveBeenCalledWith('## my-app — 1h\n- From 1.x')
+  })
+
+  it('does not serve a template summary once a provider is configured', async () => {
+    mockGetSessionSummaries.mockReturnValue([cachedRow('template', '## my-app — 1h\n- Template text')])
+    const summarize = mockSummarize()
+
+    await makeProgram().parseAsync(['summary'], { from: 'user' })
+
+    expect(summarize).toHaveBeenCalledTimes(1)
+  })
+
+  it('renders the template live without reading or writing the summary cache', async () => {
+    mockReadConfig.mockReturnValue({ ...BASE_CONFIG, summary: { engine: 'template' } })
+    mockGetSessionSummaries.mockReturnValue([cachedRow('provider', '## my-app — 1h\n- Provider text')])
+    const summarize = mockSummarize()
+
+    await makeProgram().parseAsync(['summary'], { from: 'user' })
+
+    expect(summarize).toHaveBeenCalledTimes(1)
+    expect(mockGetSessionSummaries).not.toHaveBeenCalled()
+    expect(mockSaveSessionSummary).not.toHaveBeenCalled()
+    expect(mockLog.info).toHaveBeenCalledWith(expect.stringContaining('template'))
+  })
+
+  it('names the session by its directory when it is outside a git repo', async () => {
+    const session = {
+      ...FAKE_SESSION,
+      id: 1,
+      repoName: null,
+      events: [{ ...FAKE_SESSION.events[0], cwd: '/tmp/scripts' }],
+    }
+    mockGetOrBuildSessions.mockReturnValue([session])
+    mockSummarize()
+
+    await makeProgram().parseAsync(['summary'], { from: 'user' })
+
+    expect(mockLog.plain).toHaveBeenCalledWith(expect.stringContaining('## /tmp/scripts (main) — 1h'))
   })
 
   it('warns when --slack is passed but no Slack webhook is configured', async () => {

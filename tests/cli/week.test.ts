@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, onTestFinished } from 'vitest'
 
-vi.mock('../../src/db', () => ({ updateSessionSummary: vi.fn() }))
+vi.mock('../../src/db', () => ({}))
 vi.mock('../../src/sessions/detector', () => ({ getOrBuildSessions: vi.fn() }))
 vi.mock('../../src/ai/router', () => ({ getProvider: vi.fn() }))
 vi.mock('../../src/config', () => ({ readConfig: vi.fn() }))
@@ -87,10 +87,30 @@ describe('workscribe week', () => {
   it('writes the summary to the weekly cache file', async () => {
     await makeProgram().parseAsync(['week'], { from: 'user' })
     expect(mockFs.writeFileSync).toHaveBeenCalledWith(
-      expect.stringContaining('2026-W34.md'),
+      '/home/user/.workscribe/weekly-cache/2026-W34.provider.md',
       expect.stringContaining('Week summary'),
       expect.any(Object)
     )
+  })
+
+  it('still serves a 1.x weekly cache file to a provider config', async () => {
+    mockFs.existsSync.mockImplementation((file: string) => file.endsWith('/2026-W34.md'))
+    mockFs.readFileSync.mockReturnValue('# Cached 1.x digest')
+
+    await makeProgram().parseAsync(['week'], { from: 'user' })
+
+    expect(mockLog.plain).toHaveBeenCalledWith('# Cached 1.x digest')
+  })
+
+  it('renders the template digest live without reading or writing the weekly cache', async () => {
+    mockReadConfig.mockReturnValue({ ...BASE_CONFIG, summary: { engine: 'template' } })
+    mockFs.existsSync.mockReturnValue(true)
+
+    await makeProgram().parseAsync(['week'], { from: 'user' })
+
+    expect(mockFs.readFileSync).not.toHaveBeenCalled()
+    expect(mockFs.writeFileSync).not.toHaveBeenCalled()
+    expect(mockLog.plain).toHaveBeenCalledWith(expect.stringContaining('Week summary'))
   })
 
   it('returns cached content without calling the provider when cache exists', async () => {

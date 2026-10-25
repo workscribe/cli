@@ -1,12 +1,24 @@
 import path from 'path'
 import { Command } from 'commander'
 import chalk from 'chalk'
-import { getRecentSessionsByRepo, getLastSessionTouchingFile, getSessionBranch } from '../db'
+import {
+  getRecentSessionsByRepo,
+  getLastSessionTouchingFile,
+  getSessionBranch,
+  getSessionSummaries,
+  getEventsBySessionId,
+} from '../db'
 import { getGitContext } from '../capture/git'
 import { readConfig } from '../config'
 import { formatDuration, timeAgo } from '../utils/format'
 import { log } from '../utils/logger'
+import { describeSession } from '../ai/engines/template/describe'
+import { toBulletList } from '../ai/engines/template/utils'
+import { sessionToPayload, locationContextFrom } from '../summary/payload'
+import { formatSessionHeading } from '../summary/heading'
+import { sessionKey, pickBestSummary } from '../summary/store'
 import type { SessionRow } from '../db/types'
+import type { Session } from '../sessions/detector'
 
 export interface SessionContextJson {
   date: string
@@ -19,23 +31,54 @@ export interface SessionContextJson {
   summary: string | null
 }
 
+function sessionMinutes(session: SessionRow): number {
+  return (new Date(session.ended_at).getTime() - new Date(session.started_at).getTime()) / 60000
+}
+
+function toSession(row: SessionRow): Session {
+  return {
+    id: row.id,
+    date: row.date,
+    startedAt: row.started_at,
+    endedAt: row.ended_at,
+    repoName: row.repo_name,
+    durationMinutes: sessionMinutes(row),
+    eventCount: row.event_count,
+    summary: null,
+    events: getEventsBySessionId(row.id),
+  }
+}
+
+/** A template summary rendered from the session's current events — templates are never stored, so it can't go stale. */
+function renderTemplateSummary(row: SessionRow): string {
+  const config = readConfig()
+  const payload = sessionToPayload(toSession(row), row.date, locationContextFrom(config))
+  const bullets = describeSession(payload, config.summary?.includeCategories ?? [])
+  return `${formatSessionHeading(payload)}\n${toBulletList(bullets)}`
+}
+
+/** The best stored summary (skill > AI > template), or a template one so the VS Code status bar is never empty. */
+function resolveContextSummary(row: SessionRow): string {
+  return pickBestSummary(getSessionSummaries(sessionKey(row.repo_name, row.started_at))) ?? renderTemplateSummary(row)
+}
+
 function toContextJson(session: SessionRow): SessionContextJson {
   return {
     date: session.date,
     startedAt: session.started_at,
     endedAt: session.ended_at,
     timeAgo: timeAgo(session.started_at),
-    durationMinutes: (new Date(session.ended_at).getTime() - new Date(session.started_at).getTime()) / 60000,
+    durationMinutes: sessionMinutes(session),
     branch: getSessionBranch(session.id),
     eventCount: session.event_count,
-    summary: session.summary,
+    summary: resolveContextSummary(session),
   }
 }
 
 function printSessionContext(session: SessionRow, heading: string): void {
   const ago = timeAgo(session.started_at)
   const branch = getSessionBranch(session.id)
-  const durationMinutes = (new Date(session.ended_at).getTime() - new Date(session.started_at).getTime()) / 60000
+  const durationMinutes = sessionMinutes(session)
 
   log.plain('')
   log.plain(`  ${chalk.bold(heading)}: ${chalk.cyan(ago)}`)
@@ -45,14 +88,9 @@ function printSessionContext(session: SessionRow, heading: string): void {
   if (branch) log.plain(`  Branch   ${chalk.dim(branch)}`)
   log.plain(`  Events   ${session.event_count}`)
 
-  if (session.summary) {
-    log.plain('')
-    for (const line of session.summary.split('\n')) {
-      log.plain(`  ${line}`)
-    }
-  } else {
-    log.plain('')
-    log.plain(chalk.dim(`  No summary — run: workscribe summary ${session.date}`))
+  log.plain('')
+  for (const line of resolveContextSummary(session).split('\n')) {
+    log.plain(`  ${line}`)
   }
 
   log.plain('')

@@ -2,6 +2,7 @@ import initialSchema from './001_initial_schema'
 import semanticCategories from './002_semantic_categories'
 import alerts from './003_alerts'
 import ideColumns from './004_ide_columns'
+import sessionSummaries from './005_session_summaries'
 
 export interface Migration {
   version: number
@@ -10,4 +11,4 @@ export interface Migration {
 }
 
 // Ordered list — append only. Never modify or remove an existing entry.
-export const MIGRATIONS: Migration[] = [initialSchema, semanticCategories, alerts, ideColumns]
+export const MIGRATIONS: Migration[] = [initialSchema, semanticCategories, alerts, ideColumns, sessionSummaries]

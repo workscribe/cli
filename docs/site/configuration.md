@@ -102,8 +102,25 @@ workscribe config set redact.extra '["MY_INTERNAL_TOKEN"]'
 
 | Key | Type | Default | Description |
 |---|---|---|---|
+| `summary.engine` | `"template"` \| `"ollama"` \| `"provider"` | *(derived)* | What writes summaries. Unset, it follows `ai.provider`: `ollama` → `ollama`, any other provider → `provider`, nothing configured → `template` |
 | `summary.format` | `"markdown"` \| `"json"` | `"markdown"` | Output format for daily summaries |
 | `summary.includeCategories` | string[] | `[]` | Event categories to re-include in the AI prompt (overrides built-in exclusions). Excluded by default: `exploring`, `linting`. Example: `["linting"]` to include lint pass/fail results. |
+
+**Summary engines:**
+
+| Engine | Needs | Output |
+|---|---|---|
+| `template` | Nothing — works offline, no AI | Up to 7 outcome bullets per session built from your captured activity: notes, commit messages, test and build results, dependencies, releases and pushes. Weekly digests list up to 5 bullets per day. |
+| `ollama` | A local [Ollama](https://ollama.com) server | AI-written prose, fully on-device |
+| `provider` | `ai.provider` and `ai.apiKey` | AI-written prose from your cloud provider |
+
+AI-written summaries are cached per engine (`ollama` / `provider`), so switching between Ollama and a cloud provider regenerates instead of showing the other engine's text. Switching between two cloud providers keeps the cache — use `--fresh` to regenerate. Template summaries are never cached; they're rendered fresh from your current activity every time. Summaries written before 2.0 are still served to the `provider` and `ollama` engines.
+
+```bash
+workscribe config set summary.engine template   # use the offline template even with a provider configured
+```
+
+Sessions outside any git repo are named after the directory most of their commands ran in (home-relative, e.g. `~/Downloads/scripts`), or its `projects` display name if you set one.
 
 In `json` mode, `workscribe summary` outputs structured data instead of markdown:
 

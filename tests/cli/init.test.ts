@@ -349,6 +349,19 @@ describe('workscribe init — API key validation (AC-3)', () => {
     expect(mockWriteConfig).toHaveBeenCalled()
   })
 
+  it('clears an explicit summary.engine so the chosen provider is validated and used', async () => {
+    mockReadConfig.mockReturnValue({ ...noProviderConfig(), summary: { format: 'markdown', engine: 'template' } })
+    mockGetProvider.mockReturnValue({ validate: vi.fn().mockResolvedValue(undefined) })
+    mockPromptAnswers({ provider: ['anthropic'], apiKey: ['sk-ant-test'] })
+
+    await makeProgram().parseAsync(['init'], { from: 'user' })
+
+    const [validatedConfig] = mockGetProvider.mock.calls[0]
+    expect(validatedConfig.ai.provider).toBe('anthropic')
+    expect(validatedConfig.summary.engine).toBeUndefined()
+    expect(mockLog.info).toHaveBeenCalledWith(expect.stringContaining('Clearing summary.engine (template)'))
+  })
+
   it('skips the API key prompt for ollama and still validates', async () => {
     mockReadConfig.mockReturnValue(noProviderConfig())
     const mockValidate = vi.fn().mockResolvedValue(undefined)

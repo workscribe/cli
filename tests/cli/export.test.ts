@@ -29,6 +29,7 @@ import { getProvider } from '../../src/ai/router'
 import { readConfig } from '../../src/config'
 import { log } from '../../src/utils/logger'
 import { registerExport } from '../../src/cli/export'
+import { TemplateProvider } from '../../src/ai/engines/template/provider'
 
 const mockFs = fs as unknown as Record<string, ReturnType<typeof vi.fn>>
 const mockGetOrBuildSessions = getOrBuildSessions as ReturnType<typeof vi.fn>
@@ -115,6 +116,23 @@ describe('workscribe export', () => {
 
       expect(mockProvider.summarize).toHaveBeenCalledOnce()
       expect(mockFs.writeFileSync).toHaveBeenCalledOnce()
+    })
+
+    it('exports offline with the template engine when no provider is configured', async () => {
+      mockReadConfig.mockReturnValue({ ...BASE_CONFIG, ai: { provider: '', apiKey: '', model: '' } })
+      mockGetOrBuildSessions.mockReturnValue([
+        { ...SAMPLE_SESSIONS[0], events: [{ ...SAMPLE_SESSIONS[0].events[0], metadata: '{"message":"fix: login"}' }] },
+      ])
+      mockGetProvider.mockReturnValue(new TemplateProvider())
+
+      await makeProgram().parseAsync(['export', '--date', '2026-05-28'], { from: 'user' })
+
+      expect(mockLog.info).toHaveBeenCalledWith('Generating summary via template…')
+      expect(mockFs.writeFileSync).toHaveBeenCalledWith(
+        expect.any(String),
+        '# Work Summary — 2026-05-28\n\n- Committed: fix: login\n',
+        expect.any(Object)
+      )
     })
 
     it('writes to the default exports directory path', async () => {

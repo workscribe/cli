@@ -3,6 +3,7 @@ import fs from 'fs'
 import path from 'path'
 import { CONFIG_PATH } from '../utils/paths'
 import { debugLog } from '../utils/logger'
+import type { SummaryEngine } from '../ai/engine'
 
 export interface WorkscribeConfig {
   ai: {
@@ -37,6 +38,9 @@ export interface WorkscribeConfig {
     // Excluded by default: exploring, other, linting.
     // Example: ["linting"] to include lint pass/fail in summaries.
     includeCategories?: string[]
+    // Which engine writes summaries. Deliberately absent from DEFAULTS: when unset it is
+    // derived from ai.provider (see resolveEngine), so 1.x configs keep their provider.
+    engine?: SummaryEngine
   }
   projects?: Record<string, string> // absolute path → display name override
   integrations?: {

@@ -34,7 +34,7 @@ Workscribe is a passive terminal activity capture tool. The data flows in one di
 ```
 shell hook → workscribe _capture → capture pipeline → SQLite
                                                          ↓
-workscribe summary → session detector → AI provider → markdown output
+workscribe summary → session detector → summary engine (template | ollama | provider) → markdown output
 ```
 
 ### Key design decisions
@@ -43,7 +43,7 @@ workscribe summary → session detector → AI provider → markdown output
 
 **Capture path is fully synchronous and must never throw** — `workscribe _capture` is called from the shell hook as a background process (`&!`). Errors are swallowed and optionally written to `~/.workscribe/debug.log` when `WORKSCRIBE_DEBUG=1` is set.
 
-**AI layer is provider-agnostic** — all providers implement the `AIProvider` interface in `src/ai/types.ts` with a single `summarize(payload: DaySummaryPayload)` method. The router in `src/ai/router.ts` selects the provider from config. Adding a new provider means adding a file in `src/ai/providers/` and a case in the router switch.
+**Summary engines share one interface** — every engine implements `AIProvider` (`src/ai/types.ts`: `summarize`, optional `summarizeWeek`, `validate`). `resolveEngine` (`src/ai/engine.ts`) picks `template` | `ollama` | `provider` from `summary.engine`, else from `ai.provider`, else `template`; `summary.engine` is deliberately absent from `DEFAULTS` so 1.x configs keep their provider. `src/ai/router.ts` returns the offline `TemplateProvider` (`src/ai/engines/template/`) or a `GenericProvider` built from `src/ai/provider-config.ts` — adding a cloud provider means adding an entry there. Template summaries are rendered live and never cached; AI summaries are stored per engine in `session_summaries` (see `src/summary/store.ts`).
 
 **Sessions are computed on demand, not during capture** — `workscribe _capture` only writes to the `events` table. Session grouping runs when `workscribe sessions` or `workscribe summary` is called, caches results in the `sessions` table, and invalidates when the event count changes.
 
@@ -63,8 +63,8 @@ Tests import from these pure modules directly. Never import from `src/db/index.t
 | `src/capture/` | `index.ts` orchestrates capture; `filter.ts` noise/dedup; `redact.ts` credential scrubbing; `git.ts` repo context |
 | `src/normalize/patterns.ts` | Ordered rule array — first match wins. Add new categories here |
 | `src/sessions/` | `detector.ts` orchestrates DB read/write; `grouper.ts` contains pure grouping logic |
-| `src/summary/` | Shared by `summary`/`week`/`export`: `payload.ts` builds AI payloads from sessions (pure); `weekly.ts` runs the weekly flow and its cache; `webhook.ts` posts finished summaries. No barrel — import by module path |
-| `src/ai/` | `types.ts` interfaces; `prompt.ts` system prompt + payload serializer; `router.ts` provider selection; `providers/` one file per provider |
+| `src/summary/` | Shared by `summary`/`week`/`export`/`context`: `payload.ts` builds payloads from sessions and names non-git sessions by directory (pure); `heading.ts` the `## project (branch) — duration` line; `store.ts` session keys and which stored summary to serve (pure); `weekly.ts` the weekly flow and its per-engine cache; `webhook.ts` posts finished summaries. No barrel — import by module path |
+| `src/ai/` | `types.ts` interfaces; `engine.ts` engine resolution; `engines/template/` the offline template engine (pure); `prompt.ts` system prompt + payload serializer for AI engines; `provider-config.ts` per-provider HTTP settings; `router.ts` engine → provider |
 | `src/config/index.ts` | Read/write `~/.workscribe/config.json`; `setConfigValue` coerces strings to number/boolean |
 | `src/db/index.ts` | SQLite connection singleton, migrations, typed query functions |
 | `shell/` | Static hook scripts appended to `~/.zshrc` / `~/.bashrc` by `workscribe init` |
@@ -79,7 +79,8 @@ All runtime data lives in `~/.workscribe/`:
 - `workscribe.db` — SQLite database (WAL mode, foreign keys on)
 - `config.json` — user config
 - `exports/` — markdown files from `workscribe export`
-- `weekly-cache/` — cached weekly summary markdown files (`<YYYY-WW>.md`)
+- `weekly-cache/` — cached AI weekly digests (`<YYYY-WW>.<engine>.md`; 1.x `<YYYY-WW>.md` files are still read for `provider`/`ollama`)
+- `workscribe.db` → `session_summaries` — per-engine session summaries keyed by `repo|started_at` (migration 005)
 - `debug.log` — errors when `WORKSCRIBE_DEBUG=1`
 
 ## Git workflow

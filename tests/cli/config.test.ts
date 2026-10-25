@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, onTestFinished } from 'vitest'
 
 vi.mock('../../src/config', () => ({
   readConfig: vi.fn(),
@@ -83,6 +83,26 @@ describe('workscribe config', () => {
     it('logs success for a non-sensitive key', async () => {
       await makeProgram().parseAsync(['config', 'set', 'ai.provider', 'openai'], { from: 'user' })
       expect(mockLog.success).toHaveBeenCalledWith(expect.stringContaining('ai.provider'))
+    })
+
+    it('accepts a valid summary.engine', async () => {
+      await makeProgram().parseAsync(['config', 'set', 'summary.engine', 'template'], { from: 'user' })
+      expect(mockSetConfigValue).toHaveBeenCalledWith(BASE_CONFIG, 'summary.engine', 'template')
+    })
+
+    it('rejects an unknown summary.engine without writing the config', async () => {
+      const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+        throw new Error('exit')
+      }) as never)
+      onTestFinished(() => exitSpy.mockRestore())
+
+      await expect(
+        makeProgram().parseAsync(['config', 'set', 'summary.engine', 'anthropic'], { from: 'user' })
+      ).rejects.toThrow('exit')
+
+      expect(mockLog.error).toHaveBeenCalledWith(expect.stringContaining('Invalid summary.engine "anthropic"'))
+      expect(exitSpy).toHaveBeenCalledWith(1)
+      expect(mockWriteConfig).not.toHaveBeenCalled()
     })
 
     it('shows [set] instead of the value for sensitive keys', async () => {

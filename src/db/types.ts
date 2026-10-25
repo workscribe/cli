@@ -24,3 +24,10 @@ export interface SessionRow {
   event_count: number
   summary: string | null
 }
+
+export interface SessionSummaryRow {
+  session_key: string
+  engine: string
+  text: string
+  created_at: string
+}

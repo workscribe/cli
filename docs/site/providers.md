@@ -155,8 +155,8 @@ workscribe config set ai.provider ollama
 
 ## Troubleshooting
 
-**"AI provider not configured"**
-Run `workscribe config set ai.provider <provider>` and ensure an API key is set if required.
+**Summaries are bullet lists, not AI prose**
+No provider is configured, so Workscribe is using the offline template engine. Run `workscribe config set ai.provider <provider>` (and set an API key if required), then `workscribe summary --fresh`.
 
 **Ollama: connection refused**
 Make sure Ollama is running: `ollama serve`
