@@ -37,6 +37,11 @@ describe('normalizeCommand', () => {
       expect(result.metadata.branch).toBe('feature/auth')
     })
 
+    it('skips flags when extracting remote and branch from git push', () => {
+      expect(normalize('git push -u origin main').metadata).toEqual({ remote: 'origin', branch: 'main' })
+      expect(normalize('git push --force-with-lease').metadata).toEqual({ remote: 'origin', branch: null })
+    })
+
     it('classifies git pull', () => {
       expect(category('git pull')).toBe('versioning')
       expect(category('git pull origin main')).toBe('versioning')
@@ -185,6 +190,18 @@ describe('normalizeCommand', () => {
 
     it('classifies pip uninstall', () => {
       expect(category('pip uninstall requests')).toBe('dependencies')
+    })
+
+    it('marks removals so summaries do not report them as additions', () => {
+      for (const command of [
+        'npm uninstall lodash',
+        'yarn remove express',
+        'bun remove lodash',
+        'pip uninstall requests',
+      ]) {
+        expect(normalize(command).metadata.action).toBe('remove')
+      }
+      expect(normalize('npm install lodash').metadata.action).toBeUndefined()
     })
   })
 
