@@ -1,4 +1,4 @@
-import { buildExcludedSet } from '../../prompt'
+import { buildExcludedSet } from '../../../summary/exclusions'
 import { BUILD_WORDING, MAX_COMMIT_BULLETS, MAX_LISTED_PACKAGES, MAX_SESSION_BULLETS, TEST_WORDING } from './constants'
 import { eventsOf, pluralize, stringsIn, unique } from './utils'
 import type { EventPayload, SessionPayload } from '../../types'

@@ -39,8 +39,11 @@ function extractPackages(cmd: string, afterKeyword: string): string[] {
 const BASE_RULES: Rule[] = [
   // ─── Git operations ───────────────────────────────────────────────────────
   makeRule(/^git\s+commit\b/, 'shipping', (_m, cmd) => {
-    const msgMatch = cmd.match(/-m\s+["']?([^"']+)["']?/)
-    return { message: msgMatch ? msgMatch[1].trim() : null }
+    // -m "…" / -m '…' keep the whole message (an apostrophe inside double quotes is part of it);
+    // an unquoted -m takes one word, so `-m wip --no-verify` is "wip", not "wip --no-verify"
+    const msgMatch = cmd.match(/-m\s+(?:"([^"]*)"|'([^']*)'|(\S+))/)
+    const message = msgMatch ? (msgMatch[1] ?? msgMatch[2] ?? msgMatch[3]).trim() : null
+    return { message: message || null }
   }),
 
   makeRule(/^git\s+push\b/, 'shipping', (_m, cmd) => {

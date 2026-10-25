@@ -48,14 +48,28 @@ export function eventRowToPayload(row: EventRow): EventPayload {
   return { ...payload, hint, metadata: rest }
 }
 
-function mostFrequentCwd(session: Session): string | null {
+function mostFrequentCwdOf(events: EventRow[]): string | null {
   const counts = new Map<string, number>()
-  for (const event of session.events) counts.set(event.cwd, (counts.get(event.cwd) ?? 0) + 1)
+  for (const event of events) counts.set(event.cwd, (counts.get(event.cwd) ?? 0) + 1)
   let best: string | null = null
   for (const [cwd, count] of counts) {
     if (best === null || count > (counts.get(best) ?? 0)) best = cwd
   }
   return best
+}
+
+/** The directory most of a session's events ran in, or null for a session with no events. */
+export function mostFrequentCwd(session: Session): string | null {
+  return mostFrequentCwdOf(session.events)
+}
+
+/**
+ * A directory inside the session's repo, for git lookups. Agents often run `cd repo && …` from a
+ * parent directory that isn't a repo, so the most-used directory overall can miss the repo entirely.
+ */
+export function repoCwd(session: Session): string | null {
+  if (!session.repoName) return mostFrequentCwd(session)
+  return mostFrequentCwdOf(session.events.filter((event) => event.repo_name === session.repoName))
 }
 
 function homeRelative(directory: string, homeDir: string): string {

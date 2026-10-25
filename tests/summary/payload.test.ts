@@ -4,7 +4,13 @@ vi.mock('../../src/utils/format', () => ({
   formatDate: vi.fn((isoString: string) => `time:${isoString}`),
 }))
 
-import { eventRowToPayload, sessionToPayload, buildDayPayload, sessionLocation } from '../../src/summary/payload'
+import {
+  eventRowToPayload,
+  sessionToPayload,
+  buildDayPayload,
+  sessionLocation,
+  repoCwd,
+} from '../../src/summary/payload'
 import type { EventRow } from '../../src/db/types'
 import type { Session } from '../../src/sessions/detector'
 
@@ -175,5 +181,26 @@ describe('sessionLocation', () => {
     const session = makeSession({ repoName: null, events: [makeEvent({ repo_name: null, cwd: '/Users/dev/scripts' })] })
 
     expect(sessionToPayload(session, '2026-08-17', NO_OVERRIDES).project).toBe('~/scripts')
+  })
+})
+
+describe('repoCwd', () => {
+  it("uses a directory inside the session's repo even when most commands ran from a parent directory", () => {
+    const session = makeSession({
+      repoName: 'movies',
+      events: [
+        makeEvent({ repo_name: null, cwd: '/Users/dev' }),
+        makeEvent({ repo_name: null, cwd: '/Users/dev' }),
+        makeEvent({ repo_name: 'movies', cwd: '/Users/dev/movies' }),
+      ],
+    })
+
+    expect(repoCwd(session)).toBe('/Users/dev/movies')
+  })
+
+  it('falls back to the most-used directory for a session without a repo', () => {
+    const session = makeSession({ repoName: null, events: [makeEvent({ repo_name: null, cwd: '/tmp/scripts' })] })
+
+    expect(repoCwd(session)).toBe('/tmp/scripts')
   })
 })

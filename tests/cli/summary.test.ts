@@ -51,8 +51,11 @@ vi.mock('../../src/utils/format', () => ({
 }))
 
 vi.mock('../../src/ai/prompt', () => ({
-  buildExcludedSet: vi.fn(() => new Set()),
   countExcludedEvents: vi.fn(() => new Map()),
+}))
+
+vi.mock('../../src/summary/exclusions', () => ({
+  buildExcludedSet: vi.fn(() => new Set()),
 }))
 
 import { Command } from 'commander'

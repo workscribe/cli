@@ -128,11 +128,13 @@ List detected work sessions for a date.
 ```bash
 workscribe sessions
 workscribe sessions --date 2026-05-20
+workscribe sessions --json | jq .
 ```
 
 | Option | Description |
 |---|---|
 | `--date <YYYY-MM-DD>` | Show sessions for a specific date |
+| `--json` | Print the [JSON output contract](#json-output-contract) — sessions with their events, notes and commits |
 
 Sessions are computed by grouping events with idle gaps greater than `session.idleTimeout` (default 30 minutes) and splitting across different repositories.
 
@@ -146,12 +148,14 @@ List raw captured events for a date.
 workscribe events
 workscribe events --date 2026-05-20
 workscribe events --limit 20
+workscribe events --json
 ```
 
 | Option | Description |
 |---|---|
 | `--date <YYYY-MM-DD>` | Show events for a specific date |
 | `--limit <n>` | Limit the number of events shown |
+| `--json` | Print the [JSON output contract](#json-output-contract) — structured events, no raw commands |
 
 Events are colour-coded by category:
 
@@ -255,6 +259,62 @@ workscribe export --output ~/Desktop/standup.md
 |---|---|
 | `--date <YYYY-MM-DD>` | Export a specific date |
 | `--output <path>` | Custom output path (default: `~/.workscribe/exports/workscribe-<date>.md`) |
+
+---
+
+## JSON output contract
+
+`workscribe sessions --json` and `workscribe events --json` print a versioned, machine-readable view of your activity — what coding-agent skills and other tools read instead of scraping the text output. Each prints one line of compact JSON (pipe it through `jq` to read it).
+
+**Stability:** every document carries `schemaVersion` (currently `1`). Within a version, fields may be **added** but are never renamed, removed or retyped — those changes bump `schemaVersion`. Ignore fields you don't recognise.
+
+```ts
+// workscribe sessions --json
+{ schemaVersion: 1, date: string, sessions: Session[] }
+
+Session = {
+  key: string              // stable session id: "<repo>|<startedAt>"
+  project: string | null   // repo name, projects display name, or ~/path for work outside git
+  repoName: string | null
+  repoPath: string | null  // git toplevel; null outside a git repo
+  cwd: string | null       // directory most commands ran in
+  branch: string | null
+  startedAt: string        // ISO 8601
+  endedAt: string
+  durationMinutes: number
+  eventCount: number       // all captured events, before filtering
+  notes: string[]          // workscribe note texts
+  commits: Commit[]
+  events: Event[]
+}
+
+Commit = { hash: string | null, subject: string, source: "git" | "captured" }
+
+// workscribe events --json
+{ schemaVersion: 1, date: string, total: number, events: Event[] }
+
+Event = {
+  capturedAt: string
+  category: string                 // testing, building, shipping, dependencies, ai_session, other, …
+  metadata: Record<string, unknown> // structured fields the normaliser extracted (tool, packages, message, …)
+  hint?: string                    // only on unclassified ("other") events: redacted, ≤120-char command prefix
+  exitCode: number | null          // null for commands captured through AI-tool hooks
+  durationMs: number | null
+  source: string | null            // shell, claude-code, vscode, …
+}
+```
+
+**What's included:**
+
+- Events follow the same exclusions as summaries: `exploring` and `linting` are left out unless listed in `summary.includeCategories`. Notes appear in `notes`, never in `events`. In `events --json`, `total` counts events after filtering and `--limit` caps the list.
+- Full command strings, event working directories and IDE file paths are never included. See [Privacy](/privacy) for what the structured fields can contain.
+
+**Commits** combine two sources, git commits first (oldest first), then captured-only ones:
+
+- `git` — commits found with `git log` in the session's repo from two minutes before its start (covering commit hooks) to a minute after its end, limited to commits *committed* by your `user.email` when one is configured (so cherry-picks you made count). Matched on committer date, so a commit rebased or amended later may fall outside the window, and only commits reachable from `HEAD` are seen; after a rebase leaves commit dates out of order, `git log` can stop early and miss a few. Two commits with the same subject are both listed. Because of the grace period, a commit right at the boundary between two nearby sessions in the same repo can appear in both.
+- `captured` — commit messages Workscribe recorded itself (`git commit -m`, AI-tool sessions) that git didn't return, with `hash: null`. A `git commit` that failed (rejected by a hook, nothing staged) is not listed, and neither is a subject that recent history shows was committed only by someone else (an AI session records every commit that reaches `HEAD`, including ones it pulled in).
+
+If git isn't installed, the session isn't in a repo, or git times out, `commits` falls back to the captured ones — the command never fails because of git.
 
 ---
 
