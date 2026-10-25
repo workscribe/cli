@@ -272,6 +272,12 @@ async function runAIProviderStep(config: WorkscribeConfig): Promise<boolean> {
   }
 
   config.ai.provider = provider
+  // Choosing a provider here means "summarize with it". An earlier explicit summary.engine would
+  // otherwise keep summaries — and the validation below — on the old engine.
+  if (config.summary?.engine) {
+    log.info(`Clearing summary.engine (${config.summary.engine}) so summaries use ${provider}`)
+    delete config.summary.engine
+  }
 
   if (provider === 'ollama') {
     log.plain(`\n  ${chalk.dim('Make sure Ollama is running: ollama serve')}`)

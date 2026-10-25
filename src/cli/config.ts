@@ -1,6 +1,7 @@
 import { Command } from 'commander'
 import chalk from 'chalk'
 import { readConfig, writeConfig, getConfigValue, setConfigValue } from '../config'
+import { SUMMARY_ENGINES, isSummaryEngine } from '../ai/engine'
 import { log } from '../utils/logger'
 
 export function registerConfig(program: Command): void {
@@ -20,6 +21,10 @@ export function registerConfig(program: Command): void {
     .command('set <key> <value>')
     .description('Set a config value (e.g. workscribe config set ai.provider anthropic)')
     .action((key: string, value: string) => {
+      if (key === 'summary.engine' && !isSummaryEngine(value)) {
+        log.error(`Invalid summary.engine "${value}". Use one of: ${SUMMARY_ENGINES.join(', ')}`)
+        process.exit(1)
+      }
       const config = readConfig()
       const updated = setConfigValue(config, key, value)
       writeConfig(updated)

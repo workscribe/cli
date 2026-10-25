@@ -3,12 +3,15 @@ import chalk from 'chalk'
 import { getOrBuildSessions } from '../sessions/detector'
 import { getProvider } from '../ai/router'
 import { readConfig } from '../config'
-import { updateSessionSummary } from '../db'
+import { getSessionSummaries, saveSessionSummary } from '../db'
 import { log } from '../utils/logger'
-import { todayDate, parseDate, formatDuration } from '../utils/format'
-import type { DaySummaryPayload } from '../ai/types'
+import { todayDate, parseDate } from '../utils/format'
+import type { DaySummaryPayload, SessionPayload } from '../ai/types'
+import { resolveEngine, engineLabel } from '../ai/engine'
 import { buildExcludedSet, countExcludedEvents } from '../ai/prompt'
-import { sessionToPayload } from '../summary/payload'
+import { sessionToPayload, locationContextFrom } from '../summary/payload'
+import { formatSessionHeading, formatSessionLabel } from '../summary/heading'
+import { sessionKey, pickOwnSummary, isCachedEngine } from '../summary/store'
 import { postSummary } from '../summary/webhook'
 import { runWeeklySummary } from '../summary/weekly'
 
@@ -25,6 +28,45 @@ export function parseBullets(text: string): string[] {
     .split('\n')
     .map((line) => line.replace(/^[•\-]\s*/, '').trim())
     .filter(Boolean)
+}
+
+function stripHeading(summary: string): string {
+  return summary.replace(/^## .+\n/, '')
+}
+
+function toJsonOutput(date: string, sessionPayloads: SessionPayload[], bulletsPerSession: string[]): string {
+  const sessions: SessionSummaryJson[] = sessionPayloads.map((sessionPayload, index) => ({
+    project: sessionPayload.project,
+    branch: sessionPayload.branch,
+    durationMinutes: sessionPayload.durationMinutes,
+    bullets: parseBullets(bulletsPerSession[index]),
+  }))
+  return JSON.stringify({ date, sessions }, null, 2)
+}
+
+function printCapturedEvents(sessionPayloads: SessionPayload[], excluded: Set<string>): void {
+  log.plain('')
+  log.plain(chalk.bold('  Captured events (--verbose):'))
+  for (const sessionPayload of sessionPayloads) {
+    log.plain(chalk.dim(`\n  ${formatSessionLabel(sessionPayload)}`))
+    for (const event of sessionPayload.events) {
+      const tag = excluded.has(event.category) ? chalk.dim(`  [excluded] ${event.category}`) : `  ${event.category}`
+      const hint = event.hint ? chalk.dim(` [${event.hint}]`) : ''
+      const meta = Object.keys(event.metadata).length > 0 ? chalk.dim(` ${JSON.stringify(event.metadata)}`) : ''
+      log.plain(`    ${tag}${hint}${meta}`)
+    }
+  }
+  log.plain('')
+}
+
+function printExcludedFooter(sessionPayloads: SessionPayload[], excluded: Set<string>): void {
+  const excludedCounts = countExcludedEvents(sessionPayloads, excluded)
+  if (excludedCounts.size === 0) return
+  const total = [...excludedCounts.values()].reduce((sum, count) => sum + count, 0)
+  const breakdown = [...excludedCounts.entries()].map(([category, count]) => `${category} ×${count}`).join(', ')
+  log.plain(chalk.dim(`  ℹ ${total} event${total === 1 ? '' : 's'} not included in summary (${breakdown})`))
+  log.plain(chalk.dim('    Use --verbose to inspect · workscribe config set summary.includeCategories to opt in'))
+  log.plain('')
 }
 
 export function registerSummary(program: Command): void {
@@ -76,24 +118,18 @@ export function registerSummary(program: Command): void {
         return
       }
 
+      const engine = resolveEngine(config)
+      const label = engineLabel(config)
+      const sessionPayloads = sessions.map((session) => sessionToPayload(session, date, locationContextFrom(config)))
+      const keys = sessions.map((session) => sessionKey(session.repoName, session.startedAt))
       const jsonMode = config.summary?.format === 'json'
 
-      if (!options.fresh) {
-        const allCached = sessions.every((session) => session.summary)
-        if (allCached) {
-          const fullSummary = sessions.map((session) => session.summary!).join('\n\n')
+      if (!options.fresh && isCachedEngine(engine)) {
+        const cached = keys.map((key) => pickOwnSummary(getSessionSummaries(key), engine))
+        if (cached.every((text): text is string => text !== null)) {
+          const fullSummary = cached.join('\n\n')
           log.plain('')
-          if (jsonMode) {
-            const jsonOut: SessionSummaryJson[] = sessions.map((session) => ({
-              project: session.repoName,
-              branch: session.events[0]?.branch ?? null,
-              durationMinutes: session.durationMinutes,
-              bullets: parseBullets(session.summary!.replace(/^## .+\n/, '')),
-            }))
-            log.plain(JSON.stringify({ date, sessions: jsonOut }, null, 2))
-          } else {
-            log.plain(fullSummary)
-          }
+          log.plain(jsonMode ? toJsonOutput(date, sessionPayloads, cached.map(stripHeading)) : fullSummary)
           log.plain('')
           log.plain(chalk.dim('  (cached — use --fresh to regenerate)'))
           await postSummary(options, config, fullSummary)
@@ -102,79 +138,32 @@ export function registerSummary(program: Command): void {
       }
 
       const excluded = buildExcludedSet(config.summary?.includeCategories ?? [])
-      const allSessionPayloads = sessions.map((session) => sessionToPayload(session, date))
-
-      if (options.verbose) {
-        log.plain('')
-        log.plain(chalk.bold('  Captured events (--verbose):'))
-        for (const sessionPayload of allSessionPayloads) {
-          const branch = sessionPayload.branch ? ` (${sessionPayload.branch})` : ''
-          log.plain(
-            chalk.dim(
-              `\n  ${sessionPayload.project ?? 'unknown'}${branch} — ${formatDuration(sessionPayload.durationMinutes)}`
-            )
-          )
-          for (const event of sessionPayload.events) {
-            const tag = excluded.has(event.category)
-              ? chalk.dim(`  [excluded] ${event.category}`)
-              : `  ${event.category}`
-            const hint = event.hint ? chalk.dim(` [${event.hint}]`) : ''
-            const meta = Object.keys(event.metadata).length > 0 ? chalk.dim(` ${JSON.stringify(event.metadata)}`) : ''
-            log.plain(`    ${tag}${hint}${meta}`)
-          }
-        }
-        log.plain('')
-      }
+      if (options.verbose) printCapturedEvents(sessionPayloads, excluded)
 
       log.plain('')
-      log.info(`Generating summary via ${chalk.cyan(config.ai.provider)}…`)
+      log.info(`Generating summary via ${chalk.cyan(label)}…`)
 
       const allSummaries: string[] = []
-      const jsonSessions: SessionSummaryJson[] = []
-
-      for (let index = 0; index < sessions.length; index++) {
-        const session = sessions[index]
-        const sessionPayload: DaySummaryPayload = { date, sessions: [allSessionPayloads[index]] }
+      const allBullets: string[] = []
+      for (const [index, sessionPayload] of sessionPayloads.entries()) {
+        const daySummaryPayload: DaySummaryPayload = { date, sessions: [sessionPayload] }
         try {
-          const bullets = await provider.summarize(sessionPayload)
-          const project = session.repoName ?? 'unknown'
-          const branch = session.events[0]?.branch ? ` (${session.events[0].branch})` : ''
-          const duration = formatDuration(session.durationMinutes)
-          const heading = `## ${project}${branch} — ${duration}`
-          const summary = `${heading}\n${bullets.trim()}`
+          const bullets = (await provider.summarize(daySummaryPayload)).trim()
+          const summary = `${formatSessionHeading(sessionPayload)}\n${bullets}`
           allSummaries.push(summary)
-          updateSessionSummary(session.id, summary)
-          if (jsonMode) {
-            jsonSessions.push({
-              project: session.repoName,
-              branch: session.events[0]?.branch ?? null,
-              durationMinutes: session.durationMinutes,
-              bullets: parseBullets(bullets),
-            })
-          }
+          allBullets.push(bullets)
+          if (isCachedEngine(engine)) saveSessionSummary(keys[index], engine, summary)
         } catch (error) {
-          log.error(`Summary failed [${config.ai.provider}]: ${(error as Error).message}`)
+          log.error(`Summary failed [${label}]: ${(error as Error).message}`)
           process.exit(1)
         }
       }
 
       const fullSummary = allSummaries.join('\n\n')
       log.plain('')
-      if (jsonMode) {
-        log.plain(JSON.stringify({ date, sessions: jsonSessions }, null, 2))
-      } else {
-        log.plain(fullSummary)
-      }
+      log.plain(jsonMode ? toJsonOutput(date, sessionPayloads, allBullets) : fullSummary)
       log.plain('')
-
-      const excludedCounts = countExcludedEvents(allSessionPayloads, excluded)
-      if (excludedCounts.size > 0) {
-        const total = [...excludedCounts.values()].reduce((sum, count) => sum + count, 0)
-        const breakdown = [...excludedCounts.entries()].map(([category, count]) => `${category} ×${count}`).join(', ')
-        log.plain(chalk.dim(`  ℹ ${total} event${total === 1 ? '' : 's'} not included in summary (${breakdown})`))
-        log.plain(chalk.dim('    Use --verbose to inspect · workscribe config set summary.includeCategories to opt in'))
-        log.plain('')
-      }
+      printExcludedFooter(sessionPayloads, excluded)
 
       await postSummary(options, config, fullSummary)
     })

@@ -44,8 +44,12 @@ const BASE_RULES: Rule[] = [
   }),
 
   makeRule(/^git\s+push\b/, 'shipping', (_m, cmd) => {
-    const parts = cmd.split(/\s+/)
-    return { remote: parts[2] ?? 'origin', branch: parts[3] ?? null }
+    // Flags (-u, --force, …) aren't the remote or branch: `git push -u origin main` → origin/main
+    const positional = cmd
+      .split(/\s+/)
+      .slice(2)
+      .filter((part) => !part.startsWith('-'))
+    return { remote: positional[0] ?? 'origin', branch: positional[1] ?? null }
   }),
 
   makeRule(/^git\s+(pull|fetch)\b/, 'versioning', (_m, cmd) => {
@@ -125,21 +129,25 @@ const BASE_RULES: Rule[] = [
   makeRule(/^npm\s+(uninstall|remove|rm)\b/, 'dependencies', (_m, cmd) => ({
     tool: 'npm',
     packages: extractPackages(cmd, cmd.split(/\s+/)[1]),
+    action: 'remove',
   })),
 
   makeRule(/^(yarn|pnpm)\s+remove\b/, 'dependencies', (m, cmd) => ({
     tool: m[1],
     packages: extractPackages(cmd, 'remove'),
+    action: 'remove',
   })),
 
   makeRule(/^bun\s+remove\b/, 'dependencies', (_m, cmd) => ({
     tool: 'bun',
     packages: extractPackages(cmd, 'remove'),
+    action: 'remove',
   })),
 
   makeRule(/^pip\s+uninstall\b/, 'dependencies', (_m, cmd) => ({
     tool: 'pip',
     packages: extractPackages(cmd, 'uninstall'),
+    action: 'remove',
   })),
 
   // Runtime version managers

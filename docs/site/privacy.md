@@ -7,7 +7,7 @@ description: How Workscribe handles your data and what never leaves your machine
 
 ## What stays local
 
-Everything you capture. All captured data is stored in `~/.workscribe/` on your machine. Nothing is written to any remote server except what you explicitly send to your AI provider when you run `workscribe summary`, and a small anonymous install ping — on by default, see below.
+Everything you capture. All captured data is stored in `~/.workscribe/` on your machine. Nothing is written to any remote server except a small anonymous install ping (on by default, see below) and — only if you configure a cloud AI provider — the summary payload described below. With no AI configured, summaries are built offline by the template engine and nothing about your activity leaves your machine.
 
 | Location | Contents |
 |---|---|
@@ -66,7 +66,7 @@ Redaction is applied as a regex replace — matched values are replaced with `[R
 
 ## What is sent to your AI provider
 
-Only when you run `workscribe summary`. Only structured event categories — never raw commands.
+Only if `summary.engine` is `provider` (a cloud AI provider is configured), and only when you run `workscribe summary`, `week` or `export`. The default `template` engine and `ollama` send nothing off your machine. Only structured event categories are sent — never raw commands.
 
 **Sent:**
 ```
@@ -99,13 +99,13 @@ The following categories are captured locally but **excluded from the AI payload
 
 ## Using Ollama for full offline operation
 
-If you want zero external data transmission, use Ollama:
+With no AI configured, the default `template` engine already builds summaries entirely offline. If you want AI-written summaries with zero external data transmission, use Ollama:
 
 ```bash
-workscribe config set ai.provider ollama
+workscribe config set summary.engine ollama
 ```
 
-With Ollama, `workscribe summary` never makes an external network request for your summary data. The anonymous install ping (see above) still runs unless you disable it — add `workscribe config set telemetry.enabled false` for fully offline operation.
+With the template engine or Ollama, `workscribe summary` never makes an external network request for your summary data. The anonymous install ping (see above) still runs unless you disable it — add `workscribe config set telemetry.enabled false` for fully offline operation.
 
 ---
 

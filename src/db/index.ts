@@ -1,9 +1,10 @@
 import { DatabaseSync } from 'node:sqlite'
 import fs from 'fs'
 import { WORKSCRIBE_DIR, DB_PATH } from '../utils/paths'
-import type { EventRow, SessionRow } from './types'
+import type { EventRow, SessionRow, SessionSummaryRow } from './types'
 import { MIGRATIONS } from './migrations'
-export type { EventRow, SessionRow } from './types'
+import type { StoredEngine } from '../ai/engine'
+export type { EventRow, SessionRow, SessionSummaryRow } from './types'
 
 let _db: DatabaseSync | null = null
 
@@ -234,6 +235,22 @@ export function updateSessionSummary(sessionId: number, summary: string): void {
   const db = getDb()
   const stmt = db.prepare('UPDATE sessions SET summary = $summary WHERE id = $id')
   stmt.run({ summary, id: sessionId })
+}
+
+export function getSessionSummaries(sessionKey: string): SessionSummaryRow[] {
+  const db = getDb()
+  const stmt = db.prepare('SELECT * FROM session_summaries WHERE session_key = $session_key')
+  return stmt.all({ session_key: sessionKey }) as unknown as SessionSummaryRow[]
+}
+
+export function saveSessionSummary(sessionKey: string, engine: StoredEngine, text: string): void {
+  const db = getDb()
+  const stmt = db.prepare(`
+    INSERT INTO session_summaries (session_key, engine, text, created_at)
+    VALUES ($session_key, $engine, $text, $created_at)
+    ON CONFLICT (session_key, engine) DO UPDATE SET text = excluded.text, created_at = excluded.created_at
+  `)
+  stmt.run({ session_key: sessionKey, engine, text, created_at: new Date().toISOString() })
 }
 
 export function getLastEventIds(n: number): number[] {

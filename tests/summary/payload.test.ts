@@ -4,7 +4,7 @@ vi.mock('../../src/utils/format', () => ({
   formatDate: vi.fn((isoString: string) => `time:${isoString}`),
 }))
 
-import { eventRowToPayload, sessionToPayload, buildDayPayload } from '../../src/summary/payload'
+import { eventRowToPayload, sessionToPayload, buildDayPayload, sessionLocation } from '../../src/summary/payload'
 import type { EventRow } from '../../src/db/types'
 import type { Session } from '../../src/sessions/detector'
 
@@ -114,5 +114,66 @@ describe('buildDayPayload', () => {
 
     expect(payload.date).toBe('2026-08-17')
     expect(payload.sessions.map((session) => session.project)).toEqual(['my-app', 'api'])
+  })
+})
+
+describe('sessionLocation', () => {
+  const HOME = '/Users/dev'
+  const NO_OVERRIDES = { projects: {}, homeDir: HOME }
+
+  it('uses the repo name for sessions in a git repo', () => {
+    expect(sessionLocation(makeSession(), NO_OVERRIDES)).toBe('my-app')
+  })
+
+  it('falls back to the home-relative directory outside a git repo', () => {
+    const session = makeSession({
+      repoName: null,
+      events: [makeEvent({ repo_name: null, cwd: '/Users/dev/Downloads/scripts' })],
+    })
+
+    expect(sessionLocation(session, NO_OVERRIDES)).toBe('~/Downloads/scripts')
+  })
+
+  it('shows the home directory itself as ~', () => {
+    const session = makeSession({ repoName: null, events: [makeEvent({ repo_name: null, cwd: HOME })] })
+
+    expect(sessionLocation(session, NO_OVERRIDES)).toBe('~')
+  })
+
+  it('keeps directories outside home absolute', () => {
+    const session = makeSession({ repoName: null, events: [makeEvent({ repo_name: null, cwd: '/tmp/build' })] })
+
+    expect(sessionLocation(session, NO_OVERRIDES)).toBe('/tmp/build')
+  })
+
+  it('names the directory most of the commands ran in', () => {
+    const session = makeSession({
+      repoName: null,
+      events: [
+        makeEvent({ repo_name: null, cwd: '/Users/dev/notes' }),
+        makeEvent({ repo_name: null, cwd: '/Users/dev/scripts' }),
+        makeEvent({ repo_name: null, cwd: '/Users/dev/scripts' }),
+      ],
+    })
+
+    expect(sessionLocation(session, NO_OVERRIDES)).toBe('~/scripts')
+  })
+
+  it('prefers a config.projects display name for that directory', () => {
+    const session = makeSession({ repoName: null, events: [makeEvent({ repo_name: null, cwd: '/Users/dev/scripts' })] })
+
+    expect(sessionLocation(session, { projects: { '/Users/dev/scripts': 'Shell scripts' }, homeDir: HOME })).toBe(
+      'Shell scripts'
+    )
+  })
+
+  it('is null for a session with no repo and no events', () => {
+    expect(sessionLocation(makeSession({ repoName: null, events: [] }), NO_OVERRIDES)).toBeNull()
+  })
+
+  it('becomes the payload project', () => {
+    const session = makeSession({ repoName: null, events: [makeEvent({ repo_name: null, cwd: '/Users/dev/scripts' })] })
+
+    expect(sessionToPayload(session, '2026-08-17', NO_OVERRIDES).project).toBe('~/scripts')
   })
 })

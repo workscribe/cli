@@ -30,7 +30,7 @@ When a new version of Workscribe ships with an updated hook, re-running `workscr
 
 ## workscribe summary
 
-Generate an AI work summary for today or a specific date.
+Generate a work summary for today or a specific date. With no AI configured this uses the offline template engine; with Ollama or a cloud provider configured, the summary is AI-written. See [Summary engines](/configuration#summary).
 
 ```bash
 workscribe summary
@@ -81,14 +81,14 @@ Each session gets its own heading. The heading is always generated from your cap
 **Caching:**
 - Daily summaries are cached per session in the database
 - Cached summaries are preserved when new events arrive — only new or unsummarised sessions call the AI
-- Weekly summaries are cached in `~/.workscribe/weekly-cache/<YYYY-WW>.md`
+- AI-written weekly summaries are cached in `~/.workscribe/weekly-cache/<YYYY-WW>.<engine>.md` (`ollama` or `provider`). Template digests are rendered fresh every time.
 - Use `--fresh` to force regeneration of all sessions for the day
 
 ---
 
 ## workscribe week
 
-Generate an AI weekly digest covering Monday through today.
+Generate a weekly digest covering Monday through today — AI-written when Ollama or a provider is configured, otherwise from the offline template (up to 5 bullets per day).
 
 ```bash
 workscribe week
@@ -107,7 +107,7 @@ The natural pre-standup ritual for Monday morning or end-of-week reporting. Outp
 
 **Caching:**
 
-Results are cached in `~/.workscribe/weekly-cache/<YYYY-WW>.md`. Running `workscribe week` a second time in the same week returns the cached digest instantly. Use `--fresh` to force regeneration.
+AI-written digests are cached in `~/.workscribe/weekly-cache/<YYYY-WW>.<engine>.md`. Running `workscribe week` a second time in the same week returns the cached digest instantly; use `--fresh` to force regeneration. Template digests (no AI configured) are always rendered fresh from your current activity.
 
 **Slack:**
 

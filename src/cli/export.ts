@@ -7,7 +7,8 @@ import { readConfig } from '../config'
 import { log } from '../utils/logger'
 import { todayDate, parseDate } from '../utils/format'
 import { EXPORTS_DIR } from '../utils/paths'
-import { buildDayPayload } from '../summary/payload'
+import { buildDayPayload, locationContextFrom } from '../summary/payload'
+import { engineLabel } from '../ai/engine'
 
 export function registerExport(program: Command): void {
   program
@@ -41,9 +42,9 @@ export function registerExport(program: Command): void {
         process.exit(1)
       }
 
-      const payload = buildDayPayload(date, sessions)
+      const payload = buildDayPayload(date, sessions, locationContextFrom(config))
 
-      log.info(`Generating summary via ${config.ai.provider}…`)
+      log.info(`Generating summary via ${engineLabel(config)}…`)
       const summary = await provider.summarize(payload)
 
       const outputPath = options.output ?? path.join(EXPORTS_DIR, `workscribe-${date}.md`)
