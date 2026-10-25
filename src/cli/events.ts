@@ -4,6 +4,8 @@ import { getEventsForDate } from '../db'
 import { log } from '../utils/logger'
 import { todayDate, parseDate, formatDate } from '../utils/format'
 import { loadAIToolRegistry } from '../config/registry'
+import { readConfig } from '../config'
+import { buildEventsJson } from '../summary/contract/build'
 
 const CATEGORY_COLORS: Record<string, (s: string) => string> = {
   shipping: chalk.green,
@@ -26,25 +28,42 @@ const AI_TOOL_DISPLAY_NAMES: Record<string, string> = Object.fromEntries(
   loadAIToolRegistry().map((entry) => [entry.tool, entry.displayName])
 )
 
+function isPositiveWholeNumber(value: number): boolean {
+  return Number.isInteger(value) && value > 0
+}
+
 export function registerEvents(program: Command): void {
   program
     .command('events')
     .description('List captured events')
     .option('--date <YYYY-MM-DD>', 'date to list events for (default: today)')
     .option('--limit <n>', 'max events to show', parseInt)
-    .action((opts) => {
+    .option('--json', 'output the versioned JSON contract (structured events, no raw commands)')
+    .action((options) => {
       let date = todayDate()
-      if (opts.date) {
+      if (options.date) {
         try {
-          date = parseDate(opts.date)
-        } catch (e) {
-          log.error((e as Error).message)
+          date = parseDate(options.date)
+        } catch (error) {
+          log.error((error as Error).message)
           process.exit(1)
         }
       }
 
       const events = getEventsForDate(date)
-      const limit = opts.limit ?? events.length
+
+      if (options.json) {
+        // Scripts call the JSON contract, so a bad --limit is an error rather than a silently odd list
+        if (options.limit !== undefined && !isPositiveWholeNumber(options.limit)) {
+          log.error('--limit must be a positive whole number')
+          process.exit(1)
+        }
+        const includeCategories = readConfig().summary?.includeCategories ?? []
+        log.plain(JSON.stringify(buildEventsJson(date, events, { limit: options.limit, includeCategories })))
+        return
+      }
+
+      const limit = options.limit ?? events.length
 
       if (events.length === 0) {
         log.plain(`No events captured for ${date}`)

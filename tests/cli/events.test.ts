@@ -1,7 +1,11 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach, onTestFinished } from 'vitest'
 
 vi.mock('../../src/db', () => ({
   getEventsForDate: vi.fn(),
+}))
+
+vi.mock('../../src/config', () => ({
+  readConfig: vi.fn(),
 }))
 
 vi.mock('../../src/config/registry', () => ({
@@ -12,6 +16,8 @@ import { Command } from 'commander'
 import { getEventsForDate } from '../../src/db'
 import { log } from '../../src/utils/logger'
 import { registerEvents } from '../../src/cli/events'
+import { readConfig } from '../../src/config'
+import { createTestConfig } from '../helpers/config'
 
 const mockGetEvents = getEventsForDate as ReturnType<typeof vi.fn>
 const mockLog = log as Record<string, ReturnType<typeof vi.fn>>
@@ -125,5 +131,88 @@ describe('workscribe events', () => {
       await makeProgram().parseAsync(['events'], { from: 'user' })
       expect(mockLog.plain).toHaveBeenCalledWith(expect.stringContaining('1 total'))
     })
+  })
+})
+
+describe('workscribe events --json', () => {
+  const EXPLORING_EVENT = {
+    ...SAMPLE_EVENTS[0],
+    id: 4,
+    category: 'exploring',
+    command: 'cat .env',
+    metadata: '{"tool":"cat"}',
+  }
+
+  beforeEach(() => {
+    vi.mocked(readConfig).mockReturnValue(createTestConfig())
+  })
+
+  function printedJson() {
+    const [[printed]] = mockLog.plain.mock.calls
+    return JSON.parse(printed as string)
+  }
+
+  it('prints one line of JSON with structured events and no command text', async () => {
+    mockGetEvents.mockReturnValue(SAMPLE_EVENTS)
+
+    await makeProgram().parseAsync(['events', '--json'], { from: 'user' })
+
+    expect(mockLog.plain).toHaveBeenCalledTimes(1)
+    const json = printedJson()
+    expect(json).toMatchObject({ schemaVersion: 1, total: 3 })
+    expect(json.events.map((event: { category: string }) => event.category)).toEqual([
+      'shipping',
+      'testing',
+      'building',
+    ])
+    expect(JSON.stringify(json)).not.toContain('npm run build')
+    expect(JSON.stringify(json)).not.toContain('/repo')
+  })
+
+  it('applies --limit to the list but reports the full total', async () => {
+    mockGetEvents.mockReturnValue(SAMPLE_EVENTS)
+
+    await makeProgram().parseAsync(['events', '--json', '--limit', '2'], { from: 'user' })
+
+    const json = printedJson()
+    expect(json.total).toBe(3)
+    expect(json.events).toHaveLength(2)
+  })
+
+  it('follows summary.includeCategories exclusions', async () => {
+    mockGetEvents.mockReturnValue([...SAMPLE_EVENTS, EXPLORING_EVENT])
+
+    await makeProgram().parseAsync(['events', '--json'], { from: 'user' })
+    expect(printedJson().total).toBe(3)
+
+    mockLog.plain.mockClear()
+    vi.mocked(readConfig).mockReturnValue(
+      createTestConfig({ summary: { format: 'markdown', includeCategories: ['exploring'] } })
+    )
+    await makeProgram().parseAsync(['events', '--json'], { from: 'user' })
+    expect(printedJson().total).toBe(4)
+  })
+
+  it.each(['0', '-3', 'abc'])('rejects --limit %s in JSON mode', async (limit) => {
+    mockGetEvents.mockReturnValue(SAMPLE_EVENTS)
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+      throw new Error('exit')
+    }) as never)
+    onTestFinished(() => exitSpy.mockRestore())
+
+    await expect(makeProgram().parseAsync(['events', '--json', '--limit', limit], { from: 'user' })).rejects.toThrow(
+      'exit'
+    )
+
+    expect(mockLog.error).toHaveBeenCalledWith('--limit must be a positive whole number')
+    expect(mockLog.plain).not.toHaveBeenCalled()
+  })
+
+  it('prints an empty list for a day with no events', async () => {
+    mockGetEvents.mockReturnValue([])
+
+    await makeProgram().parseAsync(['events', '--json', '--date', '2026-05-28'], { from: 'user' })
+
+    expect(printedJson()).toEqual({ schemaVersion: 1, date: '2026-05-28', total: 0, events: [] })
   })
 })

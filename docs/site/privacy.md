@@ -89,11 +89,23 @@ The following categories are captured locally but **excluded from the AI payload
 - `server_run` — `npm run dev`, `yarn start`
 - `git_other` — `git status`, `git log`, `git diff`
 
+**Also sent, for unclassified commands only:** a `hint` — the first 120 characters of the command after redaction — so the model can describe work that doesn't match a known pattern (e.g. `make deploy`, `terraform apply`).
+
+**Structured fields can echo command arguments:** the normaliser extracts fields such as `ssh` targets, the package run by `npx`, package names (which can be local paths or URLs) and Docker image names. These are redacted like everything else, but they are values you typed.
+
+**Aider prompts:** when an Aider session ends, Workscribe stores your last prompt from Aider's history file in that event's metadata while `capture.includeAiderPrompt` is on (the default), and it is sent with the other structured fields. Turn it off to stop capturing it: `workscribe config set capture.includeAiderPrompt false`.
+
 **Never sent:**
-- Raw command strings
+- Full command strings
 - File paths or file contents
 - Credentials or tokens
 - Hostnames or IP addresses
+
+---
+
+## JSON output for coding agents
+
+`workscribe sessions --json` and `workscribe events --json` expose the same structured data as the AI payload above — categories, structured fields, unclassified-command hints and commit subjects — never full commands, working directories or IDE file paths. The output goes wherever you or your tools send it: when a coding-agent skill reads it, it is sent to that agent's model provider.
 
 ---
 

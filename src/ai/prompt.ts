@@ -1,6 +1,7 @@
 import type { DaySummaryPayload, WeekSummaryPayload } from './types'
 import { formatDuration } from '../utils/format'
 import { getActiveProfileAiContexts } from '../profiles/loader'
+import { buildExcludedSet } from '../summary/exclusions'
 
 export const SYSTEM_PROMPT = `You write short developer work summaries. Focus on what the developer accomplished and what changed — not which tools or commands were used.
 
@@ -50,20 +51,6 @@ export function getSystemPrompt(): string {
   const contexts = getActiveProfileAiContexts()
   if (contexts.length === 0) return SYSTEM_PROMPT
   return SYSTEM_PROMPT + '\n\n' + contexts.join('\n')
-}
-
-// Categories excluded from the AI payload by default:
-// - exploring/note: handled separately (notes rendered before event list; exploring is raw file reads)
-// - linting: lint/format runs are support noise, not meaningful work outcomes
-// `other` is intentionally kept — hints give the AI context for commands that don't fit known patterns
-// (e.g. docker compose up, make deploy, terraform apply). The prompt instructs the model to omit
-// utility commands (wc, head) within that category.
-export const DEFAULT_EXCLUDED_CATEGORIES = new Set(['exploring', 'note', 'linting'])
-
-export function buildExcludedSet(includeCategories: string[] = []): Set<string> {
-  const excluded = new Set(DEFAULT_EXCLUDED_CATEGORIES)
-  for (const cat of includeCategories) excluded.delete(cat)
-  return excluded
 }
 
 export function countExcludedEvents(
