@@ -45,7 +45,7 @@ workscribe summary --webhook <url>
 |---|---|
 | `--date <YYYY-MM-DD>` | Summarise a specific date instead of today |
 | `--week` | Summarise Mon–today for the current week |
-| `--fresh` | Bypass cache and regenerate the summary |
+| `--fresh` | Bypass saved and cached summaries and regenerate |
 | `--verbose` | Show all captured events (including those not sent to AI) before generating the summary |
 | `--slack` | Post the summary to your configured Slack webhook |
 | `--webhook <url>` | Post the summary to a custom webhook URL |
@@ -137,6 +137,38 @@ workscribe sessions --json | jq .
 | `--json` | Print the [JSON output contract](#json-output-contract) — sessions with their events, notes and commits |
 
 Sessions are computed by grouping events with idle gaps greater than `session.idleTimeout` (default 30 minutes) and splitting across different repositories.
+
+### workscribe sessions summary set
+
+Save a summary for one session. This is how the [Workscribe agent skill](#agent-skill) saves what it wrote; you can use it from scripts too. The summary text is read from stdin.
+
+```bash
+workscribe sessions summary set --key 'api|2026-10-25T09:00:00.000Z' <<'EOF'
+## api (feature/auth) — 1h 30m
+- Fixed the token refresh race in the auth middleware (a1b2c3d)
+EOF
+```
+
+| Option | Description |
+|---|---|
+| `--key <key>` | The session's `key` from `workscribe sessions --json` (required) |
+
+- The text must be non-empty and at most 8 KB. Secrets are redacted before it's stored, using the same rules as captured commands (including `redact.extra`).
+- Saving again for the same session replaces the earlier summary.
+- If the key no longer matches a session (new activity can regroup a day), run `workscribe sessions --json` again and use the new key.
+- A saved summary is what `workscribe summary`, `workscribe context` and the VS Code status bar show for that session. `workscribe summary --fresh` regenerates with Workscribe's own engine for that run only; the saved summary stays until the skill (or this command) saves a new one. Saved summaries are per session, so weekly digests (`summary --week`, `week`) don't use them.
+
+### Agent skill
+
+Workscribe ships an Agent Skill (the open `SKILL.md` format several coding agents support) so the coding agent you already use can write your summaries. It isn't a command you type: inside the agent, ask in plain language — *"summarize my work today"*, *"write my standup"*, *"what did I do this week?"* — or, in Claude Code, type `/workscribe`. The agent reads `workscribe sessions --json`, writes one summary per session and saves it with `workscribe sessions summary set`.
+
+Installing the CLI doesn't install the skill into any agent. Until `workscribe skill install` is available, copy it into Claude Code yourself:
+
+```bash
+cp -R "$(npm root -g)/@workscribe/cli/skills/workscribe" ~/.claude/skills/
+```
+
+Without a coding agent nothing changes — `workscribe summary` keeps working with its offline template engine or Ollama. Running the skill sends your session data to the agent's model provider; see [Privacy](/privacy).
 
 ---
 

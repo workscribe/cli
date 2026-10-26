@@ -92,6 +92,11 @@ describe('shouldFilter', () => {
     it('filters workscribe even when not in user ignore list', () => {
       expect(shouldFilter('workscribe init', DEFAULT_IGNORE)).toBe(true)
     })
+
+    it('keeps a workscribe command that also runs real work through substitution', () => {
+      expect(shouldFilter('workscribe note "$(npm test)"', [])).toBe(false)
+      expect(shouldFilter('workscribe sessions summary set --key k < <(npm test)', [])).toBe(false)
+    })
   })
 
   describe('custom ignore list', () => {

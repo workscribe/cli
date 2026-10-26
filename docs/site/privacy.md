@@ -105,7 +105,17 @@ The following categories are captured locally but **excluded from the AI payload
 
 ## JSON output for coding agents
 
-`workscribe sessions --json` and `workscribe events --json` expose the same structured data as the AI payload above — categories, structured fields, unclassified-command hints and commit subjects — never full commands, working directories or IDE file paths. The output goes wherever you or your tools send it: when a coding-agent skill reads it, it is sent to that agent's model provider.
+`workscribe sessions --json` and `workscribe events --json` expose the same structured data as the AI payload above — categories, structured fields, unclassified-command hints and commit subjects — plus, for each session, its repo path and the directory most commands ran in. They never include full commands, per-event working directories or IDE file paths. The output goes wherever you or your tools send it: when a coding-agent skill reads it, it is sent to that agent's model provider.
+
+### The Workscribe agent skill
+
+When you ask your coding agent to summarize your work with the Workscribe skill:
+
+- **What leaves your machine:** the `sessions --json` output above, plus any files the agent chooses to read in your repos for context, go to the agent's model provider (as all of your conversation with that agent does).
+- **What's stored locally:** the summary the agent writes is saved in `~/.workscribe/workscribe.db` (`session_summaries`), after the same secret redaction as captured commands. It's shown by `workscribe summary`, `workscribe context` and the VS Code status bar for that session.
+- **What isn't recorded:** the skill's own `workscribe` commands are kept out of your captured activity.
+
+If you need summaries that never leave your machine, don't use the skill — `workscribe summary` with the template engine or Ollama runs entirely locally.
 
 ---
 

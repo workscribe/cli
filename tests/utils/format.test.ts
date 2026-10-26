@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { todayDate, startOfWeek, eachDayOfRange } from '../../src/utils/format'
+import { todayDate, startOfWeek, eachDayOfRange, localDateOf } from '../../src/utils/format'
 
 describe('todayDate', () => {
   it('returns a YYYY-MM-DD string', () => {
@@ -53,5 +53,13 @@ describe('eachDayOfRange', () => {
 
   it('returns empty array when start is after end', () => {
     expect(eachDayOfRange('2026-05-27', '2026-05-25')).toEqual([])
+  })
+})
+
+describe('localDateOf', () => {
+  it('returns the local calendar day of an ISO timestamp', () => {
+    const local = new Date(2026, 9, 25, 23, 30)
+
+    expect(localDateOf(local.toISOString())).toBe('2026-10-25')
   })
 })

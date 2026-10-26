@@ -6,13 +6,13 @@ import { readConfig } from '../config'
 import { getSessionSummaries, saveSessionSummary } from '../db'
 import { log } from '../utils/logger'
 import { todayDate, parseDate } from '../utils/format'
-import type { DaySummaryPayload, SessionPayload } from '../ai/types'
+import type { AIProvider, DaySummaryPayload, SessionPayload } from '../ai/types'
 import { resolveEngine, engineLabel } from '../ai/engine'
 import { countExcludedEvents } from '../ai/prompt'
 import { buildExcludedSet } from '../summary/exclusions'
 import { sessionToPayload, locationContextFrom } from '../summary/payload'
 import { formatSessionHeading, formatSessionLabel } from '../summary/heading'
-import { sessionKey, pickOwnSummary, isCachedEngine } from '../summary/store'
+import { sessionKey, pickSavedSummary, isCachedEngine, type SavedSummary } from '../summary/store'
 import { postSummary } from '../summary/webhook'
 import { runWeeklySummary } from '../summary/weekly'
 
@@ -70,6 +70,34 @@ function printExcludedFooter(sessionPayloads: SessionPayload[], excluded: Set<st
   log.plain('')
 }
 
+async function generateSessionSummary(input: {
+  provider: AIProvider
+  sessionPayload: SessionPayload
+  date: string
+  label: string
+}): Promise<string> {
+  const daySummaryPayload: DaySummaryPayload = { date: input.date, sessions: [input.sessionPayload] }
+  try {
+    const bullets = (await input.provider.summarize(daySummaryPayload)).trim()
+    return `${formatSessionHeading(input.sessionPayload)}\n${bullets}`
+  } catch (error) {
+    log.error(`Summary failed [${input.label}]: ${(error as Error).message}`)
+    process.exit(1)
+  }
+}
+
+/** Says which sessions came from saved summaries, so it's clear why --fresh would change the output. */
+function printSavedNote(saved: (SavedSummary | null)[]): void {
+  const fromSkill = saved.filter((entry) => entry?.fromSkill).length
+  const cached = saved.filter((entry) => entry && !entry.fromSkill).length
+  const parts = [
+    fromSkill > 0 ? `${fromSkill} written by the Workscribe agent skill` : null,
+    cached > 0 ? `${cached} cached` : null,
+  ].filter((part): part is string => part !== null)
+  if (parts.length === 0) return
+  log.plain(chalk.dim(`  (${parts.join(', ')} — use --fresh to regenerate)`))
+}
+
 export function registerSummary(program: Command): void {
   program
     .command('summary')
@@ -125,46 +153,34 @@ export function registerSummary(program: Command): void {
       const keys = sessions.map((session) => sessionKey(session.repoName, session.startedAt))
       const jsonMode = config.summary?.format === 'json'
 
-      if (!options.fresh && isCachedEngine(engine)) {
-        const cached = keys.map((key) => pickOwnSummary(getSessionSummaries(key), engine))
-        if (cached.every((text): text is string => text !== null)) {
-          const fullSummary = cached.join('\n\n')
-          log.plain('')
-          log.plain(jsonMode ? toJsonOutput(date, sessionPayloads, cached.map(stripHeading)) : fullSummary)
-          log.plain('')
-          log.plain(chalk.dim('  (cached — use --fresh to regenerate)'))
-          await postSummary(options, config, fullSummary)
-          return
-        }
-      }
-
+      // A summary the agent skill saved, or this engine's cache — `--fresh` ignores both
+      const saved = keys.map((key) => (options.fresh ? null : pickSavedSummary(getSessionSummaries(key), engine)))
+      const needsGeneration = saved.some((entry) => entry === null)
       const excluded = buildExcludedSet(config.summary?.includeCategories ?? [])
-      if (options.verbose) printCapturedEvents(sessionPayloads, excluded)
-
-      log.plain('')
-      log.info(`Generating summary via ${chalk.cyan(label)}…`)
-
-      const allSummaries: string[] = []
-      const allBullets: string[] = []
-      for (const [index, sessionPayload] of sessionPayloads.entries()) {
-        const daySummaryPayload: DaySummaryPayload = { date, sessions: [sessionPayload] }
-        try {
-          const bullets = (await provider.summarize(daySummaryPayload)).trim()
-          const summary = `${formatSessionHeading(sessionPayload)}\n${bullets}`
-          allSummaries.push(summary)
-          allBullets.push(bullets)
-          if (isCachedEngine(engine)) saveSessionSummary(keys[index], engine, summary)
-        } catch (error) {
-          log.error(`Summary failed [${label}]: ${(error as Error).message}`)
-          process.exit(1)
-        }
+      if (needsGeneration) {
+        if (options.verbose) printCapturedEvents(sessionPayloads, excluded)
+        log.plain('')
+        log.info(`Generating summary via ${chalk.cyan(label)}…`)
       }
 
-      const fullSummary = allSummaries.join('\n\n')
+      const summaries: string[] = []
+      for (const [index, sessionPayload] of sessionPayloads.entries()) {
+        const savedSummary = saved[index]
+        if (savedSummary) {
+          summaries.push(savedSummary.text)
+          continue
+        }
+        const generated = await generateSessionSummary({ provider, sessionPayload, date, label })
+        if (isCachedEngine(engine)) saveSessionSummary(keys[index], engine, generated)
+        summaries.push(generated)
+      }
+
+      const fullSummary = summaries.join('\n\n')
       log.plain('')
-      log.plain(jsonMode ? toJsonOutput(date, sessionPayloads, allBullets) : fullSummary)
+      log.plain(jsonMode ? toJsonOutput(date, sessionPayloads, summaries.map(stripHeading)) : fullSummary)
       log.plain('')
-      printExcludedFooter(sessionPayloads, excluded)
+      printSavedNote(saved)
+      if (needsGeneration) printExcludedFooter(sessionPayloads, excluded)
 
       await postSummary(options, config, fullSummary)
     })

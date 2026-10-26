@@ -144,6 +144,31 @@ workscribe config set summary.engine template
 
 ---
 
+## Saving a summary: "No session matches this key"
+
+The session's `key` came from an earlier `workscribe sessions --json`, and new activity has since regrouped that day's sessions (a session's key is its repo and start time). Run `workscribe sessions --json` again and save with the new key. The Workscribe agent skill does this automatically.
+
+---
+
+## Saving a summary: "it can't be typed in here" or "Nothing to save"
+
+`workscribe sessions summary set` reads the summary text from what's sent into it, not from the keyboard. Send it with a heredoc:
+
+```bash
+workscribe sessions summary set --key '<key>' <<'EOF'
+## my-project (main) — 1h 30m
+- What you got done
+EOF
+```
+
+---
+
+## Saving a summary: "This summary is too long to save"
+
+A saved summary can be at most 8 KB per session. Shorten it — Workscribe summaries are meant to be a few outcome bullets per session.
+
+---
+
 ## Ollama: "connection refused"
 
 Ollama isn't running. Start it:

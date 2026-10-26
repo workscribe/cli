@@ -315,7 +315,7 @@ describe('workscribe summary (daily)', () => {
     expect(summarize).toHaveBeenCalledTimes(1)
   })
 
-  it('renders the template live without reading or writing the summary cache', async () => {
+  it("renders the template live: it ignores other engines' caches and saves nothing", async () => {
     mockReadConfig.mockReturnValue({ ...BASE_CONFIG, summary: { engine: 'template' } })
     mockGetSessionSummaries.mockReturnValue([cachedRow('provider', '## my-app — 1h\n- Provider text')])
     const summarize = mockSummarize()
@@ -323,9 +323,78 @@ describe('workscribe summary (daily)', () => {
     await makeProgram().parseAsync(['summary'], { from: 'user' })
 
     expect(summarize).toHaveBeenCalledTimes(1)
-    expect(mockGetSessionSummaries).not.toHaveBeenCalled()
     expect(mockSaveSessionSummary).not.toHaveBeenCalled()
     expect(mockLog.info).toHaveBeenCalledWith(expect.stringContaining('template'))
+  })
+
+  it('shows a summary the agent skill saved instead of generating one, for any engine', async () => {
+    mockReadConfig.mockReturnValue({ ...BASE_CONFIG, summary: { engine: 'template' } })
+    mockGetSessionSummaries.mockReturnValue([cachedRow('skill', '## my-app (main) — 1h\n- Written by the agent')])
+    const summarize = mockSummarize()
+
+    await makeProgram().parseAsync(['summary'], { from: 'user' })
+
+    expect(summarize).not.toHaveBeenCalled()
+    expect(mockLog.plain).toHaveBeenCalledWith('## my-app (main) — 1h\n- Written by the agent')
+    expect(mockLog.plain).toHaveBeenCalledWith(expect.stringContaining('1 written by the Workscribe agent skill'))
+  })
+
+  it("prefers the skill summary over this engine's own cached one", async () => {
+    mockGetSessionSummaries.mockReturnValue([
+      cachedRow('provider', '## my-app — 1h\n- Provider text'),
+      cachedRow('skill', '## my-app — 1h\n- Skill text'),
+    ])
+    mockSummarize()
+
+    await makeProgram().parseAsync(['summary'], { from: 'user' })
+
+    expect(mockLog.plain).toHaveBeenCalledWith('## my-app — 1h\n- Skill text')
+  })
+
+  it('generates only the sessions without a saved summary', async () => {
+    mockGetOrBuildSessions.mockReturnValue([
+      { ...FAKE_SESSION, id: 1 },
+      { ...FAKE_SESSION, id: 2, repoName: 'api' },
+    ])
+    mockGetSessionSummaries.mockImplementation((key: string) =>
+      key.startsWith('my-app|') ? [cachedRow('skill', '## my-app — 1h\n- From the skill')] : []
+    )
+    const summarize = mockSummarize()
+
+    await makeProgram().parseAsync(['summary'], { from: 'user' })
+
+    expect(summarize).toHaveBeenCalledTimes(1)
+    expect(summarize.mock.calls[0][0].sessions[0].project).toBe('api')
+    expect(mockLog.plain).toHaveBeenCalledWith(
+      '## my-app — 1h\n- From the skill\n\n## api (main) — 1h\n- Shipped a fix'
+    )
+  })
+
+  it('turns a saved skill summary into bullets in JSON mode', async () => {
+    mockReadConfig.mockReturnValue({ ...BASE_CONFIG, summary: { format: 'json' } })
+    mockGetSessionSummaries.mockReturnValue([
+      cachedRow('skill', '## my-app (main) — 1h\n- First outcome\n- Second outcome'),
+    ])
+    mockSummarize()
+
+    await makeProgram().parseAsync(['summary'], { from: 'user' })
+
+    const expected = {
+      date: '2026-08-17',
+      sessions: [
+        { project: 'my-app', branch: 'main', durationMinutes: 60, bullets: ['First outcome', 'Second outcome'] },
+      ],
+    }
+    expect(mockLog.plain).toHaveBeenCalledWith(JSON.stringify(expected, null, 2))
+  })
+
+  it('regenerates instead of using the skill summary with --fresh', async () => {
+    mockGetSessionSummaries.mockReturnValue([cachedRow('skill', '## my-app — 1h\n- From the skill')])
+    const summarize = mockSummarize()
+
+    await makeProgram().parseAsync(['summary', '--fresh'], { from: 'user' })
+
+    expect(summarize).toHaveBeenCalledTimes(1)
   })
 
   it('names the session by its directory when it is outside a git repo', async () => {
