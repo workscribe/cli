@@ -14,12 +14,7 @@ vi.mock('../../src/profiles/fetcher', () => ({ readCachedManifest: vi.fn() }))
 import fs from 'fs'
 import { readConfig } from '../../src/config'
 import { readCachedManifest } from '../../src/profiles/fetcher'
-import {
-  getActiveProfileRules,
-  getActiveProfileAiContexts,
-  getCachedProfiles,
-  detectProfilesForDirectory,
-} from '../../src/profiles/loader'
+import { getActiveProfileRules, getCachedProfiles, detectProfilesForDirectory } from '../../src/profiles/loader'
 
 const mockFs = fs as unknown as Record<string, ReturnType<typeof vi.fn>>
 const mockReadConfig = readConfig as ReturnType<typeof vi.fn>
@@ -130,27 +125,6 @@ describe('getActiveProfileRules', () => {
       .mockReturnValueOnce(JSON.stringify(androidProfile))
     const rules = getActiveProfileRules()
     expect(rules.length).toBe(FLUTTER_PROFILE.rules.length + 1)
-  })
-})
-
-describe('getActiveProfileAiContexts', () => {
-  it('returns empty array when no profiles are active', () => {
-    expect(getActiveProfileAiContexts()).toEqual([])
-  })
-
-  it('returns aiContext strings for active profiles', () => {
-    mockReadConfig.mockReturnValue({ capture: { profiles: ['flutter'] } })
-    mockFs.existsSync.mockReturnValue(true)
-    mockFs.readFileSync.mockReturnValue(JSON.stringify(FLUTTER_PROFILE))
-    expect(getActiveProfileAiContexts()).toEqual([FLUTTER_PROFILE.aiContext])
-  })
-
-  it('omits profiles with no aiContext', () => {
-    const { aiContext: _ac, ...noContext } = FLUTTER_PROFILE
-    mockReadConfig.mockReturnValue({ capture: { profiles: ['flutter'] } })
-    mockFs.existsSync.mockReturnValue(true)
-    mockFs.readFileSync.mockReturnValue(JSON.stringify(noContext))
-    expect(getActiveProfileAiContexts()).toEqual([])
   })
 })
 

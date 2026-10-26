@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, onTestFinished } from 'vitest'
 
 vi.mock('../../src/db', () => ({}))
 vi.mock('../../src/sessions/detector', () => ({ getOrBuildSessions: vi.fn() }))
-vi.mock('../../src/ai/router', () => ({ getProvider: vi.fn() }))
+vi.mock('../../src/summary/writer', () => ({ createSummaryWriter: vi.fn() }))
 vi.mock('../../src/config', () => ({ readConfig: vi.fn() }))
 vi.mock('../../src/integrations/webhook', () => ({ postToWebhook: vi.fn() }))
 vi.mock('../../src/integrations/slack', () => ({
@@ -17,36 +17,32 @@ vi.mock('fs', () => ({
     mkdirSync: vi.fn(),
   },
 }))
-vi.mock('../../src/utils/paths', () => ({
-  WEEKLY_CACHE_DIR: '/home/user/.workscribe/weekly-cache',
-}))
+vi.mock('../../src/utils/paths')
 vi.mock('../../src/utils/format', () => ({
   todayDate: vi.fn(() => '2026-08-17'),
   startOfWeek: vi.fn(() => '2026-08-17'),
   eachDayOfRange: vi.fn(() => ['2026-08-17']),
-  isoWeekKey: vi.fn(() => '2026-W34'),
   formatDate: vi.fn(() => '09:00'),
 }))
 
 import { Command } from 'commander'
 import fs from 'fs'
 import { getOrBuildSessions } from '../../src/sessions/detector'
-import { getProvider } from '../../src/ai/router'
+import { createSummaryWriter } from '../../src/summary/writer'
 import { readConfig } from '../../src/config'
 import { postToWebhook } from '../../src/integrations/webhook'
 import { isSlackWebhookUrl, formatForSlack } from '../../src/integrations/slack'
-import { log, debugLog } from '../../src/utils/logger'
+import { log } from '../../src/utils/logger'
 import { registerWeek } from '../../src/cli/week'
 
 const mockFs = fs as unknown as Record<string, ReturnType<typeof vi.fn>>
 const mockGetOrBuildSessions = getOrBuildSessions as ReturnType<typeof vi.fn>
-const mockGetProvider = getProvider as ReturnType<typeof vi.fn>
+const mockCreateSummaryWriter = createSummaryWriter as ReturnType<typeof vi.fn>
 const mockReadConfig = readConfig as ReturnType<typeof vi.fn>
 const mockPostToWebhook = postToWebhook as ReturnType<typeof vi.fn>
 const mockIsSlackWebhookUrl = isSlackWebhookUrl as ReturnType<typeof vi.fn>
 const mockFormatForSlack = formatForSlack as ReturnType<typeof vi.fn>
 const mockLog = log as Record<string, ReturnType<typeof vi.fn>>
-const mockDebugLog = debugLog as ReturnType<typeof vi.fn>
 
 const FAKE_SESSION = {
   repoName: 'my-app',
@@ -59,7 +55,6 @@ const FAKE_SESSION = {
 }
 
 const BASE_CONFIG = {
-  ai: { provider: 'anthropic' },
   integrations: {},
 }
 
@@ -73,7 +68,9 @@ function makeProgram() {
 beforeEach(() => {
   mockReadConfig.mockReturnValue(BASE_CONFIG)
   mockGetOrBuildSessions.mockReturnValue([FAKE_SESSION])
-  mockGetProvider.mockReturnValue({ summarizeWeek: vi.fn().mockResolvedValue('# Week summary\n- Shipped a fix') })
+  mockCreateSummaryWriter.mockReturnValue({
+    summarizeWeek: vi.fn().mockResolvedValue('# Week summary\n- Shipped a fix'),
+  })
   mockFs.existsSync.mockReturnValue(false)
   mockPostToWebhook.mockResolvedValue(undefined)
 })
@@ -84,27 +81,9 @@ describe('workscribe week', () => {
     expect(mockLog.plain).toHaveBeenCalledWith(expect.stringContaining('Week summary'))
   })
 
-  it('writes the summary to the weekly cache file', async () => {
-    await makeProgram().parseAsync(['week'], { from: 'user' })
-    expect(mockFs.writeFileSync).toHaveBeenCalledWith(
-      '/home/user/.workscribe/weekly-cache/2026-W34.provider.md',
-      expect.stringContaining('Week summary'),
-      expect.any(Object)
-    )
-  })
-
-  it('still serves a 1.x weekly cache file to a provider config', async () => {
-    mockFs.existsSync.mockImplementation((file: string) => file.endsWith('/2026-W34.md'))
-    mockFs.readFileSync.mockReturnValue('# Cached 1.x digest')
-
-    await makeProgram().parseAsync(['week'], { from: 'user' })
-
-    expect(mockLog.plain).toHaveBeenCalledWith('# Cached 1.x digest')
-  })
-
-  it('renders the template digest live without reading or writing the weekly cache', async () => {
-    mockReadConfig.mockReturnValue({ ...BASE_CONFIG, summary: { engine: 'template' } })
+  it('renders the digest fresh every time, never reading or writing a weekly cache', async () => {
     mockFs.existsSync.mockReturnValue(true)
+    mockFs.readFileSync.mockReturnValue('# Cached 1.x digest')
 
     await makeProgram().parseAsync(['week'], { from: 'user' })
 
@@ -113,47 +92,27 @@ describe('workscribe week', () => {
     expect(mockLog.plain).toHaveBeenCalledWith(expect.stringContaining('Week summary'))
   })
 
-  it('returns cached content without calling the provider when cache exists', async () => {
-    mockFs.existsSync.mockReturnValue(true)
-    mockFs.readFileSync.mockReturnValue('# Cached week')
-    await makeProgram().parseAsync(['week'], { from: 'user' })
-    const provider = mockGetProvider.mock.results[0].value
-    expect(provider.summarizeWeek).not.toHaveBeenCalled()
-    expect(mockLog.plain).toHaveBeenCalledWith('# Cached week')
-  })
-
-  it('shows the cached hint when serving from cache', async () => {
-    mockFs.existsSync.mockReturnValue(true)
-    mockFs.readFileSync.mockReturnValue('# Cached week')
-    await makeProgram().parseAsync(['week'], { from: 'user' })
-    const allOutput = (mockLog.plain as ReturnType<typeof vi.fn>).mock.calls.flat().join(' ')
-    expect(allOutput).toContain('--fresh')
-  })
-
-  it('bypasses cache and regenerates when --fresh is passed', async () => {
-    mockFs.existsSync.mockReturnValue(true)
-    mockFs.readFileSync.mockReturnValue('# Cached week')
+  it('still accepts --fresh from 1.x scripts', async () => {
     await makeProgram().parseAsync(['week', '--fresh'], { from: 'user' })
-    const provider = mockGetProvider.mock.results[0].value
-    expect(provider.summarizeWeek).toHaveBeenCalled()
+
+    expect(mockLog.plain).toHaveBeenCalledWith(expect.stringContaining('Week summary'))
   })
 
-  it('logs the provider error and exits when the digest fails', async () => {
-    mockGetProvider.mockReturnValue({ summarizeWeek: vi.fn().mockRejectedValue(new Error('connection refused')) })
+  it('logs the error and exits when the digest fails', async () => {
+    mockCreateSummaryWriter.mockReturnValue({ summarizeWeek: vi.fn().mockRejectedValue(new Error('disk full')) })
 
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never)
     onTestFinished(() => exitSpy.mockRestore())
 
     await makeProgram().parseAsync(['week'], { from: 'user' })
 
-    expect(mockLog.error).toHaveBeenCalledWith('Weekly digest failed [anthropic]: connection refused')
+    expect(mockLog.error).toHaveBeenCalledWith('disk full')
     expect(exitSpy).toHaveBeenCalledWith(1)
-    expect(mockFs.writeFileSync).not.toHaveBeenCalled()
   })
 
   it('falls back to provider.summarize when summarizeWeek is not available', async () => {
     const fallback = vi.fn().mockResolvedValue('# Fallback summary')
-    mockGetProvider.mockReturnValue({ summarize: fallback })
+    mockCreateSummaryWriter.mockReturnValue({ summarize: fallback })
     await makeProgram().parseAsync(['week'], { from: 'user' })
     expect(fallback).toHaveBeenCalled()
     expect(mockLog.plain).toHaveBeenCalledWith(expect.stringContaining('Fallback summary'))
@@ -187,19 +146,17 @@ describe('workscribe week', () => {
     expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining('integrations.slackWebhook'))
   })
 
-  it('still shows the digest and exits cleanly when the cache write fails', async () => {
-    mockFs.mkdirSync.mockImplementation(() => {
-      throw new Error('EACCES: permission denied')
-    })
+  it('prints the 2.0 notice once for a 1.x config with AI provider settings', async () => {
+    mockReadConfig.mockReturnValue({ ...BASE_CONFIG, summary: { engine: 'ollama' } })
 
-    const program = makeProgram()
-    await program.parseAsync(['week'], { from: 'user' })
+    await makeProgram().parseAsync(['week'], { from: 'user' })
 
-    expect(mockLog.plain).toHaveBeenCalledWith(expect.stringContaining('Week summary'))
-    expect(mockLog.error).not.toHaveBeenCalled()
-    expect(mockDebugLog).toHaveBeenCalledWith(
-      'weekly-digest-cache',
-      expect.objectContaining({ message: expect.stringContaining('EACCES') })
-    )
+    expect(mockLog.notice).toHaveBeenCalledTimes(1)
+  })
+
+  it('prints no notice for a 2.0 config', async () => {
+    await makeProgram().parseAsync(['week'], { from: 'user' })
+
+    expect(mockLog.notice).not.toHaveBeenCalled()
   })
 })

@@ -58,4 +58,4 @@ Show the summaries, then say they were saved to Workscribe: `workscribe summary`
 
 ## Privacy
 
-Running this skill sends the JSON — categories, commit subjects, notes, short redacted hints for unclassified commands, and each session's repo path and working directory; never full commands or IDE file paths — to the model provider behind this agent, along with any files you read under `repoPath`. If the developer needs summaries that never leave their machine, point them to `workscribe summary` with its offline template engine or Ollama.
+Running this skill sends the JSON — categories, commit subjects, notes, short redacted hints for unclassified commands, and each session's repo path and working directory; never full commands or IDE file paths — to the model provider behind this agent, along with any files you read under `repoPath`. If the developer needs summaries that never leave their machine, point them to `workscribe summary`, whose template engine runs entirely offline.

@@ -6,7 +6,6 @@ import type { WorkscribeConfig } from '../../src/config'
 // instead of each needing its own inline fixture patched separately.
 export function createTestConfig(overrides: Partial<WorkscribeConfig> = {}): WorkscribeConfig {
   return {
-    ai: { provider: 'anthropic', apiKey: 'sk-test', model: '', baseUrl: '' },
     session: { idleTimeout: 30 },
     git: { qualifyRepoName: false },
     capture: {

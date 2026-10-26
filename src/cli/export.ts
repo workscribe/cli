@@ -2,13 +2,13 @@ import { Command } from 'commander'
 import fs from 'fs'
 import path from 'path'
 import { getOrBuildSessions } from '../sessions/detector'
-import { getProvider } from '../ai/router'
 import { readConfig } from '../config'
 import { log } from '../utils/logger'
 import { todayDate, parseDate } from '../utils/format'
 import { EXPORTS_DIR } from '../utils/paths'
 import { buildDayPayload, locationContextFrom } from '../summary/payload'
-import { engineLabel } from '../ai/engine'
+import { createSummaryWriter } from '../summary/writer'
+import { printLegacyAiNotice } from './notices'
 
 export function registerExport(program: Command): void {
   program
@@ -17,6 +17,9 @@ export function registerExport(program: Command): void {
     .option('--date <YYYY-MM-DD>', 'date to export (default: today)')
     .option('--output <path>', 'output file path (default: ~/.workscribe/exports/)')
     .action(async (options) => {
+      const config = readConfig()
+      printLegacyAiNotice(config)
+
       let date = todayDate()
       if (options.date) {
         try {
@@ -33,19 +36,8 @@ export function registerExport(program: Command): void {
         return
       }
 
-      const config = readConfig()
-      let provider
-      try {
-        provider = getProvider(config)
-      } catch (error) {
-        log.error((error as Error).message)
-        process.exit(1)
-      }
-
       const payload = buildDayPayload(date, sessions, locationContextFrom(config))
-
-      log.info(`Generating summary via ${engineLabel(config)}…`)
-      const summary = await provider.summarize(payload)
+      const summary = await createSummaryWriter(config).summarize(payload)
 
       const outputPath = options.output ?? path.join(EXPORTS_DIR, `workscribe-${date}.md`)
 

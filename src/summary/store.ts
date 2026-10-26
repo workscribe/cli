@@ -1,8 +1,5 @@
-import type { StoredEngine, SummaryEngine } from '../ai/engine'
+import type { StoredEngine } from '../ai/engine'
 import type { SessionSummaryRow } from '../db/types'
-
-/** Engines whose output is worth caching — the template renders instantly, and a cached copy would only go stale. */
-export type CachedEngine = Exclude<SummaryEngine, 'template'>
 
 /** Engine name for summaries migrated from the 1.x `sessions.summary` column (written by a provider or Ollama). */
 export const LEGACY_ENGINE = 'legacy' satisfies StoredEngine
@@ -14,9 +11,8 @@ export const SKILL_ENGINE = 'skill' satisfies StoredEngine
 // rendered live, so any stored copy is a stale leftover and must never beat a fresh render.
 const ENGINE_RANK: Record<StoredEngine, number> = { skill: 3, ollama: 2, provider: 2, legacy: 2, template: 0 }
 
-export function isCachedEngine(engine: SummaryEngine): engine is CachedEngine {
-  return engine !== 'template'
-}
+/** Summaries a 1.x AI provider or Ollama wrote. 2.0 no longer writes these, but still shows them for their sessions. */
+const LEGACY_AI_ENGINES = new Set<string>(['provider', 'ollama', LEGACY_ENGINE])
 
 /** Identifies a session across rebuilds. Must match SESSION_KEY_SQL in migration 005. */
 export function sessionKey(repoName: string | null, startedAt: string): string {
@@ -38,20 +34,8 @@ export function parseSessionKey(key: string): ParsedSessionKey | null {
   return { repoName: repoName === '' ? null : repoName, startedAt }
 }
 
-/** Engines whose stored summary a command may serve as its own — 1.x summaries count for provider/ollama. */
-export function summaryEnginesFor(engine: CachedEngine): StoredEngine[] {
-  return [engine, LEGACY_ENGINE]
-}
-
 function newestFirst(first: SessionSummaryRow, second: SessionSummaryRow): number {
   return second.created_at.localeCompare(first.created_at)
-}
-
-/** The newest summary this engine may serve, or null if it has to generate one. */
-export function pickOwnSummary(rows: SessionSummaryRow[], engine: CachedEngine): string | null {
-  const accepted = new Set<string>(summaryEnginesFor(engine))
-  const [newest] = rows.filter((row) => accepted.has(row.engine)).sort(newestFirst)
-  return newest?.text ?? null
 }
 
 export interface SavedSummary {
@@ -60,14 +44,14 @@ export interface SavedSummary {
 }
 
 /**
- * What `workscribe summary` can show for a session without generating: a summary the agent skill saved
- * wins (it was written with more context than any engine has), else this engine's own cached summary.
+ * What `workscribe summary` can show for a session instead of rendering the template: a summary the agent
+ * skill saved wins (it was written with more context), else one a 1.x AI provider wrote for that session.
  */
-export function pickSavedSummary(rows: SessionSummaryRow[], engine: SummaryEngine): SavedSummary | null {
+export function pickSavedSummary(rows: SessionSummaryRow[]): SavedSummary | null {
   const [newestSkill] = rows.filter((row) => row.engine === SKILL_ENGINE).sort(newestFirst)
   if (newestSkill) return { text: newestSkill.text, fromSkill: true }
-  const own = isCachedEngine(engine) ? pickOwnSummary(rows, engine) : null
-  return own === null ? null : { text: own, fromSkill: false }
+  const [newestLegacy] = rows.filter((row) => LEGACY_AI_ENGINES.has(row.engine)).sort(newestFirst)
+  return newestLegacy ? { text: newestLegacy.text, fromSkill: false } : null
 }
 
 /** The best stored summary for a session regardless of the configured engine (used by `context`). */

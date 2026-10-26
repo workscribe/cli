@@ -188,3 +188,16 @@ describe('workscribe context (repo mode)', () => {
     expect(parsed.eventCount).toBe(42)
   })
 })
+
+describe('workscribe context — old AI settings', () => {
+  it('never prints the 2.0 notice, even for a 1.x config — the VS Code extension reads this output', async () => {
+    mockReadConfig.mockReturnValue(createTestConfig({ ai: { provider: 'anthropic', apiKey: 'sk-old' } }))
+    mockGetGitContext.mockReturnValue({ repoName: 'myapp', branch: 'main' })
+    mockGetRecentSessionsByRepo.mockReturnValue([SAMPLE_SESSION])
+    mockGetSessionBranch.mockReturnValue('main')
+
+    await makeProgram().parseAsync(['context', '--json'], { from: 'user' })
+
+    expect(mockLog.notice).not.toHaveBeenCalled()
+  })
+})

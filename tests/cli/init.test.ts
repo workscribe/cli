@@ -63,8 +63,6 @@ vi.mock('../../src/config/registry', () => ({
   ]),
 }))
 
-vi.mock('../../src/ai/router', () => ({ getProvider: vi.fn() }))
-
 vi.mock('../../src/profiles/fetcher', () => ({
   cacheManifest: vi.fn().mockResolvedValue(undefined),
   installProfile: vi.fn().mockResolvedValue(undefined),
@@ -87,7 +85,6 @@ import prompts from 'prompts'
 import { readConfig, ensureInstallId } from '../../src/config'
 import { isHookInstalled, installHook, isCompletionsInstalled } from '../../src/capture/shell-hook'
 import { AI_HOOK_INTEGRATIONS } from '../../src/capture/hooks'
-import { getProvider } from '../../src/ai/router'
 import { log } from '../../src/utils/logger'
 import { registerInit } from '../../src/cli/init'
 import { createTestConfig } from '../helpers/config'
@@ -103,15 +100,14 @@ const mockEnsureInstallId = ensureInstallId as ReturnType<typeof vi.fn>
 const mockIsHookInstalled = isHookInstalled as ReturnType<typeof vi.fn>
 const mockInstallHook = installHook as ReturnType<typeof vi.fn>
 const mockIsCompletionsInstalled = isCompletionsInstalled as ReturnType<typeof vi.fn>
-const mockGetProvider = getProvider as ReturnType<typeof vi.fn>
 const mockLog = log as Record<string, ReturnType<typeof vi.fn>>
 const claudeIntegration = AI_HOOK_INTEGRATIONS['claude-code'] as Record<string, ReturnType<typeof vi.fn>>
 const aiderIntegration = AI_HOOK_INTEGRATIONS['aider'] as Record<string, ReturnType<typeof vi.fn>>
 
-// init.ts mutates config in place (ai.provider, telemetry.*) — always generate
-// a fresh object per test rather than sharing one, or mutations from one test
-// (e.g. answering the telemetry prompt with false) would leak into the next.
-const noProviderConfig = () => createTestConfig({ ai: { provider: '', apiKey: '', model: '', baseUrl: '' } })
+// init.ts mutates config in place (telemetry.*) — always generate a fresh object per test rather than
+// sharing one, or mutations from one test (e.g. answering the telemetry prompt with false) would leak into the next.
+const legacyAiConfig = () =>
+  createTestConfig({ ai: { provider: 'anthropic', apiKey: 'sk-old', model: '', baseUrl: '' } })
 
 function makeProgram() {
   const program = new Command()
@@ -135,10 +131,7 @@ function mockPromptAnswers(overrides: Record<string, unknown[]> = {}) {
     installComps: [true],
     install: [false],
     installSkill: [false],
-    provider: ['anthropic'],
-    apiKey: ['sk-test-123'],
-    baseUrl: ['https://example.com'],
-    retry: [false],
+    removeLegacyAi: [true],
   }
   const queues: Record<string, unknown[]> = {}
   for (const name of Object.keys(defaults)) {
@@ -161,7 +154,7 @@ beforeEach(() => {
   // shell hook: already installed and up to date — isolates AI tool step
   mockIsHookInstalled.mockReturnValue(true)
 
-  // AI provider already configured — skips provider prompt
+  // A 2.0 config (no old AI settings) — skips the legacy-cleanup prompt
   mockReadConfig.mockReturnValue(createTestConfig())
 
   mockEnsureInstallId.mockImplementation(
@@ -280,10 +273,10 @@ describe('workscribe init — AI tool hook integration', () => {
 })
 
 describe('workscribe init — step indicators (AC-1)', () => {
-  it('prints numbered step headers for all six steps', async () => {
+  it('prints numbered step headers for all five steps', async () => {
     await makeProgram().parseAsync(['init'], { from: 'user' })
     const allOutput = (mockLog.plain as ReturnType<typeof vi.fn>).mock.calls.flat().join('\n')
-    for (const stepNumber of [1, 2, 3, 4, 5, 6]) expect(allOutput).toContain(`[${stepNumber}/6]`)
+    for (const stepNumber of [1, 2, 3, 4, 5]) expect(allOutput).toContain(`[${stepNumber}/5]`)
   })
 })
 
@@ -310,93 +303,48 @@ describe('workscribe init — hook explanation (AC-2)', () => {
   })
 })
 
-describe('workscribe init — API key validation (AC-3)', () => {
-  // Factory to avoid shared-object mutation: init.ts mutates config.ai.provider in place
-  const noProviderConfig = () => ({
-    ai: { provider: '', apiKey: '', model: null },
-    session: { idleTimeout: 30 },
-    capture: { profiles: [] },
-    telemetry: { enabled: true, installId: 'existing-install-id' },
-  })
-
-  it('calls validate() after a key is entered for a key-based provider', async () => {
-    mockReadConfig.mockReturnValue(noProviderConfig())
-    const mockValidate = vi.fn().mockResolvedValue(undefined)
-    mockGetProvider.mockReturnValue({ validate: mockValidate })
-    mockPromptAnswers({ provider: ['anthropic'], apiKey: ['sk-test-123'] })
-    await makeProgram().parseAsync(['init'], { from: 'user' })
-    expect(mockValidate).toHaveBeenCalled()
-  })
-
-  it('logs success when validation passes', async () => {
-    mockReadConfig.mockReturnValue(noProviderConfig())
-    mockGetProvider.mockReturnValue({ validate: vi.fn().mockResolvedValue(undefined) })
-    mockPromptAnswers({ provider: ['anthropic'], apiKey: ['sk-test-123'] })
-    await makeProgram().parseAsync(['init'], { from: 'user' })
-    expect(mockLog.success).toHaveBeenCalledWith(expect.stringContaining('verified'))
-  })
-
-  it('logs a warning and prompts to save anyway when validation fails', async () => {
-    mockReadConfig.mockReturnValue(noProviderConfig())
-    mockGetProvider.mockReturnValue({ validate: vi.fn().mockRejectedValue(new Error('401 Unauthorized')) })
-    mockPromptAnswers({ provider: ['anthropic'], apiKey: ['bad-key'], retry: [false] })
-    await makeProgram().parseAsync(['init'], { from: 'user' })
-    expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining('Validation failed'))
-    expect(mockPrompts).toHaveBeenCalledWith(expect.objectContaining({ name: 'retry' }))
-  })
-
-  it('saves config when user chooses to save despite validation failure', async () => {
-    const { writeConfig } = await import('../../src/config')
-    const mockWriteConfig = writeConfig as ReturnType<typeof vi.fn>
-    mockReadConfig.mockReturnValue(noProviderConfig())
-    mockGetProvider.mockReturnValue({ validate: vi.fn().mockRejectedValue(new Error('401')) })
-    mockPromptAnswers({ provider: ['anthropic'], apiKey: ['bad-key'], retry: [true] })
-    await makeProgram().parseAsync(['init'], { from: 'user' })
-    expect(mockWriteConfig).toHaveBeenCalled()
-  })
-
-  it('clears an explicit summary.engine so the chosen provider is validated and used', async () => {
-    mockReadConfig.mockReturnValue({ ...noProviderConfig(), summary: { format: 'markdown', engine: 'template' } })
-    mockGetProvider.mockReturnValue({ validate: vi.fn().mockResolvedValue(undefined) })
-    mockPromptAnswers({ provider: ['anthropic'], apiKey: ['sk-ant-test'] })
-
-    await makeProgram().parseAsync(['init'], { from: 'user' })
-
-    const [validatedConfig] = mockGetProvider.mock.calls[0]
-    expect(validatedConfig.ai.provider).toBe('anthropic')
-    expect(validatedConfig.summary.engine).toBeUndefined()
-    expect(mockLog.info).toHaveBeenCalledWith(expect.stringContaining('Clearing summary.engine (template)'))
-  })
-
-  it('skips the API key prompt for ollama and still validates', async () => {
-    mockReadConfig.mockReturnValue(noProviderConfig())
-    const mockValidate = vi.fn().mockResolvedValue(undefined)
-    mockGetProvider.mockReturnValue({ validate: mockValidate })
-    mockPromptAnswers({ provider: ['ollama'] })
-    await makeProgram().parseAsync(['init'], { from: 'user' })
-    expect(mockPrompts).not.toHaveBeenCalledWith(expect.objectContaining({ name: 'apiKey' }))
-    expect(mockValidate).toHaveBeenCalled()
-  })
-})
-
 describe('workscribe init — what to do next (AC-4)', () => {
-  it('shows workscribe summary as primary CTA when provider is configured', async () => {
+  it('points to workscribe summary and the agent skill, never to an AI provider', async () => {
     await makeProgram().parseAsync(['init'], { from: 'user' })
     const allOutput = (mockLog.plain as ReturnType<typeof vi.fn>).mock.calls.flat().join('\n')
     expect(allOutput).toContain('workscribe summary')
+    expect(allOutput).toContain('workscribe skill install')
+    expect(allOutput).not.toMatch(/ai\.provider|API key/)
+  })
+})
+
+describe('workscribe init — no AI provider step (2.0)', () => {
+  it('never asks for a provider or an API key', async () => {
+    await makeProgram().parseAsync(['init'], { from: 'user' })
+    const promptNames = mockPrompts.mock.calls.map(([options]) => options.name)
+    expect(promptNames).not.toContain('provider')
+    expect(promptNames).not.toContain('apiKey')
+    expect(promptNames).not.toContain('removeLegacyAi')
   })
 
-  it('shows config commands as primary CTA when provider was skipped', async () => {
-    mockReadConfig.mockReturnValue({
-      ai: { provider: '', apiKey: '', model: null as null },
-      session: { idleTimeout: 30 },
-      capture: { profiles: [] },
-      telemetry: { enabled: true, installId: 'existing-install-id' },
-    })
-    mockPromptAnswers({ provider: ['skip'] })
+  it('removes 1.x AI settings, including the API key, when the user agrees', async () => {
+    mockReadConfig.mockReturnValue(legacyAiConfig())
+    const { writeConfig } = await import('../../src/config')
+    const mockWriteConfig = writeConfig as ReturnType<typeof vi.fn>
+
     await makeProgram().parseAsync(['init'], { from: 'user' })
-    const allOutput = (mockLog.plain as ReturnType<typeof vi.fn>).mock.calls.flat().join('\n')
-    expect(allOutput).toContain('workscribe config set ai.provider')
+
+    expect(mockPrompts).toHaveBeenCalledWith(expect.objectContaining({ name: 'removeLegacyAi', initial: true }))
+    const [savedConfig] = mockWriteConfig.mock.calls[0]
+    expect(savedConfig).not.toHaveProperty('ai')
+    expect(mockLog.success).toHaveBeenCalledWith('Removed the old AI provider settings from your config')
+  })
+
+  it('keeps 1.x AI settings when the user says no', async () => {
+    mockReadConfig.mockReturnValue(legacyAiConfig())
+    mockPromptAnswers({ removeLegacyAi: [false] })
+    const { writeConfig } = await import('../../src/config')
+    const mockWriteConfig = writeConfig as ReturnType<typeof vi.fn>
+
+    await makeProgram().parseAsync(['init'], { from: 'user' })
+
+    for (const [savedConfig] of mockWriteConfig.mock.calls) expect(savedConfig).toHaveProperty('ai')
+    expect(mockLog.info).toHaveBeenCalledWith(expect.stringContaining('Kept the old AI settings'))
   })
 })
 
@@ -427,15 +375,10 @@ describe('workscribe init — telemetry disclosure (CLI-04)', () => {
   })
 
   it('calls ensureInstallId and persists the returned id onto config, not just on disk', async () => {
-    // Uses the AI-provider-success path (not the default mocked flow) because
-    // that's the one place in this suite that triggers a real writeConfig(config)
-    // call we can inspect — ensureInstallId's own internal write is mocked away,
-    // so this is the only way to catch a regression where the returned id isn't
-    // synced back onto the in-memory config object before a later writeConfig call.
-    mockReadConfig.mockReturnValue(noProviderConfig())
+    // With no config file yet, init's final writeConfig(config) saves the in-memory config — so a regression
+    // where the returned id isn't synced back onto that object shows up here (ensureInstallId's own write is mocked).
+    mockFs.existsSync.mockImplementation((file: string) => file !== '/home/user/.workscribe/config.json')
     mockEnsureInstallId.mockReturnValue('brand-new-id')
-    mockGetProvider.mockReturnValue({ validate: vi.fn().mockResolvedValue(undefined) })
-    mockPromptAnswers({ provider: ['anthropic'], apiKey: ['sk-test-123'] })
     const { writeConfig } = await import('../../src/config')
     const mockWriteConfig = writeConfig as ReturnType<typeof vi.fn>
     await makeProgram().parseAsync(['init'], { from: 'user' })
@@ -513,7 +456,7 @@ describe('workscribe init — agent skill step', () => {
 
     expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining("Couldn't install the Workscribe skill"))
     const allOutput = mockLog.plain.mock.calls.flat().join('\n')
-    expect(allOutput).toContain('[6/6]')
+    expect(allOutput).toContain('Setup complete!')
   })
 
   it('warns and finishes setup when the skill files are missing from the install', async () => {
@@ -525,7 +468,7 @@ describe('workscribe init — agent skill step', () => {
 
     expect(mockLog.warn).toHaveBeenCalledWith('The Workscribe skill files are missing from this install.')
     expect(skillPrompts()).toHaveLength(0)
-    expect(mockLog.plain.mock.calls.flat().join('\n')).toContain('[6/6]')
+    expect(mockLog.plain.mock.calls.flat().join('\n')).toContain('Setup complete!')
   })
 
   it('tells the user how to install later when no coding agents are detected', async () => {

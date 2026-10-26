@@ -49,11 +49,11 @@
   "navigation": [
     {
       "group": "Getting Started",
-      "pages": ["getting-started"]
+      "pages": ["getting-started", "migrating-to-2"]
     },
     {
       "group": "Reference",
-      "pages": ["commands", "configuration", "providers"]
+      "pages": ["commands", "configuration", "summaries"]
     },
     {
       "group": "Trust & Safety",

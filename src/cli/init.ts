@@ -9,7 +9,6 @@ import { readConfig, writeConfig, ensureInstallId, WorkscribeConfig } from '../c
 import { detectProfilesForDirectory } from '../profiles/loader'
 import { installProfile, cacheManifest } from '../profiles/fetcher'
 import { getDb } from '../db'
-import { getProvider } from '../ai/router'
 import { log } from '../utils/logger'
 import { loadAIToolRegistry } from '../config/registry'
 import {
@@ -30,13 +29,14 @@ import { resolvePackagedSkillDir } from '../skills/package-path'
 import { describeInstallOutcome, reasonOf } from '../skills/report'
 import { groupBySkillsFolder, outcomeWithoutPrompt } from '../skills/state'
 import { describeTarget, installIntoFolder, printMessage } from '../skills/actions'
+import { offerLegacyAiCleanup } from './legacy-ai-cleanup'
 import type { SkillsFolderGroup } from '../skills/types'
 
 declare const __WORKSCRIBE_VERSION__: string
 
 type Shell = { name: string; rcFile: string }
 
-const TOTAL_STEPS = 6
+const TOTAL_STEPS = 5
 
 function detectShell(): Shell | null {
   const shell = process.env.SHELL ?? ''
@@ -77,12 +77,12 @@ function runDataDirectoriesStep(): void {
 }
 
 // ── Step 2: Database ──────────────────────────────────────────────────────
-function initDatabaseAndConfig(): WorkscribeConfig {
+async function initDatabaseAndConfig(): Promise<WorkscribeConfig> {
   step(2, TOTAL_STEPS, 'Initialising database')
   const config = readConfig()
   getDb()
   log.success('Database ready')
-  return config
+  return offerLegacyAiCleanup(config)
 }
 
 // ── Telemetry (part of setup, no separate step) ────────────────────────────
@@ -294,96 +294,8 @@ async function runProfileDetectionStep(config: WorkscribeConfig): Promise<void> 
   }
 }
 
-// ── Step 6: AI provider ───────────────────────────────────────────────────
-async function runAIProviderStep(config: WorkscribeConfig): Promise<boolean> {
-  step(6, TOTAL_STEPS, 'Configuring AI provider')
-
-  let providerConfigured = !!config.ai.provider
-
-  if (config.ai.provider) {
-    log.info(`AI provider already configured: ${chalk.cyan(config.ai.provider)}`)
-    return providerConfigured
-  }
-
-  log.plain('')
-  const { provider } = await prompts({
-    type: 'select',
-    name: 'provider',
-    message: 'Which AI provider do you want to use?',
-    choices: [
-      { title: 'Anthropic (Claude) — requires API key', value: 'anthropic' },
-      { title: 'OpenAI — requires API key', value: 'openai' },
-      { title: 'Ollama (local) — free, runs on your machine', value: 'ollama' },
-      { title: 'Other (OpenAI-compatible) — Groq, Together, Mistral…', value: 'openai-compatible' },
-      { title: 'Skip — configure later', value: 'skip' },
-    ],
-  })
-
-  if (!provider || provider === 'skip') {
-    log.info('Skipped — run later: workscribe config set ai.provider <provider>')
-    return false
-  }
-
-  config.ai.provider = provider
-  // Choosing a provider here means "summarize with it". An earlier explicit summary.engine would
-  // otherwise keep summaries — and the validation below — on the old engine.
-  if (config.summary?.engine) {
-    log.info(`Clearing summary.engine (${config.summary.engine}) so summaries use ${provider}`)
-    delete config.summary.engine
-  }
-
-  if (provider === 'ollama') {
-    log.plain(`\n  ${chalk.dim('Make sure Ollama is running: ollama serve')}`)
-    log.plain(`  ${chalk.dim('Default model: llama3  (change with: workscribe config set ai.model <model>)')}\n`)
-  } else {
-    const { apiKey } = await prompts({
-      type: 'password',
-      name: 'apiKey',
-      message: `Enter your ${provider === 'openai-compatible' ? '' : provider + ' '}API key:`,
-    })
-    if (apiKey) config.ai.apiKey = apiKey
-
-    if (provider === 'openai-compatible') {
-      const { baseUrl } = await prompts({
-        type: 'text',
-        name: 'baseUrl',
-        message: 'Enter the base URL (e.g. https://api.groq.com/openai/v1):',
-      })
-      if (baseUrl) config.ai.baseUrl = baseUrl
-    }
-  }
-
-  log.plain('')
-  log.info(`Validating ${chalk.cyan(provider)} connection…`)
-  try {
-    const testProvider = getProvider(config)
-    await testProvider.validate()
-    log.success('API key verified')
-    writeConfig(config)
-    providerConfigured = true
-  } catch (error) {
-    log.warn(`Validation failed: ${(error as Error).message}`)
-    const { retry } = await prompts({
-      type: 'confirm',
-      name: 'retry',
-      message: 'Save anyway and configure later?',
-      initial: false,
-    })
-    if (retry) {
-      writeConfig(config)
-      providerConfigured = false
-      log.info('Config saved — run workscribe config set ai.apiKey <key> to update')
-    } else {
-      log.info('API key not saved — run workscribe init again to configure')
-      providerConfigured = false
-    }
-  }
-
-  return providerConfigured
-}
-
 // ── What to do next ───────────────────────────────────────────────────────
-function printNextSteps(shell: Shell | null, providerConfigured: boolean): void {
+function printNextSteps(shell: Shell | null): void {
   log.plain('')
   log.plain(chalk.bold('  Setup complete!'))
   log.plain('')
@@ -400,20 +312,14 @@ function printNextSteps(shell: Shell | null, providerConfigured: boolean): void 
     log.plain('')
   }
 
-  if (providerConfigured) {
-    log.plain(`  Then run a few commands and generate your first summary:`)
-    log.plain(`    ${chalk.cyan('workscribe summary')}`)
-    log.plain('')
-    log.plain(`  Check capture is working:`)
-    log.plain(`    ${chalk.cyan('workscribe status')}`)
-  } else {
-    log.plain(`  Before generating summaries, configure an AI provider:`)
-    log.plain(`    ${chalk.cyan('workscribe config set ai.provider anthropic')}`)
-    log.plain(`    ${chalk.cyan('workscribe config set ai.apiKey <your-key>')}`)
-    log.plain('')
-    log.plain(`  Then run:`)
-    log.plain(`    ${chalk.cyan('workscribe summary')}`)
-  }
+  log.plain(`  Then run a few commands and generate your first summary:`)
+  log.plain(`    ${chalk.cyan('workscribe summary')}`)
+  log.plain('')
+  log.plain(`  For AI-written summaries, ask your coding agent to "summarize my work today"`)
+  log.plain(`  ${chalk.dim('(needs the Workscribe skill: workscribe skill install)')}`)
+  log.plain('')
+  log.plain(`  Check capture is working:`)
+  log.plain(`    ${chalk.cyan('workscribe status')}`)
 
   log.plain('')
 }
@@ -426,18 +332,17 @@ export function registerInit(program: Command): void {
       log.plain(chalk.bold('\n  Workscribe — Developer Work Journal\n'))
 
       runDataDirectoriesStep()
-      const config = initDatabaseAndConfig()
+      const config = await initDatabaseAndConfig()
       await runTelemetryStep(config)
       const shell = await runShellHookStep(program)
       await runAIToolsStep()
       await runAgentSkillStep()
       await runProfileDetectionStep(config)
-      const providerConfigured = await runAIProviderStep(config)
 
       if (!fs.existsSync(CONFIG_PATH)) {
         writeConfig(config)
       }
 
-      printNextSteps(shell, providerConfigured)
+      printNextSteps(shell)
     })
 }

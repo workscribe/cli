@@ -3,15 +3,12 @@ import { getConfigValue, setConfigValue } from '../../src/config'
 import type { WorkscribeConfig } from '../../src/config'
 
 // A clean config object to use as a base in tests
-const BASE_CONFIG: WorkscribeConfig = {
-  ai: {
-    provider: '',
-    apiKey: '',
-    model: '',
-    baseUrl: '',
-  },
+const BASE_CONFIG = {
   session: {
     idleTimeout: 30,
+  },
+  git: {
+    qualifyRepoName: false,
   },
   capture: {
     ignore: ['cd', 'ls', 'pwd'],
@@ -22,7 +19,10 @@ const BASE_CONFIG: WorkscribeConfig = {
   summary: {
     format: 'markdown',
   },
-}
+  integrations: {
+    webhook: '',
+  },
+} as unknown as WorkscribeConfig
 
 describe('getConfigValue', () => {
   it('gets a top-level nested value', () => {
@@ -30,8 +30,8 @@ describe('getConfigValue', () => {
   })
 
   it('gets a string nested value', () => {
-    const config = { ...BASE_CONFIG, ai: { ...BASE_CONFIG.ai, provider: 'anthropic' } }
-    expect(getConfigValue(config, 'ai.provider')).toBe('anthropic')
+    const config = { ...BASE_CONFIG, integrations: { webhook: 'https://example.com/hook' } }
+    expect(getConfigValue(config, 'integrations.webhook')).toBe('https://example.com/hook')
   })
 
   it('gets an array value', () => {
@@ -39,7 +39,7 @@ describe('getConfigValue', () => {
   })
 
   it('returns undefined for a missing key', () => {
-    expect(getConfigValue(BASE_CONFIG, 'ai.nonexistent')).toBeUndefined()
+    expect(getConfigValue(BASE_CONFIG, 'session.nonexistent')).toBeUndefined()
   })
 
   it('returns undefined for a deeply missing key', () => {
@@ -47,20 +47,14 @@ describe('getConfigValue', () => {
   })
 
   it('returns the whole nested object for a partial path', () => {
-    const result = getConfigValue(BASE_CONFIG, 'ai')
-    expect(result).toEqual(BASE_CONFIG.ai)
+    expect(getConfigValue(BASE_CONFIG, 'session')).toEqual(BASE_CONFIG.session)
   })
 })
 
 describe('setConfigValue', () => {
   it('sets a nested string value', () => {
-    const result = setConfigValue(BASE_CONFIG, 'ai.provider', 'anthropic')
-    expect(result.ai.provider).toBe('anthropic')
-  })
-
-  it('sets ai.apiKey', () => {
-    const result = setConfigValue(BASE_CONFIG, 'ai.apiKey', 'sk-test-123')
-    expect(result.ai.apiKey).toBe('sk-test-123')
+    const result = setConfigValue(BASE_CONFIG, 'integrations.webhook', 'https://example.com/hook')
+    expect(result.integrations?.webhook).toBe('https://example.com/hook')
   })
 
   it('coerces numeric strings to numbers', () => {
@@ -70,26 +64,26 @@ describe('setConfigValue', () => {
   })
 
   it('coerces "true" to boolean true', () => {
-    const result = setConfigValue(BASE_CONFIG, 'ai.provider', 'true')
-    expect(result.ai.provider).toBe(true)
+    const result = setConfigValue(BASE_CONFIG, 'git.qualifyRepoName', 'true')
+    expect(result.git.qualifyRepoName).toBe(true)
   })
 
   it('coerces "false" to boolean false', () => {
-    const result = setConfigValue(BASE_CONFIG, 'ai.provider', 'false')
-    expect(result.ai.provider).toBe(false)
+    const config = { ...BASE_CONFIG, git: { qualifyRepoName: true } }
+    const result = setConfigValue(config, 'git.qualifyRepoName', 'false')
+    expect(result.git.qualifyRepoName).toBe(false)
   })
 
   it('does not mutate the original config', () => {
     const original = JSON.parse(JSON.stringify(BASE_CONFIG)) as WorkscribeConfig
-    setConfigValue(BASE_CONFIG, 'ai.provider', 'openai')
-    expect(BASE_CONFIG.ai.provider).toBe(original.ai.provider)
+    setConfigValue(BASE_CONFIG, 'session.idleTimeout', '45')
+    expect(BASE_CONFIG.session.idleTimeout).toBe(original.session.idleTimeout)
   })
 
   it('preserves other keys when setting one value', () => {
-    const result = setConfigValue(BASE_CONFIG, 'ai.provider', 'openai')
-    expect(result.session.idleTimeout).toBe(30)
+    const result = setConfigValue(BASE_CONFIG, 'session.idleTimeout', '45')
     expect(result.capture.ignore).toEqual(['cd', 'ls', 'pwd'])
-    expect(result.ai.apiKey).toBe('')
+    expect(result.summary.format).toBe('markdown')
   })
 
   it('sets summary format', () => {
@@ -97,13 +91,8 @@ describe('setConfigValue', () => {
     expect(result.summary.format).toBe('json')
   })
 
-  it('sets ai.baseUrl', () => {
-    const result = setConfigValue(BASE_CONFIG, 'ai.baseUrl', 'https://api.groq.com/openai/v1')
-    expect(result.ai.baseUrl).toBe('https://api.groq.com/openai/v1')
-  })
-
-  it('keeps URL as string (not coerced to number)', () => {
-    const result = setConfigValue(BASE_CONFIG, 'ai.baseUrl', 'https://api.groq.com/openai/v1')
-    expect(typeof result.ai.baseUrl).toBe('string')
+  it('keeps a URL as a string (not coerced to a number)', () => {
+    const result = setConfigValue(BASE_CONFIG, 'integrations.webhook', 'https://api.example.com/v1')
+    expect(typeof result.integrations?.webhook).toBe('string')
   })
 })

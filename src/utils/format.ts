@@ -64,11 +64,3 @@ export function timeAgo(isoString: string, now = Date.now()): string {
   if (days === 1) return 'yesterday'
   return `${days} days ago`
 }
-
-// Returns ISO week string YYYY-WW for a date
-export function isoWeekKey(dateStr: string): string {
-  const d = new Date(dateStr + 'T00:00:00')
-  const jan4 = new Date(d.getFullYear(), 0, 4)
-  const weekNum = Math.ceil(((d.getTime() - jan4.getTime()) / 86400000 + jan4.getDay() + 1) / 7)
-  return `${d.getFullYear()}-W${String(weekNum).padStart(2, '0')}`
-}

@@ -1,28 +1,22 @@
 import { Command } from 'commander'
-import { getProvider } from '../ai/router'
 import { readConfig } from '../config'
 import { log } from '../utils/logger'
 import { runWeeklySummary } from '../summary/weekly'
+import { createSummaryWriter } from '../summary/writer'
+import { printLegacyAiNotice } from './notices'
 
 export function registerWeek(program: Command): void {
   program
     .command('week')
-    .description('Generate an AI weekly digest (Mon–today)')
-    .option('--fresh', 'bypass cache and regenerate')
+    .description('Generate a weekly digest (Mon–today)')
+    .option('--fresh', 'accepted for 1.x scripts — digests are always rendered fresh')
     .option('--slack', 'post to Slack webhook from config')
     .option('--webhook <url>', 'post to a custom webhook URL')
     .action(async (options) => {
       const config = readConfig()
-      let provider
+      printLegacyAiNotice(config)
       try {
-        provider = getProvider(config)
-      } catch (error) {
-        log.error((error as Error).message)
-        process.exit(1)
-      }
-
-      try {
-        await runWeeklySummary({ options, config, provider, noun: 'digest' })
+        await runWeeklySummary({ options, config, provider: createSummaryWriter(config) })
       } catch (error) {
         log.error((error as Error).message)
         process.exit(1)

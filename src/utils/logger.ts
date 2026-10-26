@@ -9,6 +9,8 @@ export const log = {
   success: (msg: string) => console.log(chalk.green('✓'), msg),
   warn: (msg: string) => console.log(chalk.yellow('⚠'), msg),
   error: (msg: string) => console.error(chalk.red('✗'), msg),
+  /** A warning on stderr — keeps stdout clean for JSON output (summary.format=json) and pipes. */
+  notice: (msg: string) => process.stderr.write(`${chalk.yellow('⚠')} ${msg}\n`),
   plain: (msg: string) => console.log(msg),
 }
 

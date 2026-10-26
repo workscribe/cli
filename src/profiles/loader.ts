@@ -85,16 +85,6 @@ export function getActiveProfileRules(): CompiledRule[] {
   })
 }
 
-export function getActiveProfileAiContexts(): string[] {
-  const activeNames = readConfig().capture.profiles
-  if (activeNames.length === 0) return []
-
-  return activeNames.flatMap((name) => {
-    const profile = loadProfileFromDisk(name)
-    return profile?.aiContext ? [profile.aiContext] : []
-  })
-}
-
 export function getCachedProfiles(): Profile[] {
   if (!fs.existsSync(PROFILES_DIR)) return []
   return fs

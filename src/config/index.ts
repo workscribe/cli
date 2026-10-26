@@ -3,15 +3,20 @@ import fs from 'fs'
 import path from 'path'
 import { CONFIG_PATH } from '../utils/paths'
 import { debugLog } from '../utils/logger'
-import type { SummaryEngine } from '../ai/engine'
+
+/**
+ * AI provider settings from Workscribe 1.x. 2.0 removed AI providers, so nothing writes these any more — they're
+ * read only to tell 1.x users (see src/summary/legacy-ai.ts) and to keep a stored API key out of bug reports.
+ */
+export interface LegacyAiConfig {
+  provider?: string
+  apiKey?: string
+  model?: string
+  baseUrl?: string
+}
 
 export interface WorkscribeConfig {
-  ai: {
-    provider: string // 'anthropic' | 'openai' | 'ollama' | 'openai-compatible'
-    apiKey: string
-    model: string
-    baseUrl: string
-  }
+  ai?: LegacyAiConfig
   session: {
     idleTimeout: number // minutes
   }
@@ -34,13 +39,13 @@ export interface WorkscribeConfig {
   }
   summary: {
     format: 'markdown' | 'json'
-    // Categories re-included in the AI payload (overrides built-in exclusions).
+    // Categories re-included in summaries (overrides built-in exclusions).
     // Excluded by default: exploring, other, linting.
     // Example: ["linting"] to include lint pass/fail in summaries.
     includeCategories?: string[]
-    // Which engine writes summaries. Deliberately absent from DEFAULTS: when unset it is
-    // derived from ai.provider (see resolveEngine), so 1.x configs keep their provider.
-    engine?: SummaryEngine
+    // 1.x setting ("template" | "ollama" | "provider"). 2.0 always uses the template; read only to detect
+    // old configs (src/summary/legacy-ai.ts).
+    engine?: string
   }
   projects?: Record<string, string> // absolute path → display name override
   integrations?: {
@@ -54,12 +59,6 @@ export interface WorkscribeConfig {
 }
 
 const DEFAULTS: WorkscribeConfig = {
-  ai: {
-    provider: '',
-    apiKey: '',
-    model: '',
-    baseUrl: '',
-  },
   session: {
     idleTimeout: 30,
   },

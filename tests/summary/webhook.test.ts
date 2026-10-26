@@ -27,33 +27,37 @@ beforeEach(() => {
 
 describe('postSummary', () => {
   it('does nothing without --webhook or --slack', async () => {
-    await postSummary({}, WITH_SLACK, 'summary')
+    await postSummary({ options: {}, config: WITH_SLACK, summary: 'summary' })
 
     expect(mockPostToWebhook).not.toHaveBeenCalled()
     expect(mockLog.warn).not.toHaveBeenCalled()
   })
 
   it('posts the raw summary to a non-Slack --webhook', async () => {
-    await postSummary({ webhook: 'https://example.com/hook' }, NO_INTEGRATIONS, 'summary')
+    await postSummary({ options: { webhook: 'https://example.com/hook' }, config: NO_INTEGRATIONS, summary: 'summary' })
 
     expect(mockPostToWebhook).toHaveBeenCalledWith('https://example.com/hook', 'summary')
   })
 
   it('prefers --webhook over the configured Slack webhook', async () => {
-    await postSummary({ webhook: 'https://example.com/hook', slack: true }, WITH_SLACK, 'summary')
+    await postSummary({
+      options: { webhook: 'https://example.com/hook', slack: true },
+      config: WITH_SLACK,
+      summary: 'summary',
+    })
 
     expect(mockPostToWebhook).toHaveBeenCalledWith('https://example.com/hook', 'summary')
   })
 
   it('formats for Slack when --slack uses the configured Slack webhook', async () => {
-    await postSummary({ slack: true }, WITH_SLACK, 'summary')
+    await postSummary({ options: { slack: true }, config: WITH_SLACK, summary: 'summary' })
 
     expect(formatForSlack).toHaveBeenCalledWith('summary', expect.any(String))
     expect(mockPostToWebhook).toHaveBeenCalledWith(SLACK_URL, 'slack-formatted')
   })
 
   it('warns when --slack is passed but no Slack webhook is configured', async () => {
-    await postSummary({ slack: true }, NO_INTEGRATIONS, 'summary')
+    await postSummary({ options: { slack: true }, config: NO_INTEGRATIONS, summary: 'summary' })
 
     expect(mockPostToWebhook).not.toHaveBeenCalled()
     expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining('integrations.slackWebhook'))
@@ -62,8 +66,22 @@ describe('postSummary', () => {
   it('logs a failed post instead of throwing', async () => {
     mockPostToWebhook.mockRejectedValue(new Error('HTTP 500'))
 
-    await postSummary({ webhook: 'https://example.com/hook' }, NO_INTEGRATIONS, 'summary')
+    await postSummary({ options: { webhook: 'https://example.com/hook' }, config: NO_INTEGRATIONS, summary: 'summary' })
 
     expect(mockLog.error).toHaveBeenCalledWith('Webhook failed: HTTP 500')
+  })
+
+  it('sends its status lines to stderr when stdout carries JSON', async () => {
+    await postSummary({
+      options: { webhook: 'https://example.com/hook' },
+      config: NO_INTEGRATIONS,
+      summary: 'summary',
+      statusToStderr: true,
+    })
+
+    expect(mockLog.notice).toHaveBeenCalledWith('Posting to webhook…')
+    expect(mockLog.notice).toHaveBeenCalledWith('Posted.')
+    expect(mockLog.info).not.toHaveBeenCalled()
+    expect(mockLog.success).not.toHaveBeenCalled()
   })
 })
