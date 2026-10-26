@@ -1,11 +1,9 @@
 import type { EventRow } from '../db/types'
+import { isWorkscribeOnlyCommand } from './workscribe-command'
 
 function normalizeForFilter(cmd: string): string {
   return cmd.trim().replace(/\s+/g, ' ')
 }
-
-// Always filtered regardless of user config — internal tool noise
-const BUILTIN_IGNORE = new Set(['workscribe'])
 
 /**
  * Returns true if the command should be dropped (noise / ignore list).
@@ -14,10 +12,11 @@ export function shouldFilter(command: string, ignoreList: string[]): boolean {
   const normalized = normalizeForFilter(command)
   if (!normalized) return true
 
-  const baseCmd = normalized.split(' ')[0]
+  // Workscribe's own commands — always excluded, not user-configurable. Checked on the raw command so
+  // compound ones an agent runs are caught too, while `workscribe note "$(npm test)"` still counts as work.
+  if (isWorkscribeOnlyCommand(command)) return true
 
-  // Built-in filter: always excluded, not user-configurable
-  if (BUILTIN_IGNORE.has(baseCmd)) return true
+  const baseCmd = normalized.split(' ')[0]
 
   // User-configurable ignore list
   const normalizedIgnore = ignoreList.map(normalizeForFilter)
