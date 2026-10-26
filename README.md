@@ -62,8 +62,8 @@ The [Workscribe VS Code extension](https://marketplace.visualstudio.com/items?it
 If the CLI is still installed:
 
 ```bash
-workscribe uninstall        # removes shell hooks, optionally deletes local data
-npm uninstall -g @workscribe/cli
+workscribe uninstall        # removes shell hooks and the agent skill, optionally deletes local data
+npm uninstall -g @workscribe/cli   # run after — npm doesn't run Workscribe's cleanup itself
 ```
 
 If you've already removed the binary and still see `_workscribe_precmd` errors in your terminal, remove the hook block manually:

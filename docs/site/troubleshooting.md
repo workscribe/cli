@@ -240,7 +240,7 @@ This loses captured history but config is unaffected.
 
 ## Uninstalling
 
-Run the uninstall command first — it removes the shell hook from your rc file before the binary is deleted:
+Run the uninstall command first — it removes the shell hook from your rc file and the Workscribe skill from your coding agents before the binary is deleted:
 
 ```bash
 workscribe uninstall
@@ -262,7 +262,39 @@ pnpm remove -g @workscribe/cli
 bun remove -g @workscribe/cli
 ```
 
-> **Note:** From v1.8.0 onwards, `npm uninstall -g` removes the shell hook automatically via a `preuninstall` lifecycle script. Running `workscribe uninstall` first is still recommended if you want to be prompted about deleting your data.
+> **Note:** Run `workscribe uninstall` first. npm 7 and later don't run package cleanup scripts, so removing the package on its own leaves the shell hook in your rc file and the agent skill in your coding agents. If that already happened, see the next section.
+
+---
+
+## The Workscribe skill doesn't show up in my coding agent
+
+1. Check what's installed: `workscribe skill status`. If your agent shows **not detected**, install it for that agent anyway with `workscribe skill install --agent <id>` (`claude-code`, `codex`, `copilot` or `cursor`).
+2. If it shows **not installed** or **outdated**, run `workscribe skill install`.
+3. Restart the agent — most agents only load skills when they start.
+
+In Claude Code the skill appears as `/workscribe`; in other agents, ask in plain language: *"summarize my work today"*.
+
+---
+
+## "A different workscribe skill is already there"
+
+`workscribe skill install` found a `workscribe` folder in the agent's skills folder that Workscribe didn't install (it has no `.workscribe-skill.json` marker) — usually an earlier manual copy. Workscribe leaves it alone so it never overwrites your own work. To replace it with the current version:
+
+```bash
+workscribe skill install --force
+```
+
+---
+
+## `/workscribe` still shows up after removing the CLI
+
+If you ran `npm uninstall -g @workscribe/cli` without `workscribe uninstall` first, the skill stays in your coding agents and tells them to run a `workscribe` command that no longer exists. Delete the copies Workscribe installed:
+
+```bash
+rm -rf ~/.claude/skills/workscribe ~/.agents/skills/workscribe ~/.cursor/skills/workscribe
+```
+
+Check each folder first if you've ever added a `workscribe` skill of your own there. Then restart the agent.
 
 ---
 

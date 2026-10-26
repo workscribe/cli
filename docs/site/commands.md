@@ -20,6 +20,7 @@ Safe to re-run at any time — installs missing hooks, updates outdated ones, an
 - Initialises the SQLite database
 - Installs or updates the shell hook in `~/.zshrc` or `~/.bashrc`
 - Detects installed AI coding tools (Claude Code, Aider, etc.) and offers to install a session capture hook for each — opt-in, defaults to no
+- Detects coding agents (Claude Code, Codex, GitHub Copilot, Cursor) and offers to install the [Workscribe agent skill](#agent-skill) for each — defaults to yes, and only asks when the skill is missing or outdated
 - Prompts you to choose an AI provider and enter your API key
 
 **Shell hook updates:**
@@ -162,13 +163,49 @@ EOF
 
 Workscribe ships an Agent Skill (the open `SKILL.md` format several coding agents support) so the coding agent you already use can write your summaries. It isn't a command you type: inside the agent, ask in plain language — *"summarize my work today"*, *"write my standup"*, *"what did I do this week?"* — or, in Claude Code, type `/workscribe`. The agent reads `workscribe sessions --json`, writes one summary per session and saves it with `workscribe sessions summary set`.
 
-Installing the CLI doesn't install the skill into any agent. Until `workscribe skill install` is available, copy it into Claude Code yourself:
-
-```bash
-cp -R "$(npm root -g)/@workscribe/cli/skills/workscribe" ~/.claude/skills/
-```
+`workscribe init` offers to install the skill for each coding agent it finds. To install or update it later, run [`workscribe skill install`](#workscribe-skill), then restart any agent that's already open.
 
 Without a coding agent nothing changes — `workscribe summary` keeps working with its offline template engine or Ollama. Running the skill sends your session data to the agent's model provider; see [Privacy](/privacy).
+
+---
+
+## workscribe skill
+
+Install, check and remove the [Workscribe agent skill](#agent-skill) in your coding agents.
+
+```bash
+workscribe skill install                      # every detected agent
+workscribe skill install --agent claude-code  # just one (or several: --agent codex cursor)
+workscribe skill status
+workscribe skill uninstall
+```
+
+| Option | Description |
+|---|---|
+| `--agent <ids...>` | Limit to these agents: `claude-code`, `codex`, `copilot`, `cursor` (`install` and `uninstall`) |
+| `--force` | Replace a `workscribe` skill folder that Workscribe didn't install (`install` only) |
+
+**Where the skill goes** — each agent's personal skills folder:
+
+| Agent | Folder | Detected by |
+|---|---|---|
+| Claude Code | `~/.claude/skills/workscribe` | `~/.claude` or the `claude` command |
+| Codex | `~/.agents/skills/workscribe` | `~/.codex` or the `codex` command |
+| GitHub Copilot | `~/.agents/skills/workscribe` | `~/.copilot`, the `copilot` command, or the Copilot Chat VS Code extension |
+| Cursor | `~/.cursor/skills/workscribe` | `~/.cursor`, or the `cursor` / `cursor-agent` command |
+
+Codex and GitHub Copilot read the same folder, so they share one copy.
+
+**How it behaves:**
+- `install` is safe to re-run: an up-to-date copy is left alone and an older one is replaced. The new copy is put in place in one step, so an interrupted install never leaves a half-written skill.
+- Each copy Workscribe installs has a `.workscribe-skill.json` marker recording its version. A `workscribe` folder without that marker is yours, so `install` skips it (unless `--force`) and `uninstall` never touches it.
+- `status` lists every supported agent as not detected, not installed, installed, outdated, or "a different workscribe skill is there", with the command that fixes it.
+- Installed skills aren't updated automatically when you upgrade the CLI — `workscribe status` flags an outdated copy, and `workscribe skill install` (or `workscribe init`) refreshes it.
+
+**Whose activity gets captured:** the skill works the same in every agent — it summarizes whatever Workscribe captured — but how much of the agent's own work is captured differs:
+- **Claude Code**: its commands are captured through the Claude Code session hook (`workscribe init` offers it).
+- **GitHub Copilot and Cursor**: their agents run commands in the VS Code or Cursor integrated terminal, so the shell hook most likely captures them.
+- **Codex**: it runs commands in its own process, so only launching `codex` is recorded.
 
 ---
 
@@ -407,6 +444,7 @@ workscribe status
 - Number of events captured today and total
 - Last captured event
 - Configured AI provider and model
+- An "Agent skill" line for each detected coding agent: installed (with version), outdated, or not installed — with the command to fix it
 - Pending security alerts count (if any)
 
 ---
@@ -445,7 +483,7 @@ When paused, the shell hook still fires but events are silently discarded. Usefu
 
 ## workscribe uninstall
 
-Remove shell hooks and optionally delete all Workscribe data.
+Remove shell hooks and the agent skill, and optionally delete all Workscribe data. Run it **before** `npm uninstall -g @workscribe/cli` — npm 7 and later don't run package cleanup scripts, so removing the package alone leaves these behind.
 
 ```bash
 workscribe uninstall
@@ -454,10 +492,11 @@ workscribe uninstall --hooks-only
 
 | Option | Description |
 |---|---|
-| `--hooks-only` | Remove shell hooks only — skip the data deletion prompt |
+| `--hooks-only` | Remove shell hooks only — keep the agent skill and skip the data deletion prompt |
 
 **What it does:**
 - Detects and removes the Workscribe hook block from `~/.zshrc`, `~/.bashrc`, and `~/.bash_profile`
+- Removes the agent skill Workscribe installed (never a `workscribe` skill you added yourself)
 - Prompts whether to delete `~/.workscribe/` (database, config, exports) — defaults to **no**
 - Prints the command to remove the CLI itself (`npm uninstall -g @workscribe/cli`)
 

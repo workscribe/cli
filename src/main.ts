@@ -21,6 +21,7 @@ import { registerBugReport } from './cli/bug-report'
 import { registerCompletions, shouldRunStartupChecks } from './cli/completions'
 import { registerAlerts } from './cli/alerts'
 import { registerContext } from './cli/context'
+import { registerSkill } from './cli/skill'
 import { checkForUpdate, pingTelemetry } from './utils/update-check'
 import { ensureTelemetryFallback } from './config'
 import { log } from './utils/logger'
@@ -63,6 +64,7 @@ registerBugReport(program)
 registerCompletions(program)
 registerAlerts(program)
 registerContext(program)
+registerSkill(program)
 
 // parseAsync (not parse) so a throw from either a sync or an async action
 // handler — e.g. getDb() failing to create its data directory — surfaces

@@ -9,6 +9,11 @@ import { getEventsForDate } from '../db'
 import { PAUSE_FLAG_PATH } from '../utils/paths'
 import { getPendingAlerts } from '../db/alerts'
 import { checkHookHealth } from '../capture/hooks/claude-code'
+import { detectAgents } from '../skills/detect'
+import { formatAgentSkillLine } from '../skills/actions'
+
+// Labelled on the first agent's row only, like the other status sections
+const AGENT_SKILL_LABEL = 'Agent skill'
 
 export function registerStatus(program: Command): void {
   program
@@ -48,6 +53,11 @@ export function registerStatus(program: Command): void {
       log.plain(
         `  Profiles     ${activeProfiles.length > 0 ? chalk.cyan(activeProfiles.join(', ')) : chalk.dim('none')}`
       )
+
+      detectAgents().forEach((agent, index) => {
+        const label = index === 0 ? AGENT_SKILL_LABEL : ''
+        log.plain(`  ${label.padEnd(AGENT_SKILL_LABEL.length)}  ${formatAgentSkillLine(agent)}`)
+      })
 
       const pendingAlerts = getPendingAlerts()
       if (pendingAlerts.length > 0) {

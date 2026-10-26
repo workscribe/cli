@@ -24,10 +24,19 @@ import {
 } from '../capture/shell-hook'
 import { AI_HOOK_INTEGRATIONS } from '../capture/hooks'
 import { getPublicCommands } from './completions'
+import { detectAgents } from '../skills/detect'
+import { readInstallState } from '../skills/installer'
+import { resolvePackagedSkillDir } from '../skills/package-path'
+import { describeInstallOutcome, reasonOf } from '../skills/report'
+import { groupBySkillsFolder, outcomeWithoutPrompt } from '../skills/state'
+import { describeTarget, installIntoFolder, printMessage } from '../skills/actions'
+import type { SkillsFolderGroup } from '../skills/types'
+
+declare const __WORKSCRIBE_VERSION__: string
 
 type Shell = { name: string; rcFile: string }
 
-const TOTAL_STEPS = 5
+const TOTAL_STEPS = 6
 
 function detectShell(): Shell | null {
   const shell = process.env.SHELL ?? ''
@@ -209,6 +218,50 @@ async function runAIToolsStep(): Promise<void> {
   }
 }
 
+// ── Step 5: Agent skill ───────────────────────────────────────────────────
+async function offerSkillInstall(group: SkillsFolderGroup, sourceDir: string): Promise<void> {
+  const target = describeTarget(group)
+  const state = readInstallState(target.skillsFolder, __WORKSCRIBE_VERSION__)
+  const knownOutcome = outcomeWithoutPrompt(state)
+  if (knownOutcome) {
+    printMessage(describeInstallOutcome({ ...target, outcome: knownOutcome, version: __WORKSCRIBE_VERSION__ }))
+    return
+  }
+
+  const { installSkill: shouldInstall } = await prompts({
+    type: 'confirm',
+    name: 'installSkill',
+    message: `${state.kind === 'outdated' ? 'Update' : 'Install'} the Workscribe skill for ${target.agents}? Lets ${target.agents} summarize your work when you ask`,
+    initial: true,
+  })
+  if (!shouldInstall) {
+    log.info(`Skill skipped for ${target.agents} — run workscribe skill install any time`)
+    return
+  }
+  printMessage(installIntoFolder({ target, sourceDir }))
+}
+
+async function runAgentSkillStep(): Promise<void> {
+  step(5, TOTAL_STEPS, 'Installing the Workscribe agent skill')
+
+  const agents = detectAgents()
+  if (agents.length === 0) {
+    log.info('No coding agents detected — run workscribe skill install after installing one')
+    return
+  }
+
+  let sourceDir: string
+  try {
+    sourceDir = resolvePackagedSkillDir()
+  } catch (error) {
+    log.warn(reasonOf(error)) // setup can carry on; the skill is optional
+    return
+  }
+  for (const group of groupBySkillsFolder(agents)) {
+    await offerSkillInstall(group, sourceDir)
+  }
+}
+
 // Profile detection (part of environment scan, no separate step)
 async function runProfileDetectionStep(config: WorkscribeConfig): Promise<void> {
   try {
@@ -241,9 +294,9 @@ async function runProfileDetectionStep(config: WorkscribeConfig): Promise<void> 
   }
 }
 
-// ── Step 5: AI provider ───────────────────────────────────────────────────
+// ── Step 6: AI provider ───────────────────────────────────────────────────
 async function runAIProviderStep(config: WorkscribeConfig): Promise<boolean> {
-  step(5, TOTAL_STEPS, 'Configuring AI provider')
+  step(6, TOTAL_STEPS, 'Configuring AI provider')
 
   let providerConfigured = !!config.ai.provider
 
@@ -377,6 +430,7 @@ export function registerInit(program: Command): void {
       await runTelemetryStep(config)
       const shell = await runShellHookStep(program)
       await runAIToolsStep()
+      await runAgentSkillStep()
       await runProfileDetectionStep(config)
       const providerConfigured = await runAIProviderStep(config)
 
