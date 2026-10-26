@@ -3,6 +3,7 @@ import chalk from 'chalk'
 import { getOrBuildSessions } from '../sessions/detector'
 import { log } from '../utils/logger'
 import { todayDate, parseDate, formatDate, formatDuration } from '../utils/format'
+import { registerSummarySet } from './session-summary'
 import { readConfig } from '../config'
 import { locationContextFrom, repoCwd } from '../summary/payload'
 import { buildSessionsJson, sessionToJson } from '../summary/contract/build'
@@ -41,7 +42,7 @@ function printSessionsJson(date: string, sessions: Session[]): void {
 }
 
 export function registerSessions(program: Command): void {
-  program
+  const sessionsCommand = program
     .command('sessions')
     .description('List detected work sessions')
     .option('--date <YYYY-MM-DD>', 'date to show sessions for (default: today)')
@@ -97,4 +98,6 @@ export function registerSessions(program: Command): void {
 
       log.plain('')
     })
+
+  registerSummarySet(sessionsCommand)
 }

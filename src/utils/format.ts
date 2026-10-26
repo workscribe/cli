@@ -27,6 +27,11 @@ function localDateStr(d: Date): string {
   return `${y}-${m}-${day}`
 }
 
+/** The local YYYY-MM-DD an ISO timestamp falls on — the same day rule sessions are grouped by. */
+export function localDateOf(isoString: string): string {
+  return localDateStr(new Date(isoString))
+}
+
 // Returns Monday of the ISO week containing dateStr (YYYY-MM-DD)
 export function startOfWeek(dateStr: string): string {
   const d = new Date(dateStr + 'T00:00:00')

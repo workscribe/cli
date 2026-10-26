@@ -23,6 +23,21 @@ export function sessionKey(repoName: string | null, startedAt: string): string {
   return `${repoName ?? ''}|${startedAt}`
 }
 
+export interface ParsedSessionKey {
+  repoName: string | null
+  startedAt: string
+}
+
+/** Reverses sessionKey(). Null for a malformed key: no `|`, or a start that isn't a timestamp. */
+export function parseSessionKey(key: string): ParsedSessionKey | null {
+  const separator = key.lastIndexOf('|')
+  if (separator === -1) return null
+  const startedAt = key.slice(separator + 1)
+  if (startedAt === '' || Number.isNaN(new Date(startedAt).getTime())) return null
+  const repoName = key.slice(0, separator)
+  return { repoName: repoName === '' ? null : repoName, startedAt }
+}
+
 /** Engines whose stored summary a command may serve as its own — 1.x summaries count for provider/ollama. */
 export function summaryEnginesFor(engine: CachedEngine): StoredEngine[] {
   return [engine, LEGACY_ENGINE]

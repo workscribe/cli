@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   pickSavedSummary,
+  parseSessionKey,
   sessionKey,
   summaryEnginesFor,
   pickOwnSummary,
@@ -84,6 +85,30 @@ describe('pickBestSummary', () => {
     const rows = [row('legacy', 'old', '2026-10-01T00:00:00.000Z'), row('ollama', 'new', '2026-10-25T00:00:00.000Z')]
 
     expect(pickBestSummary(rows)).toBe('new')
+  })
+})
+
+describe('parseSessionKey', () => {
+  it('reverses sessionKey for a repo session', () => {
+    expect(parseSessionKey(sessionKey('api', '2026-10-25T09:00:00.000Z'))).toEqual({
+      repoName: 'api',
+      startedAt: '2026-10-25T09:00:00.000Z',
+    })
+  })
+
+  it('reverses sessionKey for a session outside a git repo', () => {
+    expect(parseSessionKey(sessionKey(null, '2026-10-25T09:00:00.000Z'))).toEqual({
+      repoName: null,
+      startedAt: '2026-10-25T09:00:00.000Z',
+    })
+  })
+
+  it('splits on the last | so a repo name containing one survives', () => {
+    expect(parseSessionKey('odd|name|2026-10-25T09:00:00.000Z')?.repoName).toBe('odd|name')
+  })
+
+  it.each(['no-separator', 'api|', 'api|not-a-date'])('is null for the malformed key %s', (key) => {
+    expect(parseSessionKey(key)).toBeNull()
   })
 })
 
