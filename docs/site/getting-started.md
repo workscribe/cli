@@ -38,7 +38,9 @@ workscribe init
 2. Detect your shell (zsh or bash) and install the capture hook
 3. If the shell hook is outdated, prompt you to update it
 4. If Claude Code is detected, offer to install a session capture hook
-5. Walk you through choosing an AI provider
+5. Offer to install the Workscribe skill into the coding agents it finds (Claude Code, Codex, GitHub Copilot, Cursor)
+
+There's no AI provider or API key to set up — summaries work offline out of the box.
 
 Safe to re-run at any time — updates outdated hooks and skips steps already complete.
 
@@ -54,7 +56,7 @@ source ~/.zshrc   # or ~/.bashrc
 workscribe status
 ```
 
-You should see `Capture active` and your configured AI provider. Run a few commands, then check:
+You should see `Capture active`. Run a few commands, then check:
 
 ```bash
 workscribe events
@@ -68,7 +70,9 @@ Events should appear within seconds of running commands.
 workscribe summary
 ```
 
-Workscribe groups your captured events into sessions and sends them to your AI provider, which returns a standup-ready narrative.
+Workscribe groups your captured events into sessions and builds a summary of each with its offline template engine — commits, test and build results, dependencies, notes and more. Nothing leaves your machine.
+
+For a prose summary, ask your coding agent to *"summarize my work today"* — the Workscribe skill reads your sessions, writes the summary and saves it, so `workscribe summary` shows it too. See [Summaries](/summaries).
 
 ---
 

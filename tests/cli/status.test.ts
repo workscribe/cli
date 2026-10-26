@@ -200,23 +200,28 @@ describe('workscribe status', () => {
     })
   })
 
-  describe('AI provider', () => {
-    it('shows configured provider name', async () => {
-      mockReadConfig.mockReturnValue({ ...BASE_CONFIG, ai: { ...BASE_CONFIG.ai, provider: 'openai' } })
+  describe('summaries and old AI settings', () => {
+    const configWithoutAi = () => {
+      const { ai: _removedAi, ...rest } = BASE_CONFIG
+      return rest
+    }
+
+    it('says summaries use the offline template', async () => {
+      mockReadConfig.mockReturnValue(configWithoutAi())
       await makeProgram().parseAsync(['status'], { from: 'user' })
-      expect(mockLog.plain).toHaveBeenCalledWith(expect.stringContaining('openai'))
+      expect(mockLog.plain).toHaveBeenCalledWith(expect.stringMatching(/Summaries\s+.*template.*\(offline\)/))
     })
 
-    it('shows "not configured" when provider is absent', async () => {
-      mockReadConfig.mockReturnValue({ ...BASE_CONFIG, ai: { provider: null, apiKey: null, model: null } })
+    it('prints the 2.0 notice once for a 1.x config with AI provider settings', async () => {
       await makeProgram().parseAsync(['status'], { from: 'user' })
-      expect(mockLog.plain).toHaveBeenCalledWith(expect.stringContaining('not configured'))
+      expect(mockLog.notice).toHaveBeenCalledTimes(1)
+      expect(mockLog.notice).toHaveBeenCalledWith(expect.stringContaining('  workscribe init'))
     })
 
-    it('shows model when configured', async () => {
-      mockReadConfig.mockReturnValue({ ...BASE_CONFIG, ai: { ...BASE_CONFIG.ai, model: 'gpt-4o' } })
+    it('prints no notice when no old AI settings are left', async () => {
+      mockReadConfig.mockReturnValue(configWithoutAi())
       await makeProgram().parseAsync(['status'], { from: 'user' })
-      expect(mockLog.plain).toHaveBeenCalledWith(expect.stringContaining('gpt-4o'))
+      expect(mockLog.notice).not.toHaveBeenCalled()
     })
   })
 })

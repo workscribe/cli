@@ -75,41 +75,40 @@ describe('workscribe config', () => {
 
   describe('config set <key> <value>', () => {
     it('calls setConfigValue and writeConfig', async () => {
-      await makeProgram().parseAsync(['config', 'set', 'ai.provider', 'openai'], { from: 'user' })
-      expect(mockSetConfigValue).toHaveBeenCalledWith(BASE_CONFIG, 'ai.provider', 'openai')
-      expect(mockWriteConfig).toHaveBeenCalledOnce()
+      await makeProgram().parseAsync(['config', 'set', 'session.idleTimeout', '45'], { from: 'user' })
+      expect(mockSetConfigValue).toHaveBeenCalledWith(BASE_CONFIG, 'session.idleTimeout', '45')
+      expect(mockWriteConfig).toHaveBeenCalledWith(BASE_CONFIG)
     })
 
     it('logs success for a non-sensitive key', async () => {
-      await makeProgram().parseAsync(['config', 'set', 'ai.provider', 'openai'], { from: 'user' })
-      expect(mockLog.success).toHaveBeenCalledWith(expect.stringContaining('ai.provider'))
+      await makeProgram().parseAsync(['config', 'set', 'session.idleTimeout', '45'], { from: 'user' })
+      expect(mockLog.success).toHaveBeenCalledWith(expect.stringContaining('session.idleTimeout'))
     })
 
-    it('accepts a valid summary.engine', async () => {
-      await makeProgram().parseAsync(['config', 'set', 'summary.engine', 'template'], { from: 'user' })
-      expect(mockSetConfigValue).toHaveBeenCalledWith(BASE_CONFIG, 'summary.engine', 'template')
-    })
-
-    it('rejects an unknown summary.engine without writing the config', async () => {
+    it.each([
+      ['ai.provider', 'openai'],
+      ['ai.apiKey', 'sk-new'],
+      ['summary.engine', 'ollama'],
+    ])('refuses the removed AI setting %s without reading or writing the config', async (key, value) => {
       const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
         throw new Error('exit')
       }) as never)
       onTestFinished(() => exitSpy.mockRestore())
 
-      await expect(
-        makeProgram().parseAsync(['config', 'set', 'summary.engine', 'anthropic'], { from: 'user' })
-      ).rejects.toThrow('exit')
+      await expect(makeProgram().parseAsync(['config', 'set', key, value], { from: 'user' })).rejects.toThrow('exit')
 
-      expect(mockLog.error).toHaveBeenCalledWith(expect.stringContaining('Invalid summary.engine "anthropic"'))
+      expect(mockLog.error).toHaveBeenCalledWith(expect.stringContaining('AI providers were removed in Workscribe 2.0'))
+      expect(mockLog.error).toHaveBeenCalledWith(expect.stringContaining('workscribe skill install'))
       expect(exitSpy).toHaveBeenCalledWith(1)
+      expect(mockReadConfig).not.toHaveBeenCalled()
       expect(mockWriteConfig).not.toHaveBeenCalled()
     })
 
     it('shows [set] instead of the value for sensitive keys', async () => {
-      await makeProgram().parseAsync(['config', 'set', 'ai.apiKey', 'sk-secret-key'], { from: 'user' })
+      await makeProgram().parseAsync(['config', 'set', 'integrations.token', 'tok-secret'], { from: 'user' })
       const calls = mockLog.success.mock.calls.map((call: unknown[]) => call[0] as string)
       expect(calls.some((call) => call.includes('[set]'))).toBe(true)
-      expect(calls.some((call) => call.includes('sk-secret-key'))).toBe(false)
+      expect(calls.some((call) => call.includes('tok-secret'))).toBe(false)
     })
   })
 })

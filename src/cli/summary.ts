@@ -1,18 +1,17 @@
 import { Command } from 'commander'
 import chalk from 'chalk'
 import { getOrBuildSessions } from '../sessions/detector'
-import { getProvider } from '../ai/router'
 import { readConfig } from '../config'
-import { getSessionSummaries, saveSessionSummary } from '../db'
+import { getSessionSummaries } from '../db'
 import { log } from '../utils/logger'
 import { todayDate, parseDate } from '../utils/format'
 import type { AIProvider, DaySummaryPayload, SessionPayload } from '../ai/types'
-import { resolveEngine, engineLabel } from '../ai/engine'
-import { countExcludedEvents } from '../ai/prompt'
-import { buildExcludedSet } from '../summary/exclusions'
+import { buildExcludedSet, countExcludedEvents } from '../summary/exclusions'
 import { sessionToPayload, locationContextFrom } from '../summary/payload'
 import { formatSessionHeading, formatSessionLabel } from '../summary/heading'
-import { sessionKey, pickSavedSummary, isCachedEngine, type SavedSummary } from '../summary/store'
+import { sessionKey, pickSavedSummary, type SavedSummary } from '../summary/store'
+import { createSummaryWriter } from '../summary/writer'
+import { printLegacyAiNotice } from './notices'
 import { postSummary } from '../summary/webhook'
 import { runWeeklySummary } from '../summary/weekly'
 
@@ -23,7 +22,7 @@ interface SessionSummaryJson {
   bullets: string[]
 }
 
-/** Parse AI bullet output into a clean string array. Handles both - and • prefixes. */
+/** Parse bullet output into a clean string array. Handles both - and • prefixes. */
 export function parseBullets(text: string): string[] {
   return text
     .split('\n')
@@ -74,14 +73,13 @@ async function generateSessionSummary(input: {
   provider: AIProvider
   sessionPayload: SessionPayload
   date: string
-  label: string
 }): Promise<string> {
   const daySummaryPayload: DaySummaryPayload = { date: input.date, sessions: [input.sessionPayload] }
   try {
     const bullets = (await input.provider.summarize(daySummaryPayload)).trim()
     return `${formatSessionHeading(input.sessionPayload)}\n${bullets}`
   } catch (error) {
-    log.error(`Summary failed [${input.label}]: ${(error as Error).message}`)
+    log.error(`Summary failed: ${(error as Error).message}`)
     process.exit(1)
   }
 }
@@ -89,39 +87,34 @@ async function generateSessionSummary(input: {
 /** Says which sessions came from saved summaries, so it's clear why --fresh would change the output. */
 function printSavedNote(saved: (SavedSummary | null)[]): void {
   const fromSkill = saved.filter((entry) => entry?.fromSkill).length
-  const cached = saved.filter((entry) => entry && !entry.fromSkill).length
+  const fromLegacyProvider = saved.filter((entry) => entry && !entry.fromSkill).length
   const parts = [
     fromSkill > 0 ? `${fromSkill} written by the Workscribe agent skill` : null,
-    cached > 0 ? `${cached} cached` : null,
+    fromLegacyProvider > 0 ? `${fromLegacyProvider} written by an AI provider in Workscribe 1.x` : null,
   ].filter((part): part is string => part !== null)
   if (parts.length === 0) return
-  log.plain(chalk.dim(`  (${parts.join(', ')} — use --fresh to regenerate)`))
+  log.plain(chalk.dim(`  (${parts.join(', ')} — use --fresh for the template summary)`))
 }
 
 export function registerSummary(program: Command): void {
   program
     .command('summary')
-    .description('Generate an AI work summary')
+    .description('Generate a work summary')
     .option('--date <YYYY-MM-DD>', 'date to summarize (default: today)')
     .option('--week', 'summarize the current week')
-    .option('--fresh', 'bypass cache and regenerate')
-    .option('--verbose', 'show all captured events including those not sent to AI')
+    .option('--fresh', 'ignore saved summaries and render the template')
+    .option('--verbose', 'show all captured events, including those left out of the summary')
     .option('--slack', 'post summary to Slack webhook from config')
     .option('--webhook <url>', 'post summary to a custom webhook URL')
     .action(async (options) => {
       const config = readConfig()
-      let provider
-      try {
-        provider = getProvider(config)
-      } catch (error) {
-        log.error((error as Error).message)
-        process.exit(1)
-      }
+      printLegacyAiNotice(config)
+      const provider = createSummaryWriter(config)
 
       // ── Weekly branch ────────────────────────────────────────────────────────
       if (options.week) {
         try {
-          await runWeeklySummary({ options, config, provider, noun: 'summary' })
+          await runWeeklySummary({ options, config, provider })
         } catch (error) {
           log.error((error as Error).message)
           process.exit(1)
@@ -147,20 +140,17 @@ export function registerSummary(program: Command): void {
         return
       }
 
-      const engine = resolveEngine(config)
-      const label = engineLabel(config)
       const sessionPayloads = sessions.map((session) => sessionToPayload(session, date, locationContextFrom(config)))
       const keys = sessions.map((session) => sessionKey(session.repoName, session.startedAt))
       const jsonMode = config.summary?.format === 'json'
 
-      // A summary the agent skill saved, or this engine's cache — `--fresh` ignores both
-      const saved = keys.map((key) => (options.fresh ? null : pickSavedSummary(getSessionSummaries(key), engine)))
+      // A summary the agent skill (or a 1.x AI provider) saved — `--fresh` ignores both and renders the template
+      const saved = keys.map((key) => (options.fresh ? null : pickSavedSummary(getSessionSummaries(key))))
       const needsGeneration = saved.some((entry) => entry === null)
       const excluded = buildExcludedSet(config.summary?.includeCategories ?? [])
-      if (needsGeneration) {
-        if (options.verbose) printCapturedEvents(sessionPayloads, excluded)
-        log.plain('')
-        log.info(`Generating summary via ${chalk.cyan(label)}…`)
+      if (needsGeneration && options.verbose) {
+        if (jsonMode) log.notice('--verbose is skipped when summary.format is json, to keep the JSON output clean')
+        else printCapturedEvents(sessionPayloads, excluded)
       }
 
       const summaries: string[] = []
@@ -170,18 +160,21 @@ export function registerSummary(program: Command): void {
           summaries.push(savedSummary.text)
           continue
         }
-        const generated = await generateSessionSummary({ provider, sessionPayload, date, label })
-        if (isCachedEngine(engine)) saveSessionSummary(keys[index], engine, generated)
-        summaries.push(generated)
+        summaries.push(await generateSessionSummary({ provider, sessionPayload, date }))
       }
 
       const fullSummary = summaries.join('\n\n')
-      log.plain('')
-      log.plain(jsonMode ? toJsonOutput(date, sessionPayloads, summaries.map(stripHeading)) : fullSummary)
-      log.plain('')
-      printSavedNote(saved)
-      if (needsGeneration) printExcludedFooter(sessionPayloads, excluded)
+      if (jsonMode) {
+        // Only the JSON on stdout, so it can be piped straight into another tool
+        log.plain(toJsonOutput(date, sessionPayloads, summaries.map(stripHeading)))
+      } else {
+        log.plain('')
+        log.plain(fullSummary)
+        log.plain('')
+        printSavedNote(saved)
+        if (needsGeneration) printExcludedFooter(sessionPayloads, excluded)
+      }
 
-      await postSummary(options, config, fullSummary)
+      await postSummary({ options, config, summary: fullSummary, statusToStderr: jsonMode })
     })
 }

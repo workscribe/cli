@@ -1,13 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import {
-  pickSavedSummary,
-  parseSessionKey,
-  sessionKey,
-  summaryEnginesFor,
-  pickOwnSummary,
-  pickBestSummary,
-  isCachedEngine,
-} from '../../src/summary/store'
+import { pickSavedSummary, parseSessionKey, sessionKey, pickBestSummary } from '../../src/summary/store'
 import { SESSION_KEY_SQL } from '../../src/db/migrations/005_session_summaries'
 import type { SessionSummaryRow } from '../../src/db/types'
 
@@ -26,38 +18,6 @@ describe('sessionKey', () => {
 
   it('matches the expression migration 005 uses to backfill 1.x summaries', () => {
     expect(SESSION_KEY_SQL).toBe("COALESCE(repo_name, '') || '|' || started_at")
-  })
-})
-
-describe('isCachedEngine', () => {
-  it('never caches the template, which renders live', () => {
-    expect(isCachedEngine('template')).toBe(false)
-    expect(isCachedEngine('provider')).toBe(true)
-    expect(isCachedEngine('ollama')).toBe(true)
-  })
-})
-
-describe('summaryEnginesFor', () => {
-  it('accepts 1.x summaries for the provider and ollama engines', () => {
-    expect(summaryEnginesFor('provider')).toEqual(['provider', 'legacy'])
-    expect(summaryEnginesFor('ollama')).toEqual(['ollama', 'legacy'])
-  })
-})
-
-describe('pickOwnSummary', () => {
-  it('ignores summaries written by another engine', () => {
-    expect(pickOwnSummary([row('template', 'template text')], 'provider')).toBeNull()
-    expect(pickOwnSummary([row('provider', 'provider text')], 'ollama')).toBeNull()
-  })
-
-  it('serves a 1.x summary to the provider engine', () => {
-    expect(pickOwnSummary([row('legacy', 'old text')], 'provider')).toBe('old text')
-  })
-
-  it('prefers the newest accepted summary', () => {
-    const rows = [row('legacy', 'old', '2026-10-01T00:00:00.000Z'), row('provider', 'new', '2026-10-25T00:00:00.000Z')]
-
-    expect(pickOwnSummary(rows, 'provider')).toBe('new')
   })
 })
 
@@ -113,15 +73,27 @@ describe('parseSessionKey', () => {
 })
 
 describe('pickSavedSummary', () => {
-  it('prefers a skill summary for any engine', () => {
+  it('prefers a skill summary over a 1.x AI summary', () => {
     const rows = [row('provider', 'provider'), row('skill', 'skill')]
 
-    expect(pickSavedSummary(rows, 'provider')).toEqual({ text: 'skill', fromSkill: true })
-    expect(pickSavedSummary([row('skill', 'skill')], 'template')).toEqual({ text: 'skill', fromSkill: true })
+    expect(pickSavedSummary(rows)).toEqual({ text: 'skill', fromSkill: true })
   })
 
-  it("falls back to the engine's own cache, never for the template", () => {
-    expect(pickSavedSummary([row('legacy', 'old')], 'provider')).toEqual({ text: 'old', fromSkill: false })
-    expect(pickSavedSummary([row('template', 'stale')], 'template')).toBeNull()
+  it.each(['provider', 'ollama', 'legacy'])('still serves a summary a 1.x %s engine wrote', (engine) => {
+    expect(pickSavedSummary([row(engine, 'old')])).toEqual({ text: 'old', fromSkill: false })
+  })
+
+  it('takes the newest 1.x summary', () => {
+    const rows = [
+      row('legacy', 'older', '2026-10-24T09:00:00.000Z'),
+      row('ollama', 'newer', '2026-10-25T09:00:00.000Z'),
+    ]
+
+    expect(pickSavedSummary(rows)?.text).toBe('newer')
+  })
+
+  it('never serves a stored template, which is always rendered fresh', () => {
+    expect(pickSavedSummary([row('template', 'stale')])).toBeNull()
+    expect(pickSavedSummary([])).toBeNull()
   })
 })

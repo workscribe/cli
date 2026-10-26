@@ -4,8 +4,8 @@ vi.mock('../../src/sessions/detector', () => ({
   getOrBuildSessions: vi.fn(),
 }))
 
-vi.mock('../../src/ai/router', () => ({
-  getProvider: vi.fn(),
+vi.mock('../../src/summary/writer', () => ({
+  createSummaryWriter: vi.fn(),
 }))
 
 vi.mock('../../src/config', () => ({
@@ -25,7 +25,7 @@ vi.mock('../../src/utils/paths')
 import fs from 'fs'
 import { Command } from 'commander'
 import { getOrBuildSessions } from '../../src/sessions/detector'
-import { getProvider } from '../../src/ai/router'
+import { createSummaryWriter } from '../../src/summary/writer'
 import { readConfig } from '../../src/config'
 import { log } from '../../src/utils/logger'
 import { registerExport } from '../../src/cli/export'
@@ -33,11 +33,11 @@ import { TemplateProvider } from '../../src/ai/engines/template/provider'
 
 const mockFs = fs as unknown as Record<string, ReturnType<typeof vi.fn>>
 const mockGetOrBuildSessions = getOrBuildSessions as ReturnType<typeof vi.fn>
-const mockGetProvider = getProvider as ReturnType<typeof vi.fn>
+const mockCreateSummaryWriter = createSummaryWriter as ReturnType<typeof vi.fn>
 const mockReadConfig = readConfig as ReturnType<typeof vi.fn>
 const mockLog = log as Record<string, ReturnType<typeof vi.fn>>
 
-const BASE_CONFIG = { ai: { provider: 'anthropic', apiKey: 'sk-test', model: null }, session: { idleTimeout: 30 } }
+const BASE_CONFIG = { session: { idleTimeout: 30 } }
 
 const SAMPLE_SESSIONS = [
   {
@@ -82,10 +82,10 @@ beforeEach(() => {
 
 describe('workscribe export', () => {
   describe('no sessions', () => {
-    it('logs no-activity message and does not call AI provider', async () => {
+    it('logs no-activity message and does not summarize', async () => {
       mockGetOrBuildSessions.mockReturnValue([])
       const mockProvider = { summarize: vi.fn() }
-      mockGetProvider.mockReturnValue(mockProvider)
+      mockCreateSummaryWriter.mockReturnValue(mockProvider)
 
       await makeProgram().parseAsync(['export'], { from: 'user' })
 
@@ -94,23 +94,11 @@ describe('workscribe export', () => {
     })
   })
 
-  describe('no AI provider configured', () => {
-    it('logs an error and exits when getProvider throws', async () => {
-      mockGetOrBuildSessions.mockReturnValue(SAMPLE_SESSIONS)
-      mockGetProvider.mockImplementation(() => {
-        throw new Error('No AI provider configured')
-      })
-
-      await expect(makeProgram().parseAsync(['export'], { from: 'user' })).rejects.toThrow()
-      expect(mockLog.error).toHaveBeenCalledWith(expect.stringContaining('No AI provider'))
-    })
-  })
-
   describe('happy path', () => {
-    it('calls provider.summarize and writes the output file', async () => {
+    it('summarizes the day and writes the output file', async () => {
       const mockProvider = { summarize: vi.fn().mockResolvedValue('## Summary\n\nDid some coding.') }
       mockGetOrBuildSessions.mockReturnValue(SAMPLE_SESSIONS)
-      mockGetProvider.mockReturnValue(mockProvider)
+      mockCreateSummaryWriter.mockReturnValue(mockProvider)
 
       await makeProgram().parseAsync(['export', '--date', '2026-05-28'], { from: 'user' })
 
@@ -118,16 +106,14 @@ describe('workscribe export', () => {
       expect(mockFs.writeFileSync).toHaveBeenCalledOnce()
     })
 
-    it('exports offline with the template engine when no provider is configured', async () => {
-      mockReadConfig.mockReturnValue({ ...BASE_CONFIG, ai: { provider: '', apiKey: '', model: '' } })
+    it('exports offline with the template engine', async () => {
       mockGetOrBuildSessions.mockReturnValue([
         { ...SAMPLE_SESSIONS[0], events: [{ ...SAMPLE_SESSIONS[0].events[0], metadata: '{"message":"fix: login"}' }] },
       ])
-      mockGetProvider.mockReturnValue(new TemplateProvider())
+      mockCreateSummaryWriter.mockReturnValue(new TemplateProvider())
 
       await makeProgram().parseAsync(['export', '--date', '2026-05-28'], { from: 'user' })
 
-      expect(mockLog.info).toHaveBeenCalledWith('Generating summary via template…')
       expect(mockFs.writeFileSync).toHaveBeenCalledWith(
         expect.any(String),
         '# Work Summary — 2026-05-28\n\n- Committed: fix: login\n',
@@ -138,7 +124,7 @@ describe('workscribe export', () => {
     it('writes to the default exports directory path', async () => {
       const mockProvider = { summarize: vi.fn().mockResolvedValue('summary') }
       mockGetOrBuildSessions.mockReturnValue(SAMPLE_SESSIONS)
-      mockGetProvider.mockReturnValue(mockProvider)
+      mockCreateSummaryWriter.mockReturnValue(mockProvider)
 
       await makeProgram().parseAsync(['export', '--date', '2026-05-28'], { from: 'user' })
 
@@ -149,7 +135,7 @@ describe('workscribe export', () => {
     it('logs a success message with the output path', async () => {
       const mockProvider = { summarize: vi.fn().mockResolvedValue('summary') }
       mockGetOrBuildSessions.mockReturnValue(SAMPLE_SESSIONS)
-      mockGetProvider.mockReturnValue(mockProvider)
+      mockCreateSummaryWriter.mockReturnValue(mockProvider)
 
       await makeProgram().parseAsync(['export', '--date', '2026-05-28'], { from: 'user' })
 
@@ -161,7 +147,7 @@ describe('workscribe export', () => {
     it('writes to the custom path when --output is provided', async () => {
       const mockProvider = { summarize: vi.fn().mockResolvedValue('summary') }
       mockGetOrBuildSessions.mockReturnValue(SAMPLE_SESSIONS)
-      mockGetProvider.mockReturnValue(mockProvider)
+      mockCreateSummaryWriter.mockReturnValue(mockProvider)
 
       await makeProgram().parseAsync(['export', '--output', '/tmp/my-summary.md'], { from: 'user' })
 
@@ -174,6 +160,28 @@ describe('workscribe export', () => {
     it('logs an error and exits on an invalid date', async () => {
       await expect(makeProgram().parseAsync(['export', '--date', 'not-a-date'], { from: 'user' })).rejects.toThrow()
       expect(mockLog.error).toHaveBeenCalledWith(expect.stringContaining('Invalid date'))
+    })
+  })
+
+  describe('old AI settings', () => {
+    beforeEach(() => {
+      mockGetOrBuildSessions.mockReturnValue(SAMPLE_SESSIONS)
+      mockCreateSummaryWriter.mockReturnValue({ summarize: vi.fn().mockResolvedValue('- Did some coding') })
+    })
+
+    it('prints the 2.0 notice once for a 1.x config, even on a day with no activity', async () => {
+      mockReadConfig.mockReturnValue({ ...BASE_CONFIG, ai: { provider: 'openai', apiKey: 'sk-old' } })
+      mockGetOrBuildSessions.mockReturnValue([])
+
+      await makeProgram().parseAsync(['export'], { from: 'user' })
+
+      expect(mockLog.notice).toHaveBeenCalledTimes(1)
+    })
+
+    it('prints no notice for a 2.0 config', async () => {
+      await makeProgram().parseAsync(['export', '--date', '2026-05-28'], { from: 'user' })
+
+      expect(mockLog.notice).not.toHaveBeenCalled()
     })
   })
 })

@@ -11,32 +11,6 @@ Use `workscribe config set <key> <value>` to update any value. Nested keys use d
 
 ---
 
-## AI
-
-| Key | Type | Default | Description |
-|---|---|---|---|
-| `ai.provider` | string | `""` | AI provider to use: `anthropic`, `openai`, `ollama`, `openai-compatible` |
-| `ai.apiKey` | string | `""` | API key for the selected provider |
-| `ai.model` | string | `""` | Model override (uses provider default if empty) |
-| `ai.baseUrl` | string | `""` | Base URL for `openai-compatible` providers |
-
-**Provider defaults:**
-
-| Provider | Default model |
-|---|---|
-| `anthropic` | `claude-haiku-4-5-20251001` |
-| `openai` | `gpt-4o-mini` |
-| `ollama` | `llama3` |
-| `openai-compatible` | — (set `ai.model` manually) |
-
-```bash
-workscribe config set ai.provider anthropic
-workscribe config set ai.apiKey sk-ant-...
-workscribe config set ai.model claude-sonnet-4-6
-```
-
----
-
 ## Session
 
 | Key | Type | Default | Description |
@@ -102,23 +76,12 @@ workscribe config set redact.extra '["MY_INTERNAL_TOKEN"]'
 
 | Key | Type | Default | Description |
 |---|---|---|---|
-| `summary.engine` | `"template"` \| `"ollama"` \| `"provider"` | *(derived)* | What writes summaries. Unset, it follows `ai.provider`: `ollama` → `ollama`, any other provider → `provider`, nothing configured → `template` |
 | `summary.format` | `"markdown"` \| `"json"` | `"markdown"` | Output format for daily summaries |
-| `summary.includeCategories` | string[] | `[]` | Event categories to re-include in the AI prompt (overrides built-in exclusions). Excluded by default: `exploring`, `linting`. Example: `["linting"]` to include lint pass/fail results. |
+| `summary.includeCategories` | string[] | `[]` | Event categories to re-include in summaries (overrides built-in exclusions). Excluded by default: `exploring`, `linting`. Example: `["linting"]` to include lint pass/fail results. |
 
-**Summary engines:**
+Summaries come from Workscribe's offline template engine — up to 7 outcome bullets per session built from your captured activity (notes, commit messages, test and build results, dependencies, releases and pushes), and up to 5 bullets per day in weekly digests. There's no engine to choose: for AI-written summaries, use the agent skill. See [Summaries](/summaries).
 
-| Engine | Needs | Output |
-|---|---|---|
-| `template` | Nothing — works offline, no AI | Up to 7 outcome bullets per session built from your captured activity: notes, commit messages, test and build results, dependencies, releases and pushes. Weekly digests list up to 5 bullets per day. |
-| `ollama` | A local [Ollama](https://ollama.com) server | AI-written prose, fully on-device |
-| `provider` | `ai.provider` and `ai.apiKey` | AI-written prose from your cloud provider |
-
-AI-written summaries are cached per engine (`ollama` / `provider`), so switching between Ollama and a cloud provider regenerates instead of showing the other engine's text. Switching between two cloud providers keeps the cache — use `--fresh` to regenerate. Template summaries are never cached; they're rendered fresh from your current activity every time. Summaries written before 2.0 are still served to the `provider` and `ollama` engines.
-
-```bash
-workscribe config set summary.engine template   # use the offline template even with a provider configured
-```
+> **Removed in 2.0:** the `ai.*` keys (`ai.provider`, `ai.apiKey`, `ai.model`, `ai.baseUrl`) and `summary.engine`. `workscribe config set` refuses them, and `workscribe init` offers to delete them from an old config. See [Migrating to 2.0](/migrating-to-2).
 
 Sessions outside any git repo are named after the directory most of their commands ran in (home-relative, e.g. `~/Downloads/scripts`), or its `projects` display name if you set one.
 
@@ -259,12 +222,6 @@ Workscribe ships with built-in support for Claude Code, Aider, Gemini, GitHub Co
 
 ```json
 {
-  "ai": {
-    "provider": "anthropic",
-    "apiKey": "sk-ant-...",
-    "model": "claude-haiku-4-5-20251001",
-    "baseUrl": ""
-  },
   "session": {
     "idleTimeout": 30
   },

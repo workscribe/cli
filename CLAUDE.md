@@ -34,7 +34,8 @@ Workscribe is a passive terminal activity capture tool. The data flows in one di
 ```
 shell hook → workscribe _capture → capture pipeline → SQLite
                                                          ↓
-workscribe summary → session detector → summary engine (template | ollama | provider) → markdown output
+workscribe summary → session detector → template engine → markdown output
+                                          (the agent skill writes AI prose and saves it via `sessions summary set`)
 ```
 
 ### Key design decisions
@@ -43,7 +44,7 @@ workscribe summary → session detector → summary engine (template | ollama | 
 
 **Capture path is fully synchronous and must never throw** — `workscribe _capture` is called from the shell hook as a background process (`&!`). Errors are swallowed and optionally written to `~/.workscribe/debug.log` when `WORKSCRIBE_DEBUG=1` is set.
 
-**Summary engines share one interface** — every engine implements `AIProvider` (`src/ai/types.ts`: `summarize`, optional `summarizeWeek`, `validate`). `resolveEngine` (`src/ai/engine.ts`) picks `template` | `ollama` | `provider` from `summary.engine`, else from `ai.provider`, else `template`; `summary.engine` is deliberately absent from `DEFAULTS` so 1.x configs keep their provider. `src/ai/router.ts` returns the offline `TemplateProvider` (`src/ai/engines/template/`) or a `GenericProvider` built from `src/ai/provider-config.ts` — adding a cloud provider means adding an entry there. Template summaries are rendered live and never cached; AI summaries are stored per engine in `session_summaries` (see `src/summary/store.ts`).
+**No AI providers since 2.0** — Workscribe makes no AI API calls of its own. `summary`, `week` and `export` get their writer from `createSummaryWriter` (`src/summary/writer.ts`), which always returns the offline `TemplateProvider` (`src/ai/engines/template/`, implementing the `AIProvider` interface in `src/ai/types.ts`). AI-written prose comes from the agent skill (`skills/workscribe/`), which saves through `sessions summary set`. Template summaries are rendered live and never stored; `session_summaries` holds skill summaries plus `provider`/`ollama`/`legacy` rows from 1.x, which are still shown (see `src/summary/store.ts`). 1.x `ai.*` and `summary.engine` settings are read only to print a once-per-run notice on stderr, refuse `config set`, offer cleanup in `init` and redact keys (`src/summary/legacy-ai.ts`).
 
 **Sessions are computed on demand, not during capture** — `workscribe _capture` only writes to the `events` table. Session grouping runs when `workscribe sessions` or `workscribe summary` is called, caches results in the `sessions` table, and invalidates when the event count changes.
 
@@ -63,10 +64,10 @@ Tests import from these pure modules directly. Never import from `src/db/index.t
 | `src/capture/` | `index.ts` orchestrates capture; `filter.ts` noise/dedup; `redact.ts` credential scrubbing; `git.ts` repo context |
 | `src/normalize/patterns.ts` | Ordered rule array — first match wins. Add new categories here |
 | `src/sessions/` | `detector.ts` orchestrates DB read/write; `grouper.ts` contains pure grouping logic |
-| `src/summary/` | Shared by `summary`/`week`/`export`/`context`: `payload.ts` builds payloads from sessions and names non-git sessions by directory (pure); `heading.ts` the `## project (branch) — duration` line; `store.ts` session keys and which stored summary to serve (pure); `weekly.ts` the weekly flow and its per-engine cache; `webhook.ts` posts finished summaries; `exclusions.ts` default-excluded categories (dependency-free); `contract/` the versioned `--json` contract (types, `SCHEMA_VERSION`, pure builders — key sets are pinned by tests); `git-commits.ts` `git log`/`rev-parse` lookups via `execFileSync`; `write-back.ts` limits and messages for `sessions summary set` (pure; the command, `src/cli/session-summary.ts`, reads stdin via `src/utils/stdin.ts`). No barrel — import by module path |
+| `src/summary/` | Shared by `summary`/`week`/`export`/`context`: `payload.ts` builds payloads from sessions and names non-git sessions by directory (pure); `heading.ts` the `## project (branch) — duration` line; `store.ts` session keys and which stored summary to serve (pure); `weekly.ts` the weekly flow (rendered fresh, no cache); `writer.ts` what writes summaries (the template); `legacy-ai.ts` detection, notice and cleanup of 1.x AI settings (pure); `webhook.ts` posts finished summaries; `exclusions.ts` default-excluded categories (dependency-free); `contract/` the versioned `--json` contract (types, `SCHEMA_VERSION`, pure builders — key sets are pinned by tests); `git-commits.ts` `git log`/`rev-parse` lookups via `execFileSync`; `write-back.ts` limits and messages for `sessions summary set` (pure; the command, `src/cli/session-summary.ts`, reads stdin via `src/utils/stdin.ts`). No barrel — import by module path |
 | `skills/workscribe/` | The portable Agent Skill (`SKILL.md` + `references/`) shipped in the npm package. It reads `sessions --json` and saves via `sessions summary set`; it must only run commands that start with `workscribe` (see `src/capture/workscribe-command.ts`, which keeps them out of capture, built on the quote-aware helpers in `src/capture/shell-syntax.ts`) |
 | `src/skills/` | Installs the agent skill into coding agents: `agents.ts` the agent → skills-folder registry (Codex and Copilot share `~/.agents/skills`); `detect.ts` detection with injected I/O; `state.ts`/`report.ts` install states and messages (pure); `installer.ts` the marker-guarded, move-aside install and uninstall; `package-path.ts` finds the packaged `skills/workscribe/`. Used by `src/cli/skill.ts`, `init`, `status` and `uninstall` |
-| `src/ai/` | `types.ts` interfaces; `engine.ts` engine resolution; `engines/template/` the offline template engine (pure); `prompt.ts` system prompt + payload serializer for AI engines; `provider-config.ts` per-provider HTTP settings; `router.ts` engine → provider |
+| `src/ai/` | `types.ts` payload types and the `AIProvider` writer interface; `engine.ts` the `StoredEngine` names of stored summaries; `engines/template/` the offline template engine (pure). The name is historical — there are no AI providers since 2.0 |
 | `src/config/index.ts` | Read/write `~/.workscribe/config.json`; `setConfigValue` coerces strings to number/boolean |
 | `src/db/index.ts` | SQLite connection singleton, migrations, typed query functions |
 | `shell/` | Static hook scripts appended to `~/.zshrc` / `~/.bashrc` by `workscribe init` |
@@ -81,8 +82,8 @@ All runtime data lives in `~/.workscribe/`:
 - `workscribe.db` — SQLite database (WAL mode, foreign keys on)
 - `config.json` — user config
 - `exports/` — markdown files from `workscribe export`
-- `weekly-cache/` — cached AI weekly digests (`<YYYY-WW>.<engine>.md`; 1.x `<YYYY-WW>.md` files are still read for `provider`/`ollama`)
-- `workscribe.db` → `session_summaries` — per-engine session summaries keyed by `repo|started_at` (migration 005)
+- `weekly-cache/` — left over from 1.x AI digests; 2.0 no longer reads or writes it
+- `workscribe.db` → `session_summaries` — saved session summaries (`skill`, plus 1.x `provider`/`ollama`/`legacy`) keyed by `repo|started_at` (migration 005)
 - `debug.log` — errors when `WORKSCRIBE_DEBUG=1`
 
 ## Git workflow
@@ -126,7 +127,7 @@ Documentation source lives in `docs/site/` in this repo and is published automat
 | New command added | `docs/site/commands.md` |
 | Command option added or changed | `docs/site/commands.md` |
 | New config key | `docs/site/configuration.md` |
-| New AI provider | `docs/site/providers.md` |
+| Summary behaviour or the agent skill | `docs/site/summaries.md` |
 | Privacy or data handling change | `docs/site/privacy.md` |
 | New error or common failure mode | `docs/site/troubleshooting.md` |
 

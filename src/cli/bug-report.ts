@@ -22,7 +22,7 @@ function tailFile(filePath: string, lines: number): string {
 function redactConfig(): string {
   try {
     const config = readConfig()
-    if (config.ai.apiKey) config.ai.apiKey = '<redacted>'
+    if (config.ai?.apiKey) config.ai.apiKey = '<redacted>' // left over from a 1.x config
     if (config.integrations?.slackWebhook) config.integrations.slackWebhook = '<redacted>'
     if (config.integrations?.webhook) config.integrations.webhook = '<redacted>'
     return JSON.stringify(config, null, 2)

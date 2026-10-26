@@ -21,7 +21,7 @@ Safe to re-run at any time — installs missing hooks, updates outdated ones, an
 - Installs or updates the shell hook in `~/.zshrc` or `~/.bashrc`
 - Detects installed AI coding tools (Claude Code, Aider, etc.) and offers to install a session capture hook for each — opt-in, defaults to no
 - Detects coding agents (Claude Code, Codex, GitHub Copilot, Cursor) and offers to install the [Workscribe agent skill](#agent-skill) for each — defaults to yes, and only asks when the skill is missing or outdated
-- Prompts you to choose an AI provider and enter your API key
+- If your config still has AI provider settings from Workscribe 1.x (including an API key), offers to remove them — 2.0 doesn't use them
 
 **Shell hook updates:**
 
@@ -31,7 +31,7 @@ When a new version of Workscribe ships with an updated hook, re-running `workscr
 
 ## workscribe summary
 
-Generate a work summary for today or a specific date. With no AI configured this uses the offline template engine; with Ollama or a cloud provider configured, the summary is AI-written. See [Summary engines](/configuration#summary).
+Generate a work summary for today or a specific date with Workscribe's offline template engine. A session your coding agent already summarized with the [agent skill](#agent-skill) shows that summary instead. See [Summaries](/summaries).
 
 ```bash
 workscribe summary
@@ -46,8 +46,8 @@ workscribe summary --webhook <url>
 |---|---|
 | `--date <YYYY-MM-DD>` | Summarise a specific date instead of today |
 | `--week` | Summarise Mon–today for the current week |
-| `--fresh` | Bypass saved and cached summaries and regenerate |
-| `--verbose` | Show all captured events (including those not sent to AI) before generating the summary |
+| `--fresh` | Ignore saved summaries and render the template for every session |
+| `--verbose` | Show all captured events, including those left out of the summary |
 | `--slack` | Post the summary to your configured Slack webhook |
 | `--webhook <url>` | Post the summary to a custom webhook URL |
 
@@ -77,19 +77,19 @@ Then run `workscribe summary --slack` to post. The summary is automatically form
 - Committed fixes and pushed to remote
 ```
 
-Each session gets its own heading. The heading is always generated from your captured data — project name, branch, and duration — not from the AI.
+Each session gets its own heading. The heading is always generated from your captured data — project name, branch, and duration.
 
-**Caching:**
-- Daily summaries are cached per session in the database
-- Cached summaries are preserved when new events arrive — only new or unsummarised sessions call the AI
-- AI-written weekly summaries are cached in `~/.workscribe/weekly-cache/<YYYY-WW>.<engine>.md` (`ollama` or `provider`). Template digests are rendered fresh every time.
-- Use `--fresh` to force regeneration of all sessions for the day
+**Saved summaries:**
+- A summary the agent skill saved for a session is shown instead of the template
+- Summaries an AI provider wrote in Workscribe 1.x are still shown for their sessions
+- Template summaries are rendered fresh every time and never stored
+- Use `--fresh` to render the template for every session, ignoring saved summaries for that run
 
 ---
 
 ## workscribe week
 
-Generate a weekly digest covering Monday through today — AI-written when Ollama or a provider is configured, otherwise from the offline template (up to 5 bullets per day).
+Generate a weekly digest covering Monday through today with the offline template engine (up to 5 bullets per day). Digests are rendered fresh every time.
 
 ```bash
 workscribe week
@@ -100,15 +100,11 @@ workscribe week --webhook <url>
 
 | Option | Description |
 |---|---|
-| `--fresh` | Bypass cache and regenerate the digest |
+| `--fresh` | Accepted for 1.x scripts — digests are always rendered fresh |
 | `--slack` | Post the digest to your configured Slack webhook |
 | `--webhook <url>` | Post the digest to a custom webhook URL |
 
 The natural pre-standup ritual for Monday morning or end-of-week reporting. Output is markdown grouped by day, with each session summarised under its project and branch.
-
-**Caching:**
-
-AI-written digests are cached in `~/.workscribe/weekly-cache/<YYYY-WW>.<engine>.md`. Running `workscribe week` a second time in the same week returns the cached digest instantly; use `--fresh` to force regeneration. Template digests (no AI configured) are always rendered fresh from your current activity.
 
 **Slack:**
 
@@ -157,7 +153,7 @@ EOF
 - The text must be non-empty and at most 8 KB. Secrets are redacted before it's stored, using the same rules as captured commands (including `redact.extra`).
 - Saving again for the same session replaces the earlier summary.
 - If the key no longer matches a session (new activity can regroup a day), run `workscribe sessions --json` again and use the new key.
-- A saved summary is what `workscribe summary`, `workscribe context` and the VS Code status bar show for that session. `workscribe summary --fresh` regenerates with Workscribe's own engine for that run only; the saved summary stays until the skill (or this command) saves a new one. Saved summaries are per session, so weekly digests (`summary --week`, `week`) don't use them.
+- A saved summary is what `workscribe summary`, `workscribe context` and the VS Code status bar show for that session. `workscribe summary --fresh` renders the template for that run only; the saved summary stays until the skill (or this command) saves a new one. Saved summaries are per session, so weekly digests (`summary --week`, `week`) don't use them.
 
 ### Agent skill
 
@@ -165,7 +161,7 @@ Workscribe ships an Agent Skill (the open `SKILL.md` format several coding agent
 
 `workscribe init` offers to install the skill for each coding agent it finds. To install or update it later, run [`workscribe skill install`](#workscribe-skill), then restart any agent that's already open.
 
-Without a coding agent nothing changes — `workscribe summary` keeps working with its offline template engine or Ollama. Running the skill sends your session data to the agent's model provider; see [Privacy](/privacy).
+Without a coding agent nothing changes — `workscribe summary` keeps working with its offline template engine. Running the skill sends your session data to the agent's model provider; see [Privacy](/privacy).
 
 ---
 
@@ -259,7 +255,8 @@ The note is stored as an event in the database, timestamped now, and associated 
 **Where notes appear:**
 
 - `workscribe sessions` — displayed indented under the matching session
-- `workscribe summary` and `workscribe week` — injected into the AI prompt before the event list so the model reads your context first, and uses it to explain the why behind the work
+- `workscribe summary` and `workscribe week` — shown first in the session's bullets, so the summary explains the why behind the work
+- `workscribe sessions --json` — included for the agent skill, which uses them the same way
 
 **Removing a note:**
 
@@ -402,7 +399,7 @@ workscribe context --file src/auth.ts --json
 | `--file <path>` | Show the last session that touched this file (requires IDE integration) |
 | `--json` | Output structured JSON instead of formatted text — `null` when no session is found |
 
-**Without `--file`:** shows the most recent session for the current git repo — date, duration, branch, event count, and the AI-generated summary if one exists.
+**Without `--file`:** shows the most recent session for the current git repo — date, duration, branch, event count, and the session's summary — one the agent skill saved, one an AI provider wrote in 1.x, or else the template.
 
 **With `--file`:** narrows to the most recent session that included a `code_edit` event for that path. This is what powers the [VS Code extension](https://marketplace.visualstudio.com/items?itemName=workscribe.workscribe)'s status bar "last worked on" indicator — surfacing "3 days ago" when you switch to a file you haven't touched recently. Neovim and other editor integrations aren't built yet.
 
@@ -443,7 +440,8 @@ workscribe status
 - Whether capture is active or paused
 - Number of events captured today and total
 - Last captured event
-- Configured AI provider and model
+- How summaries are made (the offline template, plus the agent skill)
+- A notice if your config still has AI provider settings from Workscribe 1.x, with how to remove them
 - An "Agent skill" line for each detected coding agent: installed (with version), outdated, or not installed — with the command to fix it
 - Pending security alerts count (if any)
 
@@ -555,9 +553,6 @@ workscribe config get <key>
 **Examples:**
 
 ```bash
-workscribe config set ai.provider anthropic
-workscribe config set ai.apiKey sk-...
-workscribe config set ai.model claude-haiku-4-5-20251001
 workscribe config set session.idleTimeout 20
 workscribe config set redact.extra "MY_SECRET_PATTERN"
 workscribe config set integrations.slackWebhook https://hooks.slack.com/services/...
@@ -566,10 +561,10 @@ workscribe config set projects./Users/me/sandbox/myrepo actual-repo-name
 
 **Sensitive value masking:**
 
-`workscribe config get` and `workscribe config` mask API keys, tokens, and webhook URLs — showing only the first four characters and the total length:
+`workscribe config get` and `workscribe config` mask tokens, webhook URLs and keys (including an API key left over from 1.x) — showing only the first four characters and the total length:
 
 ```
-sk-a******** (51 chars)
+http******** (68 chars)
 ```
 
 This confirms a value is set without exposing it in your terminal history.

@@ -100,47 +100,40 @@ workscribe config set projects./full/path/to/repo correct-name
 ```
 
 **Summary has no heading:**
-This shouldn't happen — headings are generated from your data, not the AI. If you're seeing this, run `workscribe --version` to check your installed version.
+This shouldn't happen — headings are generated from your data. If you're seeing this, run `workscribe --version` to check your installed version.
 
 **Bullet points are off-topic:**
-Try `--fresh` to regenerate without cache:
+If the session shows a summary your coding agent saved (or one an AI provider wrote in 1.x), `--fresh` renders the template from your captured activity instead:
 
 ```bash
 workscribe summary --fresh
 ```
 
-For local models (Ollama), try a larger model:
-
-```bash
-workscribe config set ai.model llama3:70b
-```
+To have the agent write a better one, ask it again — the Workscribe skill replaces the saved summary.
 
 ---
 
 ## Summary uses bullets instead of AI prose
 
-With no AI configured, Workscribe uses the offline `template` engine — summaries are built from your captured activity rather than written by a model. That's expected. For AI-written summaries, configure Ollama or a cloud provider:
+That's expected: `workscribe summary` always uses the offline template engine, which builds bullets from your captured activity rather than writing prose. For AI-written summaries, ask your coding agent — install the Workscribe skill first:
 
 ```bash
-workscribe config set summary.engine ollama   # local, on-device
-# or
-workscribe config set ai.provider anthropic   # or openai, gemini, groq
-workscribe config set ai.apiKey <your-key>
+workscribe skill install
 ```
 
-Run `workscribe summary --fresh` afterwards to regenerate today's summary with the new engine.
+Then, in Claude Code, Codex, GitHub Copilot or Cursor, ask *"summarize my work today"* (or type `/workscribe` in Claude Code). The summary the agent writes is saved, so `workscribe summary` shows it from then on.
 
 ---
 
-## "summary.engine is "provider" but ai.provider is not set"
+## "AI providers were removed in Workscribe 2.0"
 
-`summary.engine` was set to `provider` without a provider to use. Either set one, or let Workscribe pick the engine:
+Your config still has AI provider settings from 1.x (`ai.provider`, `ai.apiKey`, `ai.model`, `ai.baseUrl` or `summary.engine`). 2.0 ignores them — summaries use the offline template, and AI-written summaries come from the agent skill. To stop the notice and delete the old settings, including any stored API key:
 
 ```bash
-workscribe config set ai.provider anthropic
-# or
-workscribe config set summary.engine template
+workscribe init
 ```
+
+and answer **yes** when asked to remove the old AI settings. `workscribe config set ai.…` and `config set summary.engine` are refused with the same message. See [Migrating to 2.0](/migrating-to-2).
 
 ---
 
@@ -166,39 +159,6 @@ EOF
 ## Saving a summary: "This summary is too long to save"
 
 A saved summary can be at most 8 KB per session. Shorten it — Workscribe summaries are meant to be a few outcome bullets per session.
-
----
-
-## Ollama: "connection refused"
-
-Ollama isn't running. Start it:
-
-```bash
-ollama serve
-```
-
-And ensure the model is pulled:
-
-```bash
-ollama pull llama3
-```
-
----
-
-## API key errors (401 / 403)
-
-Confirm a key is stored (output is masked for security):
-
-```bash
-workscribe config get ai.apiKey
-# sk-a******** (51 chars)
-```
-
-If no key is set or you need to replace it:
-
-```bash
-workscribe config set ai.apiKey <new-key>
-```
 
 ---
 

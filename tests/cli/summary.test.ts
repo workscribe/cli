@@ -12,8 +12,8 @@ vi.mock('../../src/sessions/detector', () => ({
   getOrBuildSessions: vi.fn(),
 }))
 
-vi.mock('../../src/ai/router', () => ({
-  getProvider: vi.fn(),
+vi.mock('../../src/summary/writer', () => ({
+  createSummaryWriter: vi.fn(),
 }))
 
 vi.mock('../../src/config', () => ({
@@ -47,38 +47,33 @@ vi.mock('../../src/utils/format', () => ({
   formatDuration: vi.fn(() => '1h'),
   startOfWeek: vi.fn(() => '2026-08-17'),
   eachDayOfRange: vi.fn(() => ['2026-08-17']),
-  isoWeekKey: vi.fn(() => '2026-W34'),
-}))
-
-vi.mock('../../src/ai/prompt', () => ({
-  countExcludedEvents: vi.fn(() => new Map()),
 }))
 
 vi.mock('../../src/summary/exclusions', () => ({
   buildExcludedSet: vi.fn(() => new Set()),
+  countExcludedEvents: vi.fn(() => new Map()),
 }))
 
 import { Command } from 'commander'
 import fs from 'fs'
 import { getOrBuildSessions } from '../../src/sessions/detector'
-import { getProvider } from '../../src/ai/router'
+import { createSummaryWriter } from '../../src/summary/writer'
 import { readConfig } from '../../src/config'
 import { getSessionSummaries, saveSessionSummary } from '../../src/db'
 import { postToWebhook } from '../../src/integrations/webhook'
 import { isSlackWebhookUrl } from '../../src/integrations/slack'
-import { log, debugLog } from '../../src/utils/logger'
+import { log } from '../../src/utils/logger'
 import { parseBullets, registerSummary } from '../../src/cli/summary'
 
 const mockFs = fs as unknown as Record<string, ReturnType<typeof vi.fn>>
 const mockGetOrBuildSessions = getOrBuildSessions as ReturnType<typeof vi.fn>
-const mockGetProvider = getProvider as ReturnType<typeof vi.fn>
+const mockCreateSummaryWriter = createSummaryWriter as ReturnType<typeof vi.fn>
 const mockReadConfig = readConfig as ReturnType<typeof vi.fn>
 const mockGetSessionSummaries = getSessionSummaries as ReturnType<typeof vi.fn>
 const mockSaveSessionSummary = saveSessionSummary as ReturnType<typeof vi.fn>
 const mockPostToWebhook = postToWebhook as ReturnType<typeof vi.fn>
 const mockIsSlackWebhookUrl = isSlackWebhookUrl as ReturnType<typeof vi.fn>
 const mockLog = log as Record<string, ReturnType<typeof vi.fn>>
-const mockDebugLog = debugLog as ReturnType<typeof vi.fn>
 
 const FAKE_SESSION = {
   repoName: 'my-app',
@@ -91,7 +86,7 @@ const FAKE_SESSION = {
   ],
 }
 
-const BASE_CONFIG = { ai: { provider: 'anthropic' }, integrations: {} }
+const BASE_CONFIG = { integrations: {} }
 
 function makeProgram() {
   const program = new Command()
@@ -136,7 +131,9 @@ describe('workscribe summary --week', () => {
   beforeEach(() => {
     mockReadConfig.mockReturnValue(BASE_CONFIG)
     mockGetOrBuildSessions.mockReturnValue([FAKE_SESSION])
-    mockGetProvider.mockReturnValue({ summarizeWeek: vi.fn().mockResolvedValue('# Week summary\n- Shipped a fix') })
+    mockCreateSummaryWriter.mockReturnValue({
+      summarizeWeek: vi.fn().mockResolvedValue('# Week summary\n- Shipped a fix'),
+    })
     mockFs.existsSync.mockReturnValue(false)
   })
 
@@ -145,30 +142,22 @@ describe('workscribe summary --week', () => {
     expect(mockLog.plain).toHaveBeenCalledWith(expect.stringContaining('Week summary'))
   })
 
-  it('uses the "summary" wording when the weekly summary fails', async () => {
-    mockGetProvider.mockReturnValue({ summarizeWeek: vi.fn().mockRejectedValue(new Error('connection refused')) })
+  it('exits with the error when the weekly digest fails', async () => {
+    mockCreateSummaryWriter.mockReturnValue({ summarizeWeek: vi.fn().mockRejectedValue(new Error('disk full')) })
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never)
     onTestFinished(() => exitSpy.mockRestore())
 
     await makeProgram().parseAsync(['summary', '--week'], { from: 'user' })
 
-    expect(mockLog.error).toHaveBeenCalledWith('Weekly summary failed [anthropic]: connection refused')
+    expect(mockLog.error).toHaveBeenCalledWith('disk full')
     expect(exitSpy).toHaveBeenCalledWith(1)
   })
 
-  it('still shows the summary and exits cleanly when the cache write fails', async () => {
-    mockFs.mkdirSync.mockImplementation(() => {
-      throw new Error('EACCES: permission denied')
-    })
-
+  it('renders the digest fresh every time and writes no weekly cache', async () => {
     await makeProgram().parseAsync(['summary', '--week'], { from: 'user' })
 
-    expect(mockLog.plain).toHaveBeenCalledWith(expect.stringContaining('Week summary'))
-    expect(mockLog.error).not.toHaveBeenCalled()
-    expect(mockDebugLog).toHaveBeenCalledWith(
-      'weekly-summary-cache',
-      expect.objectContaining({ message: expect.stringContaining('EACCES') })
-    )
+    expect(mockFs.readFileSync).not.toHaveBeenCalled()
+    expect(mockFs.writeFileSync).not.toHaveBeenCalled()
   })
 })
 
@@ -187,7 +176,7 @@ describe('workscribe summary (daily)', () => {
 
   function mockSummarize(bullets = '- Shipped a fix') {
     const summarize = vi.fn().mockResolvedValue(bullets)
-    mockGetProvider.mockReturnValue({ summarize })
+    mockCreateSummaryWriter.mockReturnValue({ summarize })
     return summarize
   }
 
@@ -197,7 +186,7 @@ describe('workscribe summary (daily)', () => {
     mockGetSessionSummaries.mockReturnValue([])
   })
 
-  it('summarizes each session separately and caches the result', async () => {
+  it('summarizes each session separately and saves nothing', async () => {
     mockGetOrBuildSessions.mockReturnValue([
       { ...FAKE_SESSION, id: 1 },
       { ...FAKE_SESSION, id: 2, repoName: 'api' },
@@ -225,16 +214,7 @@ describe('workscribe summary (daily)', () => {
         },
       ],
     })
-    expect(mockSaveSessionSummary).toHaveBeenCalledWith(
-      'my-app|2026-08-17T09:00:00.000Z',
-      'provider',
-      '## my-app (main) — 1h\n- Shipped a fix'
-    )
-    expect(mockSaveSessionSummary).toHaveBeenCalledWith(
-      'api|2026-08-17T09:00:00.000Z',
-      'provider',
-      '## api (main) — 1h\n- Shipped a fix'
-    )
+    expect(mockSaveSessionSummary).not.toHaveBeenCalled()
     expect(mockLog.plain).toHaveBeenCalledWith(expect.stringContaining('## my-app (main) — 1h'))
   })
 
@@ -254,7 +234,7 @@ describe('workscribe summary (daily)', () => {
     })
   })
 
-  it('serves cached summaries without calling the provider', async () => {
+  it('still shows a summary a 1.x AI provider wrote for the session, and says where it came from', async () => {
     mockGetSessionSummaries.mockReturnValue([cachedRow('provider', '## my-app — 1h\n- Cached work')])
     const summarize = mockSummarize()
 
@@ -262,10 +242,10 @@ describe('workscribe summary (daily)', () => {
 
     expect(summarize).not.toHaveBeenCalled()
     expect(mockLog.plain).toHaveBeenCalledWith('## my-app — 1h\n- Cached work')
-    expect(mockLog.plain).toHaveBeenCalledWith(expect.stringContaining('cached'))
+    expect(mockLog.plain).toHaveBeenCalledWith(expect.stringContaining('1 written by an AI provider in Workscribe 1.x'))
   })
 
-  it('regenerates cached summaries when --fresh is passed', async () => {
+  it('renders the template instead of a 1.x summary when --fresh is passed', async () => {
     mockGetSessionSummaries.mockReturnValue([cachedRow('provider', '## my-app — 1h\n- Cached work')])
     const summarize = mockSummarize()
 
@@ -287,6 +267,42 @@ describe('workscribe summary (daily)', () => {
     expect(mockLog.plain).toHaveBeenCalledWith(JSON.stringify(expected, null, 2))
   })
 
+  it('prints only the JSON in JSON mode — no saved-summary note or footer', async () => {
+    mockReadConfig.mockReturnValue({ ...BASE_CONFIG, summary: { format: 'json' } })
+    mockGetSessionSummaries.mockReturnValue([cachedRow('skill', '## my-app — 1h\n- From the skill')])
+    mockSummarize()
+
+    await makeProgram().parseAsync(['summary'], { from: 'user' })
+
+    expect(mockLog.plain).toHaveBeenCalledTimes(1)
+    expect(() => JSON.parse(mockLog.plain.mock.calls[0][0])).not.toThrow()
+  })
+
+  it('keeps stdout to the JSON with --slack: posting status goes to stderr', async () => {
+    mockReadConfig.mockReturnValue({
+      ...BASE_CONFIG,
+      summary: { format: 'json' },
+      integrations: { slackWebhook: 'https://hooks.slack.com/services/T/B/X' },
+    })
+    mockIsSlackWebhookUrl.mockReturnValue(true)
+    mockSummarize()
+
+    await makeProgram().parseAsync(['summary', '--slack'], { from: 'user' })
+
+    expect(mockLog.plain).toHaveBeenCalledTimes(1)
+    expect(mockLog.notice).toHaveBeenCalledWith('Posted.')
+  })
+
+  it('skips --verbose in JSON mode, saying why on stderr', async () => {
+    mockReadConfig.mockReturnValue({ ...BASE_CONFIG, summary: { format: 'json' } })
+    mockSummarize()
+
+    await makeProgram().parseAsync(['summary', '--verbose'], { from: 'user' })
+
+    expect(mockLog.plain).toHaveBeenCalledTimes(1)
+    expect(mockLog.notice).toHaveBeenCalledWith(expect.stringContaining('--verbose is skipped'))
+  })
+
   it('posts the full summary to --webhook', async () => {
     mockSummarize()
     mockIsSlackWebhookUrl.mockReturnValue(false)
@@ -296,7 +312,7 @@ describe('workscribe summary (daily)', () => {
     expect(mockPostToWebhook).toHaveBeenCalledWith('https://example.com/hook', '## my-app (main) — 1h\n- Shipped a fix')
   })
 
-  it('serves a 1.x summary to a provider config', async () => {
+  it('serves a summary migrated from the 1.x sessions table', async () => {
     mockGetSessionSummaries.mockReturnValue([cachedRow('legacy', '## my-app — 1h\n- From 1.x')])
     const summarize = mockSummarize()
 
@@ -306,7 +322,7 @@ describe('workscribe summary (daily)', () => {
     expect(mockLog.plain).toHaveBeenCalledWith('## my-app — 1h\n- From 1.x')
   })
 
-  it('does not serve a template summary once a provider is configured', async () => {
+  it('never serves a stored template summary — the template always renders fresh', async () => {
     mockGetSessionSummaries.mockReturnValue([cachedRow('template', '## my-app — 1h\n- Template text')])
     const summarize = mockSummarize()
 
@@ -315,20 +331,7 @@ describe('workscribe summary (daily)', () => {
     expect(summarize).toHaveBeenCalledTimes(1)
   })
 
-  it("renders the template live: it ignores other engines' caches and saves nothing", async () => {
-    mockReadConfig.mockReturnValue({ ...BASE_CONFIG, summary: { engine: 'template' } })
-    mockGetSessionSummaries.mockReturnValue([cachedRow('provider', '## my-app — 1h\n- Provider text')])
-    const summarize = mockSummarize()
-
-    await makeProgram().parseAsync(['summary'], { from: 'user' })
-
-    expect(summarize).toHaveBeenCalledTimes(1)
-    expect(mockSaveSessionSummary).not.toHaveBeenCalled()
-    expect(mockLog.info).toHaveBeenCalledWith(expect.stringContaining('template'))
-  })
-
-  it('shows a summary the agent skill saved instead of generating one, for any engine', async () => {
-    mockReadConfig.mockReturnValue({ ...BASE_CONFIG, summary: { engine: 'template' } })
+  it('shows a summary the agent skill saved instead of rendering the template', async () => {
     mockGetSessionSummaries.mockReturnValue([cachedRow('skill', '## my-app (main) — 1h\n- Written by the agent')])
     const summarize = mockSummarize()
 
@@ -339,7 +342,7 @@ describe('workscribe summary (daily)', () => {
     expect(mockLog.plain).toHaveBeenCalledWith(expect.stringContaining('1 written by the Workscribe agent skill'))
   })
 
-  it("prefers the skill summary over this engine's own cached one", async () => {
+  it('prefers the skill summary over a 1.x AI summary', async () => {
     mockGetSessionSummaries.mockReturnValue([
       cachedRow('provider', '## my-app — 1h\n- Provider text'),
       cachedRow('skill', '## my-app — 1h\n- Skill text'),
@@ -388,7 +391,7 @@ describe('workscribe summary (daily)', () => {
     expect(mockLog.plain).toHaveBeenCalledWith(JSON.stringify(expected, null, 2))
   })
 
-  it('regenerates instead of using the skill summary with --fresh', async () => {
+  it('renders the template instead of the skill summary with --fresh', async () => {
     mockGetSessionSummaries.mockReturnValue([cachedRow('skill', '## my-app — 1h\n- From the skill')])
     const summarize = mockSummarize()
 
@@ -419,5 +422,23 @@ describe('workscribe summary (daily)', () => {
 
     expect(mockPostToWebhook).not.toHaveBeenCalled()
     expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining('integrations.slackWebhook'))
+  })
+
+  it('prints the 2.0 notice once for a 1.x config with AI provider settings', async () => {
+    mockReadConfig.mockReturnValue({ ...BASE_CONFIG, ai: { provider: 'anthropic', apiKey: 'sk-old' } })
+    mockSummarize()
+
+    await makeProgram().parseAsync(['summary'], { from: 'user' })
+
+    expect(mockLog.notice).toHaveBeenCalledTimes(1)
+    expect(mockLog.notice).toHaveBeenCalledWith(expect.stringContaining('AI providers were removed in Workscribe 2.0'))
+  })
+
+  it('prints no notice for a 2.0 config', async () => {
+    mockSummarize()
+
+    await makeProgram().parseAsync(['summary'], { from: 'user' })
+
+    expect(mockLog.notice).not.toHaveBeenCalled()
   })
 })

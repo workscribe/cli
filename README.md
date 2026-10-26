@@ -12,23 +12,30 @@
 $ workscribe summary
 
 ## api-service (feature/auth) — 2h 15m
-- Set up authentication feature branch and installed JWT dependencies
-- Resolved failing test suite for token validation logic
-- Committed authentication middleware fixes
+- Committed: add JWT validation middleware
+- Committed: fix token expiry check
+- Resolved failing tests (9 runs, now passing)
+- Added dependencies: bcrypt, jsonwebtoken
+- Pushed to origin/feature/auth
 
 ## infrastructure — 45m
-- Restarted staging environment and verified deployment stability
-- Investigated and resolved Docker networking issue in compose setup
+- Note: staging was flaky after the compose upgrade
+- Builds passing (2 runs)
 ```
 
-**[Full documentation →](https://workscribe.mintlify.site)** — commands, configuration, AI providers, troubleshooting. This README covers getting started; everything else lives there and is kept current as the product changes.
+Want prose instead? Ask your coding agent to *"summarize my work today"* — see [Summaries](#summaries).
+
+**[Full documentation →](https://workscribe.mintlify.site)** — commands, configuration, summaries, troubleshooting. This README covers getting started; everything else lives there and is kept current as the product changes.
 
 ## How it works
 
-A shell hook captures every command you run. At the end of the day, `workscribe summary` groups your activity into work sessions and sends structured event data (never raw commands) to your configured AI provider, which returns a standup-ready narrative.
+A shell hook captures every command you run. At the end of the day, `workscribe summary` groups your activity into work sessions and turns them into a summary with its offline template engine — no AI provider, no API key, nothing sent anywhere.
+
+For AI-written prose, ask the coding agent you already use (Claude Code, Codex, GitHub Copilot or Cursor) to *"summarize my work today"*. The Workscribe agent skill reads your sessions and writes the summary — install it with `workscribe skill install`.
 
 ```
-shell hook → capture → SQLite → session grouper → AI provider → markdown
+shell hook → capture → SQLite → session grouper → template engine → markdown
+                                               ↘ agent skill (your coding agent) → prose summary
 ```
 
 ## Requirements
@@ -51,7 +58,7 @@ source ~/.zshrc   # or restart your terminal
 
 > Use the global install flag for your package manager — e.g. `npm install -g`, `yarn global add`, `pnpm add -g`, or `bun add -g`.
 
-`workscribe init` walks you through choosing an AI provider, installs the shell hook, and offers to install a Claude Code session capture hook if Claude Code is detected. Safe to re-run — updates outdated hooks and skips steps already complete.
+`workscribe init` installs the shell hook, offers to install a Claude Code session capture hook if Claude Code is detected, and offers to install the Workscribe skill into the coding agents it finds. Safe to re-run — updates outdated hooks and skips steps already complete.
 
 ## Also capturing in your editor?
 
@@ -72,16 +79,13 @@ If you've already removed the binary and still see `_workscribe_precmd` errors i
 2. Delete everything between `# workscribe:hook:start` and `# workscribe:hook:end` (inclusive)
 3. Run `source ~/.zshrc` or restart your terminal
 
-## AI providers
+## Summaries
 
-Anthropic, OpenAI, Gemini, Groq, Ollama (fully offline), or any OpenAI-compatible endpoint.
+`workscribe summary`, `week` and `export` use a built-in template engine: deterministic, instant and fully offline. There's nothing to configure.
 
-```bash
-workscribe config set ai.provider anthropic
-workscribe config set ai.apiKey <your-key>
-```
+For AI-written summaries, use the coding agent you already have. `workscribe skill install` adds the Workscribe skill to Claude Code, Codex, GitHub Copilot and Cursor; then ask the agent to *"summarize my work today"* (or type `/workscribe` in Claude Code). Summaries the agent writes are saved, so `workscribe summary` and the VS Code status bar show them too.
 
-**[Provider setup, defaults, and model overrides →](https://workscribe.mintlify.site/providers)**
+**[How summaries work →](https://workscribe.mintlify.site/summaries)** · **Upgrading from 1.x?** AI providers were removed in 2.0 — see the **[migration guide →](https://workscribe.mintlify.site/migrating-to-2)**
 
 ## Commands
 
@@ -100,8 +104,8 @@ A few of the most common:
 
 - All captured activity data is stored locally on your machine — nothing is written anywhere else
 - Credentials are redacted before any event is written to disk (tokens, API keys, passwords, JWTs)
-- Your captured activity (commands, sessions) is never sent anywhere except your configured AI provider, and only when you run `workscribe summary`
-- Use Ollama to keep that data fully on-device with zero external transmission
+- `workscribe summary`, `week` and `export` never send your activity anywhere — the template engine runs entirely on your machine
+- The agent skill is the one exception, and only when you ask your coding agent for a summary: the agent sends the session data it reads to its own model provider
 - Separately, Workscribe sends an anonymous install ping (a random ID, CLI version, OS platform, Node version — no activity data, ever), disclosed during `workscribe init`. Opt out anytime: `workscribe config set telemetry.enabled false`
 
 **[Full privacy & security details →](https://workscribe.mintlify.site/privacy)**
@@ -109,7 +113,6 @@ A few of the most common:
 ## Configuration
 
 ```bash
-workscribe config set ai.provider anthropic
 workscribe config set session.idleTimeout 20
 workscribe config set integrations.slackWebhook https://hooks.slack.com/services/...
 workscribe summary --slack

@@ -11,6 +11,7 @@ import { getPendingAlerts } from '../db/alerts'
 import { checkHookHealth } from '../capture/hooks/claude-code'
 import { detectAgents } from '../skills/detect'
 import { formatAgentSkillLine } from '../skills/actions'
+import { printLegacyAiNotice } from './notices'
 
 // Labelled on the first agent's row only, like the other status sections
 const AGENT_SKILL_LABEL = 'Agent skill'
@@ -21,6 +22,7 @@ export function registerStatus(program: Command): void {
     .description('Show capture status and event counts')
     .action(() => {
       const config = readConfig()
+      printLegacyAiNotice(config)
       const total = getEventCount()
       const todayEvents = getEventsForDate(todayDate())
       const last = getLastEvent()
@@ -44,17 +46,16 @@ export function registerStatus(program: Command): void {
       }
 
       log.plain('')
-      log.plain(
-        `  AI provider  ${config.ai.provider ? chalk.cyan(config.ai.provider) : chalk.yellow('not configured')}`
-      )
-      if (config.ai.model) log.plain(`  Model        ${chalk.dim(config.ai.model)}`)
+      const agents = detectAgents()
+      const skillHint = agents.length > 0 ? ' · AI-written ones via the agent skill below' : ''
+      log.plain(`  Summaries    ${chalk.cyan('template')} ${chalk.dim(`(offline)${skillHint}`)}`)
 
       const activeProfiles = config.capture.profiles
       log.plain(
         `  Profiles     ${activeProfiles.length > 0 ? chalk.cyan(activeProfiles.join(', ')) : chalk.dim('none')}`
       )
 
-      detectAgents().forEach((agent, index) => {
+      agents.forEach((agent, index) => {
         const label = index === 0 ? AGENT_SKILL_LABEL : ''
         log.plain(`  ${label.padEnd(AGENT_SKILL_LABEL.length)}  ${formatAgentSkillLine(agent)}`)
       })

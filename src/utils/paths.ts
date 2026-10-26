@@ -31,7 +31,6 @@ export const DEBUG_LOG_PATH = path.join(xdgStateDir, 'debug.log')
 export const UPDATE_CHECK_PATH = path.join(xdgStateDir, 'update-check.json')
 export const EXPORTS_DIR = path.join(xdgDataDir, 'exports')
 export const PAUSE_FLAG_PATH = path.join(xdgStateDir, 'paused')
-export const WEEKLY_CACHE_DIR = path.join(xdgDataDir, 'weekly-cache')
 export const PROFILES_DIR = path.join(xdgDataDir, 'profiles')
 // Fixed at ~/.workscribe/alerts.pending so shell hooks can check it without knowing XDG paths.
 // Content is irrelevant — its presence signals pending alerts.

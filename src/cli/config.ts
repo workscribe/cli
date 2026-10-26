@@ -1,7 +1,7 @@
 import { Command } from 'commander'
 import chalk from 'chalk'
 import { readConfig, writeConfig, getConfigValue, setConfigValue } from '../config'
-import { SUMMARY_ENGINES, isSummaryEngine } from '../ai/engine'
+import { REMOVED_AI_SETTING_MESSAGE, isRemovedAiSetting } from '../summary/legacy-ai'
 import { log } from '../utils/logger'
 
 export function registerConfig(program: Command): void {
@@ -19,20 +19,18 @@ export function registerConfig(program: Command): void {
 
   configCmd
     .command('set <key> <value>')
-    .description('Set a config value (e.g. workscribe config set ai.provider anthropic)')
+    .description('Set a config value (e.g. workscribe config set session.idleTimeout 45)')
     .action((key: string, value: string) => {
-      if (key === 'summary.engine' && !isSummaryEngine(value)) {
-        log.error(`Invalid summary.engine "${value}". Use one of: ${SUMMARY_ENGINES.join(', ')}`)
+      // Checked before reading or writing, so a refused key never touches config.json
+      if (isRemovedAiSetting(key)) {
+        log.error(REMOVED_AI_SETTING_MESSAGE)
         process.exit(1)
       }
       const config = readConfig()
       const updated = setConfigValue(config, key, value)
       writeConfig(updated)
       const isSensitive =
-        key === 'ai.apiKey' ||
-        key.toLowerCase().includes('key') ||
-        key.toLowerCase().includes('secret') ||
-        key.toLowerCase().includes('token')
+        key.toLowerCase().includes('key') || key.toLowerCase().includes('secret') || key.toLowerCase().includes('token')
       const displayValue = isSensitive ? '[set]' : chalk.yellow(value)
       log.success(`Set ${chalk.cyan(key)} = ${displayValue}`)
     })
