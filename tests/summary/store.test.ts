@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest'
-import { sessionKey, summaryEnginesFor, pickOwnSummary, pickBestSummary, isCachedEngine } from '../../src/summary/store'
+import {
+  pickSavedSummary,
+  sessionKey,
+  summaryEnginesFor,
+  pickOwnSummary,
+  pickBestSummary,
+  isCachedEngine,
+} from '../../src/summary/store'
 import { SESSION_KEY_SQL } from '../../src/db/migrations/005_session_summaries'
 import type { SessionSummaryRow } from '../../src/db/types'
 
@@ -77,5 +84,19 @@ describe('pickBestSummary', () => {
     const rows = [row('legacy', 'old', '2026-10-01T00:00:00.000Z'), row('ollama', 'new', '2026-10-25T00:00:00.000Z')]
 
     expect(pickBestSummary(rows)).toBe('new')
+  })
+})
+
+describe('pickSavedSummary', () => {
+  it('prefers a skill summary for any engine', () => {
+    const rows = [row('provider', 'provider'), row('skill', 'skill')]
+
+    expect(pickSavedSummary(rows, 'provider')).toEqual({ text: 'skill', fromSkill: true })
+    expect(pickSavedSummary([row('skill', 'skill')], 'template')).toEqual({ text: 'skill', fromSkill: true })
+  })
+
+  it("falls back to the engine's own cache, never for the template", () => {
+    expect(pickSavedSummary([row('legacy', 'old')], 'provider')).toEqual({ text: 'old', fromSkill: false })
+    expect(pickSavedSummary([row('template', 'stale')], 'template')).toBeNull()
   })
 })

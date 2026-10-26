@@ -7,6 +7,9 @@ export type CachedEngine = Exclude<SummaryEngine, 'template'>
 /** Engine name for summaries migrated from the 1.x `sessions.summary` column (written by a provider or Ollama). */
 export const LEGACY_ENGINE = 'legacy' satisfies StoredEngine
 
+/** Engine name for summaries the Workscribe agent skill saved with `sessions summary set`. */
+export const SKILL_ENGINE = 'skill' satisfies StoredEngine
+
 // Higher wins when picking what to show: richer sources first. Template rows rank 0 — templates are
 // rendered live, so any stored copy is a stale leftover and must never beat a fresh render.
 const ENGINE_RANK: Record<StoredEngine, number> = { skill: 3, ollama: 2, provider: 2, legacy: 2, template: 0 }
@@ -34,6 +37,22 @@ export function pickOwnSummary(rows: SessionSummaryRow[], engine: CachedEngine):
   const accepted = new Set<string>(summaryEnginesFor(engine))
   const [newest] = rows.filter((row) => accepted.has(row.engine)).sort(newestFirst)
   return newest?.text ?? null
+}
+
+export interface SavedSummary {
+  text: string
+  fromSkill: boolean
+}
+
+/**
+ * What `workscribe summary` can show for a session without generating: a summary the agent skill saved
+ * wins (it was written with more context than any engine has), else this engine's own cached summary.
+ */
+export function pickSavedSummary(rows: SessionSummaryRow[], engine: SummaryEngine): SavedSummary | null {
+  const [newestSkill] = rows.filter((row) => row.engine === SKILL_ENGINE).sort(newestFirst)
+  if (newestSkill) return { text: newestSkill.text, fromSkill: true }
+  const own = isCachedEngine(engine) ? pickOwnSummary(rows, engine) : null
+  return own === null ? null : { text: own, fromSkill: false }
 }
 
 /** The best stored summary for a session regardless of the configured engine (used by `context`). */
