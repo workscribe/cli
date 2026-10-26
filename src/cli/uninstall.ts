@@ -7,6 +7,8 @@ import chalk from 'chalk'
 import { WORKSCRIBE_DIR, REQUIRED_DIRS } from '../utils/paths'
 import { isHookInstalled, removeHook } from '../capture/shell-hook'
 import { log } from '../utils/logger'
+import { SKILL_AGENTS } from '../skills/agents'
+import { removeSkills } from '../skills/actions'
 
 function detectShellRcFiles(): { name: string; rcFile: string }[] {
   const candidates = [
@@ -48,7 +50,11 @@ export function registerUninstall(program: Command): void {
         }
       }
 
+      // --hooks-only runs from npm preuninstall, which some package managers also run on upgrade — so
+      // agent skills are only removed on a full uninstall, never silently during an upgrade
       if (opts.hooksOnly) return
+
+      removeSkills(SKILL_AGENTS, { reportMissing: false })
 
       // 2. Optionally delete all Workscribe data directories
       const existingDirs = [...new Set(REQUIRED_DIRS)].filter((dir) => fs.existsSync(dir))
@@ -73,7 +79,7 @@ export function registerUninstall(program: Command): void {
       }
 
       log.plain('')
-      log.plain(`  ${chalk.dim('npm uninstall -g @workscribe/cli')}  — remove the CLI itself`)
+      log.plain(`  ${chalk.dim('npm uninstall -g @workscribe/cli')}  — then remove the CLI itself`)
       log.plain('')
     })
 }

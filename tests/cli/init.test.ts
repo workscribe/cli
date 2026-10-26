@@ -76,6 +76,11 @@ vi.mock('../../src/profiles/loader', () => ({
 
 vi.mock('prompts', () => ({ default: vi.fn() }))
 
+// fs is mocked above, so the skill modules must be too — by default no coding agents are detected
+vi.mock('../../src/skills/detect', () => ({ detectAgents: vi.fn().mockReturnValue([]) }))
+vi.mock('../../src/skills/installer', () => ({ installSkill: vi.fn(), readInstallState: vi.fn() }))
+vi.mock('../../src/skills/package-path', () => ({ resolvePackagedSkillDir: vi.fn(() => '/pkg/skills/workscribe') }))
+
 import fs from 'fs'
 import { Command } from 'commander'
 import prompts from 'prompts'
@@ -86,6 +91,10 @@ import { getProvider } from '../../src/ai/router'
 import { log } from '../../src/utils/logger'
 import { registerInit } from '../../src/cli/init'
 import { createTestConfig } from '../helpers/config'
+import { detectAgents } from '../../src/skills/detect'
+import { installSkill, readInstallState } from '../../src/skills/installer'
+import { resolvePackagedSkillDir } from '../../src/skills/package-path'
+import { skillAgent as agent } from '../helpers/skill-agents'
 
 const mockFs = fs as unknown as Record<string, ReturnType<typeof vi.fn>>
 const mockPrompts = prompts as ReturnType<typeof vi.fn>
@@ -125,6 +134,7 @@ function mockPromptAnswers(overrides: Record<string, unknown[]> = {}) {
     update: [true],
     installComps: [true],
     install: [false],
+    installSkill: [false],
     provider: ['anthropic'],
     apiKey: ['sk-test-123'],
     baseUrl: ['https://example.com'],
@@ -270,14 +280,10 @@ describe('workscribe init — AI tool hook integration', () => {
 })
 
 describe('workscribe init — step indicators (AC-1)', () => {
-  it('prints numbered step headers for all five steps', async () => {
+  it('prints numbered step headers for all six steps', async () => {
     await makeProgram().parseAsync(['init'], { from: 'user' })
     const allOutput = (mockLog.plain as ReturnType<typeof vi.fn>).mock.calls.flat().join('\n')
-    expect(allOutput).toContain('[1/5]')
-    expect(allOutput).toContain('[2/5]')
-    expect(allOutput).toContain('[3/5]')
-    expect(allOutput).toContain('[4/5]')
-    expect(allOutput).toContain('[5/5]')
+    for (const stepNumber of [1, 2, 3, 4, 5, 6]) expect(allOutput).toContain(`[${stepNumber}/6]`)
   })
 })
 
@@ -436,6 +442,99 @@ describe('workscribe init — telemetry disclosure (CLI-04)', () => {
     expect(mockEnsureInstallId).toHaveBeenCalled()
     expect(mockWriteConfig).toHaveBeenCalledWith(
       expect.objectContaining({ telemetry: expect.objectContaining({ installId: 'brand-new-id' }) })
+    )
+  })
+})
+
+describe('workscribe init — agent skill step', () => {
+  const skillPrompts = () => mockPrompts.mock.calls.filter(([options]) => options.name === 'installSkill')
+
+  beforeEach(() => {
+    vi.mocked(detectAgents).mockReturnValue([agent('claude-code'), agent('codex'), agent('copilot')])
+    vi.mocked(readInstallState).mockReturnValue({ kind: 'not-installed' })
+    vi.mocked(installSkill).mockReturnValue('installed')
+  })
+
+  it('asks once per skills folder, defaulting to yes, and installs on yes', async () => {
+    mockPromptAnswers({ installSkill: [true] })
+
+    await makeProgram().parseAsync(['init'], { from: 'user' })
+
+    expect(skillPrompts().map(([options]) => [options.message, options.initial])).toEqual([
+      ['Install the Workscribe skill for Claude Code? Lets Claude Code summarize your work when you ask', true],
+      [
+        'Install the Workscribe skill for Codex and GitHub Copilot? Lets Codex and GitHub Copilot summarize your work when you ask',
+        true,
+      ],
+    ])
+    expect(installSkill).toHaveBeenCalledTimes(2)
+  })
+
+  it('installs nothing when the user says no', async () => {
+    mockPromptAnswers({ installSkill: [false] })
+
+    await makeProgram().parseAsync(['init'], { from: 'user' })
+
+    expect(installSkill).not.toHaveBeenCalled()
+    expect(mockLog.info).toHaveBeenCalledWith('Skill skipped for Claude Code — run workscribe skill install any time')
+  })
+
+  it('does not ask again when the skill is up to date, so re-running init never duplicates it', async () => {
+    vi.mocked(readInstallState).mockReturnValue({ kind: 'installed', version: '0.0.0-test' })
+    mockPromptAnswers({ installSkill: [true] })
+
+    await makeProgram().parseAsync(['init'], { from: 'user' })
+
+    expect(skillPrompts()).toHaveLength(0)
+    expect(installSkill).not.toHaveBeenCalled()
+  })
+
+  it('offers an update for an outdated copy and leaves a folder it does not own alone', async () => {
+    vi.mocked(readInstallState).mockImplementation((folder: string) =>
+      folder.endsWith('.claude/skills') ? { kind: 'outdated', version: '1.9.0' } : { kind: 'not-ours' }
+    )
+    mockPromptAnswers({ installSkill: [true] })
+
+    await makeProgram().parseAsync(['init'], { from: 'user' })
+
+    expect(skillPrompts().map(([options]) => options.message)).toEqual([
+      'Update the Workscribe skill for Claude Code? Lets Claude Code summarize your work when you ask',
+    ])
+    expect(installSkill).toHaveBeenCalledTimes(1)
+  })
+
+  it('warns and finishes setup when an install fails', async () => {
+    mockPromptAnswers({ installSkill: [true] })
+    vi.mocked(installSkill).mockImplementation(() => {
+      throw new Error('EACCES: permission denied')
+    })
+
+    await makeProgram().parseAsync(['init'], { from: 'user' })
+
+    expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining("Couldn't install the Workscribe skill"))
+    const allOutput = mockLog.plain.mock.calls.flat().join('\n')
+    expect(allOutput).toContain('[6/6]')
+  })
+
+  it('warns and finishes setup when the skill files are missing from the install', async () => {
+    vi.mocked(resolvePackagedSkillDir).mockImplementationOnce(() => {
+      throw new Error('The Workscribe skill files are missing from this install.')
+    })
+
+    await makeProgram().parseAsync(['init'], { from: 'user' })
+
+    expect(mockLog.warn).toHaveBeenCalledWith('The Workscribe skill files are missing from this install.')
+    expect(skillPrompts()).toHaveLength(0)
+    expect(mockLog.plain.mock.calls.flat().join('\n')).toContain('[6/6]')
+  })
+
+  it('tells the user how to install later when no coding agents are detected', async () => {
+    vi.mocked(detectAgents).mockReturnValue([])
+
+    await makeProgram().parseAsync(['init'], { from: 'user' })
+
+    expect(mockLog.info).toHaveBeenCalledWith(
+      'No coding agents detected — run workscribe skill install after installing one'
     )
   })
 })

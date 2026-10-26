@@ -27,8 +27,19 @@ vi.mock('../../src/capture/hooks/claude-code', () => ({
   checkHookHealth: vi.fn().mockReturnValue({ installed: false, pinned: true, confirmedBroken: null }),
 }))
 
+// fs is mocked above, so the skill modules must be too — by default no coding agents are detected
+vi.mock('../../src/skills/detect', () => ({ detectAgents: vi.fn().mockReturnValue([]) }))
+vi.mock('../../src/skills/installer', () => ({
+  readInstallState: vi.fn(),
+  installSkill: vi.fn(),
+  uninstallSkill: vi.fn(),
+}))
+
 import fs from 'fs'
 import { Command } from 'commander'
+import { detectAgents } from '../../src/skills/detect'
+import { readInstallState } from '../../src/skills/installer'
+import { skillAgent as agent } from '../helpers/skill-agents'
 import { getEventCount, getLastEvent, getEventsForDate, getRecentOtherRate } from '../../src/db'
 import { readConfig } from '../../src/config'
 import { log } from '../../src/utils/logger'
@@ -207,5 +218,34 @@ describe('workscribe status', () => {
       await makeProgram().parseAsync(['status'], { from: 'user' })
       expect(mockLog.plain).toHaveBeenCalledWith(expect.stringContaining('gpt-4o'))
     })
+  })
+})
+
+describe('workscribe status — agent skill', () => {
+  const skillLines = () =>
+    mockLog.plain.mock.calls
+      .map(([line]: unknown[]) => String(line))
+      .filter((line) => line.includes('~/.claude/skills') || line.includes('~/.cursor/skills'))
+
+  it('shows one line per detected agent with its state and the fix', async () => {
+    vi.mocked(detectAgents).mockReturnValue([agent('claude-code'), agent('cursor')])
+    vi.mocked(readInstallState).mockImplementation((folder: string) =>
+      folder.endsWith('.claude/skills') ? { kind: 'installed', version: '0.0.0-test' } : { kind: 'not-installed' }
+    )
+
+    await makeProgram().parseAsync(['status'], { from: 'user' })
+
+    const lines = skillLines()
+    expect(lines).toHaveLength(2)
+    expect(lines[0]).toMatch(/Agent skill\s+Claude Code.*installed \(0\.0\.0-test\)/)
+    expect(lines[1]).toMatch(/^\s+Cursor.*not installed — run workscribe skill install/)
+  })
+
+  it('shows nothing about skills when no coding agents are detected', async () => {
+    vi.mocked(detectAgents).mockReturnValue([])
+
+    await makeProgram().parseAsync(['status'], { from: 'user' })
+
+    expect(skillLines()).toEqual([])
   })
 })
