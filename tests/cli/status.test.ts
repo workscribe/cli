@@ -179,10 +179,43 @@ describe('workscribe status', () => {
     })
 
     it('shows no warning when the installed hook is pinned', async () => {
-      mockCheckHookHealth.mockReturnValue({ installed: true, pinned: true, confirmedBroken: null })
+      mockCheckHookHealth.mockReturnValue({
+        installed: true,
+        pinned: true,
+        guarded: true,
+        nodeMissing: false,
+        confirmedBroken: null,
+      })
       await makeProgram().parseAsync(['status'], { from: 'user' })
       const calls = (mockLog.plain as ReturnType<typeof vi.fn>).mock.calls.flat().join(' ')
       expect(calls).not.toContain('Claude Code hook')
+    })
+
+    it('says to update a pinned hook from an older version that has no guard', async () => {
+      mockCheckHookHealth.mockReturnValue({
+        installed: true,
+        pinned: true,
+        guarded: false,
+        nodeMissing: false,
+        confirmedBroken: null,
+      })
+      await makeProgram().parseAsync(['status'], { from: 'user' })
+      const calls = (mockLog.plain as ReturnType<typeof vi.fn>).mock.calls.flat().join(' ')
+      expect(calls).toContain('Claude Code hook is from an older version')
+      expect(calls).toContain('Run workscribe init to update it')
+    })
+
+    it("says capture is off when the hook's Node.js version is gone", async () => {
+      mockCheckHookHealth.mockReturnValue({
+        installed: true,
+        pinned: true,
+        guarded: true,
+        nodeMissing: true,
+        confirmedBroken: null,
+      })
+      await makeProgram().parseAsync(['status'], { from: 'user' })
+      const calls = (mockLog.plain as ReturnType<typeof vi.fn>).mock.calls.flat().join(' ')
+      expect(calls).toContain('The Node.js version the Claude Code hook uses is gone')
     })
 
     it('shows a "failing right now" warning when unpinned and confirmed broken', async () => {

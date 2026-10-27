@@ -19,13 +19,14 @@ Safe to re-run at any time — installs missing hooks, updates outdated ones, an
 - Creates `~/.workscribe/` with owner-only permissions
 - Initialises the SQLite database
 - Installs or updates the shell hook in `~/.zshrc` or `~/.bashrc`
-- Detects installed AI coding tools (Claude Code, Aider, etc.) and offers to install a session capture hook for each — opt-in, defaults to no
+- Installs shell completions, and rewrites the completion script on every run, so deleting the data folder doesn't break them. If your rc file has completions from Workscribe 2.0.0 or earlier, which print an error once the script is gone, offers to update them — defaults to yes
+- Detects installed AI coding tools (Claude Code, Aider, etc.) and offers to install a session capture hook for each — opt-in, defaults to no. If a hook is already there but outdated (from an older version, or pinned to a Node.js version that's since been removed), offers to update it instead — defaults to yes, since you opted in before
 - Detects coding agents (Claude Code, Codex, GitHub Copilot, Cursor) and offers to install the [Workscribe agent skill](#agent-skill) for each — defaults to yes, and only asks when the skill is missing or outdated
 - If your config still has AI provider settings from Workscribe 1.x (including an API key), offers to remove them — 2.0 doesn't use them
 
 **Shell hook updates:**
 
-When a new version of Workscribe ships with an updated hook, re-running `workscribe init` detects the change and prompts you to update. Your rc file is backed up before any modification.
+When a new version of Workscribe ships with an updated hook, re-running `workscribe init` detects the change and prompts you to update. Your rc file is backed up before any modification — the same goes for the completions block and `~/.claude/settings.json`.
 
 ---
 
@@ -481,7 +482,7 @@ When paused, the shell hook still fires but events are silently discarded. Usefu
 
 ## workscribe uninstall
 
-Remove shell hooks and the agent skill, and optionally delete all Workscribe data. Run it **before** `npm uninstall -g @workscribe/cli` — npm 7 and later don't run package cleanup scripts, so removing the package alone leaves these behind.
+Remove everything `workscribe init` added — shell hooks, shell completions, the Claude Code session hook and the agent skill — and optionally delete all Workscribe data. Run it **before** `npm uninstall -g @workscribe/cli`: npm 7 and later don't run package cleanup scripts, so removing the package alone leaves these behind (see [Troubleshooting](/troubleshooting#errors-after-removing-workscribe-without-workscribe-uninstall) if that already happened).
 
 ```bash
 workscribe uninstall
@@ -490,10 +491,12 @@ workscribe uninstall --hooks-only
 
 | Option | Description |
 |---|---|
-| `--hooks-only` | Remove shell hooks only — keep the agent skill and skip the data deletion prompt |
+| `--hooks-only` | Remove shell hooks, completions and the Claude Code hook only — keep the agent skill and skip the data deletion prompt |
 
 **What it does:**
 - Detects and removes the Workscribe hook block from `~/.zshrc`, `~/.bashrc`, and `~/.bash_profile`
+- Removes the shell completions block from those files, and the fish completion file
+- Removes the Claude Code session hook from `~/.claude/settings.json`, leaving your other hooks and settings untouched (each edited file is backed up first)
 - Removes the agent skill Workscribe installed (never a `workscribe` skill you added yourself)
 - Prompts whether to delete `~/.workscribe/` (database, config, exports) — defaults to **no**
 - Prints the command to remove the CLI itself (`npm uninstall -g @workscribe/cli`)
@@ -506,11 +509,7 @@ The hook is removed from your rc file but remains active in your current shell s
 source ~/.zshrc   # or ~/.bashrc
 ```
 
-**If you've already removed the binary** and still see `_workscribe_precmd` errors, remove the hook block manually:
-
-1. Open `~/.zshrc` (or `~/.bashrc`)
-2. Delete everything between `# workscribe:hook:start` and `# workscribe:hook:end` (inclusive)
-3. Run `source ~/.zshrc` or restart your terminal
+**If you've already removed the package** and see errors in new terminals or in Claude Code, see [Errors after removing Workscribe without `workscribe uninstall`](/troubleshooting#errors-after-removing-workscribe-without-workscribe-uninstall).
 
 ---
 

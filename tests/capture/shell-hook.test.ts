@@ -7,6 +7,7 @@ vi.mock('fs', () => ({
     writeFileSync: vi.fn(),
     copyFileSync: vi.fn(),
     appendFileSync: vi.fn(),
+    constants: { COPYFILE_EXCL: 1 },
   },
 }))
 
@@ -118,7 +119,8 @@ describe('installHook', () => {
     installHook('/home/user/.zshrc', HOOK_BLOCK)
     expect(mockFs.copyFileSync).toHaveBeenCalledWith(
       '/home/user/.zshrc',
-      expect.stringContaining('.zshrc.workscribe-backup-')
+      expect.stringContaining('.zshrc.workscribe-backup-'),
+      1
     )
   })
 
@@ -136,7 +138,8 @@ describe('updateHook', () => {
     updateHook('/home/user/.zshrc', HOOK_BLOCK)
     expect(mockFs.copyFileSync).toHaveBeenCalledWith(
       '/home/user/.zshrc',
-      expect.stringContaining('.zshrc.workscribe-backup-')
+      expect.stringContaining('.zshrc.workscribe-backup-'),
+      1
     )
   })
 
@@ -169,7 +172,8 @@ describe('removeHook', () => {
     removeHook('/home/user/.zshrc')
     expect(mockFs.copyFileSync).toHaveBeenCalledWith(
       '/home/user/.zshrc',
-      expect.stringContaining('.zshrc.workscribe-backup-')
+      expect.stringContaining('.zshrc.workscribe-backup-'),
+      1
     )
   })
 

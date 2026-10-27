@@ -82,6 +82,18 @@ export function registerStatus(program: Command): void {
           )
         }
         log.plain(chalk.dim('     Run workscribe init to repair it'))
+      } else if (hookHealth.installed && hookHealth.nodeMissing) {
+        log.plain('')
+        log.plain(
+          `  ${chalk.yellow('⚠')}  The Node.js version the Claude Code hook uses is gone — Claude Code activity is not being captured.`
+        )
+        log.plain(chalk.dim('     Run workscribe init to repair it'))
+      } else if (hookHealth.installed && !hookHealth.guarded) {
+        log.plain('')
+        log.plain(
+          `  ${chalk.yellow('⚠')}  Claude Code hook is from an older version — it will show errors in Claude Code if Workscribe is ever removed.`
+        )
+        log.plain(chalk.dim('     Run workscribe init to update it'))
       }
 
       const { total: weekTotal, otherCount } = getRecentOtherRate(7)

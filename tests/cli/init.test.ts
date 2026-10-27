@@ -34,6 +34,9 @@ vi.mock('../../src/capture/shell-hook', () => ({
   updateHook: vi.fn(),
   isCompletionsInstalled: vi.fn(),
   installCompletions: vi.fn(),
+  isCompletionsOutdated: vi.fn(() => false),
+  updateCompletions: vi.fn(),
+  writeCompletionScript: vi.fn(),
   resolveWorkscribeBinary: vi.fn().mockReturnValue(null),
   injectBinaryPath: vi.fn((content: string) => content),
 }))
@@ -44,6 +47,7 @@ vi.mock('../../src/capture/hooks', () => ({
       displayName: 'Claude Code',
       isInstalled: vi.fn(),
       isHookInstalled: vi.fn(),
+      isHookOutdated: vi.fn(() => false),
       install: vi.fn(),
     },
     aider: {
@@ -83,7 +87,14 @@ import fs from 'fs'
 import { Command } from 'commander'
 import prompts from 'prompts'
 import { readConfig, ensureInstallId } from '../../src/config'
-import { isHookInstalled, installHook, isCompletionsInstalled } from '../../src/capture/shell-hook'
+import {
+  isHookInstalled,
+  installHook,
+  isCompletionsInstalled,
+  isCompletionsOutdated,
+  updateCompletions,
+  writeCompletionScript,
+} from '../../src/capture/shell-hook'
 import { AI_HOOK_INTEGRATIONS } from '../../src/capture/hooks'
 import { log } from '../../src/utils/logger'
 import { registerInit } from '../../src/cli/init'
@@ -129,6 +140,8 @@ function mockPromptAnswers(overrides: Record<string, unknown[]> = {}) {
     telemetryEnabled: [true],
     update: [true],
     installComps: [true],
+    updateShellCompletions: [true],
+    updateAiHook: [true],
     install: [false],
     installSkill: [false],
     removeLegacyAi: [true],
@@ -168,6 +181,7 @@ beforeEach(() => {
   claudeIntegration.isInstalled.mockReturnValue(false)
   claudeIntegration.isHookInstalled.mockReturnValue(false)
   claudeIntegration.install.mockReset()
+  claudeIntegration.isHookOutdated.mockReturnValue(false)
   aiderIntegration.isInstalled.mockReturnValue(false)
   aiderIntegration.isHookInstalled.mockReturnValue(false)
   aiderIntegration.install.mockReset()
@@ -479,5 +493,71 @@ describe('workscribe init — agent skill step', () => {
     expect(mockLog.info).toHaveBeenCalledWith(
       'No coding agents detected — run workscribe skill install after installing one'
     )
+  })
+})
+
+describe('workscribe init — shell completions repair (WOR-120)', () => {
+  beforeEach(() => {
+    vi.mocked(isCompletionsOutdated).mockReturnValue(false)
+  })
+
+  it('refreshes the completion script without asking when completions are current', async () => {
+    await makeProgram().parseAsync(['init'], { from: 'user' })
+
+    expect(writeCompletionScript).toHaveBeenCalled()
+    expect(mockPrompts).not.toHaveBeenCalledWith(expect.objectContaining({ name: 'updateShellCompletions' }))
+    expect(mockLog.info).toHaveBeenCalledWith('Shell completions already installed')
+  })
+
+  it('offers to update an older unguarded block, defaulting to yes, and updates it', async () => {
+    vi.mocked(isCompletionsOutdated).mockReturnValue(true)
+
+    await makeProgram().parseAsync(['init'], { from: 'user' })
+
+    expect(mockPrompts).toHaveBeenCalledWith(expect.objectContaining({ name: 'updateShellCompletions', initial: true }))
+    expect(updateCompletions).toHaveBeenCalled()
+  })
+
+  it('leaves the block alone when the user declines', async () => {
+    vi.mocked(isCompletionsOutdated).mockReturnValue(true)
+    mockPromptAnswers({ updateShellCompletions: [false] })
+
+    await makeProgram().parseAsync(['init'], { from: 'user' })
+
+    expect(updateCompletions).not.toHaveBeenCalled()
+    expect(mockLog.info).toHaveBeenCalledWith('Shell completions update skipped')
+  })
+})
+
+describe('workscribe init — outdated AI tool hook (WOR-120)', () => {
+  beforeEach(() => {
+    claudeIntegration.isInstalled.mockReturnValue(true)
+    claudeIntegration.isHookInstalled.mockReturnValue(false)
+    claudeIntegration.isHookOutdated.mockReturnValue(true)
+  })
+
+  it('offers to update an outdated hook, defaulting to yes, and updates it', async () => {
+    await makeProgram().parseAsync(['init'], { from: 'user' })
+
+    expect(mockPrompts).toHaveBeenCalledWith(expect.objectContaining({ name: 'updateAiHook', initial: true }))
+    expect(mockPrompts).not.toHaveBeenCalledWith(expect.objectContaining({ name: 'install' }))
+    expect(claudeIntegration.install).toHaveBeenCalled()
+    expect(mockLog.success).toHaveBeenCalledWith('Claude Code session hook updated')
+  })
+
+  it('keeps the hook as it is when the user declines', async () => {
+    mockPromptAnswers({ updateAiHook: [false] })
+
+    await makeProgram().parseAsync(['init'], { from: 'user' })
+
+    expect(claudeIntegration.install).not.toHaveBeenCalled()
+  })
+
+  it('still asks the opt-in first-install question (default no) when there is no hook at all', async () => {
+    claudeIntegration.isHookOutdated.mockReturnValue(false)
+
+    await makeProgram().parseAsync(['init'], { from: 'user' })
+
+    expect(mockPrompts).toHaveBeenCalledWith(expect.objectContaining({ name: 'install', initial: false }))
   })
 })

@@ -5,13 +5,29 @@ import { execFileSync } from 'child_process'
 import { log } from '../utils/logger'
 import { CompletionCommand, bashCompletion, zshCompletion, fishCompletion } from '../utils/completion-scripts'
 import { WORKSCRIBE_DIR } from '../utils/paths'
+import { backUpFile } from '../utils/backup'
+import {
+  COMPLETIONS_MARKER,
+  completionsBlock,
+  hasCompletionsBlock,
+  isCompletionsBlockOutdated,
+  removeCompletionsBlock,
+  replaceCompletionsBlock,
+} from './completions-block'
 
 const FISH_COMPLETIONS_DIR = path.join(os.homedir(), '.config', 'fish', 'completions')
 
 const HOOK_START = '# workscribe:hook:start'
 const HOOK_END = '# workscribe:hook:end'
 const HOOK_PREAMBLE = '# Workscribe — developer work journal'
-const COMPLETIONS_MARKER = '# Workscribe completions'
+
+/** A shell and the rc file `init` writes its hook (and completions) into. */
+export type ShellTarget = { name: string; rcFile: string }
+
+/** Backs up an rc file before editing it, never overwriting an earlier backup, and says where it went. */
+function backUp(rcFile: string): void {
+  log.info(`Backed up ${rcFile} → ${path.basename(backUpFile(rcFile))}`)
+}
 
 export function getInstalledHookBlock(rcFile: string): string | null {
   if (!fs.existsSync(rcFile)) return null
@@ -33,16 +49,12 @@ export function isHookOutdated(rcFile: string, hookContent: string): boolean {
 }
 
 export function installHook(rcFile: string, hookContent: string): void {
-  const backup = `${rcFile}.workscribe-backup-${Date.now()}`
-  fs.copyFileSync(rcFile, backup)
-  log.info(`Backed up ${rcFile} → ${path.basename(backup)}`)
+  backUp(rcFile)
   fs.appendFileSync(rcFile, `\n${hookContent}\n`)
 }
 
 export function updateHook(rcFile: string, hookContent: string): void {
-  const backup = `${rcFile}.workscribe-backup-${Date.now()}`
-  fs.copyFileSync(rcFile, backup)
-  log.info(`Backed up ${rcFile} → ${path.basename(backup)}`)
+  backUp(rcFile)
   const content = fs.readFileSync(rcFile, 'utf-8')
   const startIdx = content.indexOf(HOOK_START)
   const endIdx = content.indexOf(HOOK_END) + HOOK_END.length
@@ -50,9 +62,7 @@ export function updateHook(rcFile: string, hookContent: string): void {
 }
 
 export function removeHook(rcFile: string): void {
-  const backup = `${rcFile}.workscribe-backup-${Date.now()}`
-  fs.copyFileSync(rcFile, backup)
-  log.info(`Backed up ${rcFile} → ${path.basename(backup)}`)
+  backUp(rcFile)
   const content = fs.readFileSync(rcFile, 'utf-8')
   const startIdx = content.indexOf(HOOK_START)
   const endIdx = content.indexOf(HOOK_END) + HOOK_END.length
@@ -99,7 +109,7 @@ export function injectBinaryPath(hookContent: string, binaryPath: string, nodePa
     .replaceAll('command workscribe alerts', `${pinnedInvocation} alerts`)
 }
 
-export function isCompletionsInstalled(shell: { name: string; rcFile: string }): boolean {
+export function isCompletionsInstalled(shell: ShellTarget): boolean {
   if (shell.name === 'fish') {
     return fs.existsSync(path.join(FISH_COMPLETIONS_DIR, 'workscribe.fish'))
   }
@@ -110,26 +120,73 @@ export function isCompletionsInstalled(shell: { name: string; rcFile: string }):
   }
 }
 
-export function installCompletions(shell: { name: string; rcFile: string }, commands: CompletionCommand[]): void {
-  if (shell.name === 'fish') {
-    if (!fs.existsSync(FISH_COMPLETIONS_DIR)) {
-      fs.mkdirSync(FISH_COMPLETIONS_DIR, { recursive: true })
-    }
-    fs.writeFileSync(path.join(FISH_COMPLETIONS_DIR, 'workscribe.fish'), fishCompletion(commands), { mode: 0o644 })
-  } else {
-    const script = shell.name === 'zsh' ? zshCompletion(commands) : bashCompletion(commands)
-    const cacheFile = path.join(WORKSCRIBE_DIR, `completion.${shell.name}`)
-    fs.writeFileSync(cacheFile, script, { mode: 0o644 })
-    // installCompletions can be called more than once (e.g. isCompletionsInstalled
-    // raced with a concurrent init, or a caller re-runs it to refresh the cache
-    // file). The rcFile append must stay idempotent so repeated calls never grow
-    // duplicate source lines.
-    if (!isCompletionsInstalled(shell)) {
-      const sourceLine =
-        shell.name === 'zsh'
-          ? `\n${COMPLETIONS_MARKER}\nautoload -Uz compinit && compinit\nsource "${cacheFile}"\n`
-          : `\n${COMPLETIONS_MARKER}\nsource "${cacheFile}"\n`
-      fs.appendFileSync(shell.rcFile, sourceLine)
-    }
+const FISH_COMPLETIONS_FILE = path.join(FISH_COMPLETIONS_DIR, 'workscribe.fish')
+
+function completionScriptFile(shellName: string): string {
+  return path.join(WORKSCRIBE_DIR, `completion.${shellName}`)
+}
+
+function readRcFile(rcFile: string): string | null {
+  try {
+    return fs.readFileSync(rcFile, 'utf-8')
+  } catch {
+    return null // a missing rc file simply has no completions block
   }
+}
+
+/** (Re)writes the completion script itself — safe to run on every `init`, so a deleted data folder is repaired. */
+export function writeCompletionScript(shell: ShellTarget, commands: CompletionCommand[]): void {
+  if (shell.name === 'fish') {
+    fs.mkdirSync(FISH_COMPLETIONS_DIR, { recursive: true })
+    fs.writeFileSync(FISH_COMPLETIONS_FILE, fishCompletion(commands), { mode: 0o644 })
+    return
+  }
+  const script = shell.name === 'zsh' ? zshCompletion(commands) : bashCompletion(commands)
+  fs.mkdirSync(WORKSCRIBE_DIR, { recursive: true })
+  fs.writeFileSync(completionScriptFile(shell.name), script, { mode: 0o644 })
+}
+
+export function installCompletions(shell: ShellTarget, commands: CompletionCommand[]): void {
+  writeCompletionScript(shell, commands)
+  // installCompletions can be called more than once (e.g. isCompletionsInstalled raced with a concurrent init).
+  // The rcFile append must stay idempotent so repeated calls never grow duplicate blocks.
+  if (shell.name !== 'fish' && !isCompletionsInstalled(shell)) {
+    fs.appendFileSync(shell.rcFile, `\n${completionsBlock(shell.name, completionScriptFile(shell.name))}\n`)
+  }
+}
+
+/** The rc file has a completions block from an older version — one that errors once its script is deleted. */
+export function isCompletionsOutdated(shell: ShellTarget): boolean {
+  if (shell.name === 'fish') return false // fish completions are a standalone file, not an rc-file line
+  const content = readRcFile(shell.rcFile)
+  return (
+    content !== null &&
+    isCompletionsBlockOutdated(content, completionsBlock(shell.name, completionScriptFile(shell.name)))
+  )
+}
+
+export function updateCompletions(shell: ShellTarget): void {
+  const content = readRcFile(shell.rcFile)
+  if (content === null || !hasCompletionsBlock(content)) return
+  backUp(shell.rcFile)
+  fs.writeFileSync(
+    shell.rcFile,
+    replaceCompletionsBlock(content, completionsBlock(shell.name, completionScriptFile(shell.name)))
+  )
+}
+
+/** Removes the completions block from an rc file, if it has one. Returns whether anything was removed. */
+export function removeCompletions(rcFile: string): boolean {
+  const content = readRcFile(rcFile)
+  if (content === null || !hasCompletionsBlock(content)) return false
+  backUp(rcFile)
+  fs.writeFileSync(rcFile, removeCompletionsBlock(content))
+  return true
+}
+
+/** Removes the fish completion file, if present. Returns whether anything was removed. */
+export function removeFishCompletions(): boolean {
+  if (!fs.existsSync(FISH_COMPLETIONS_FILE)) return false
+  fs.rmSync(FISH_COMPLETIONS_FILE, { force: true })
+  return true
 }

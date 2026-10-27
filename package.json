@@ -30,7 +30,6 @@
   },
   "scripts": {
     "build": "tsup",
-    "preuninstall": "workscribe uninstall --hooks-only 2>/dev/null; exit 0",
     "prepack": "npm run build",
     "postbuild": "node scripts/postbuild.js",
     "dev": "tsx src/index.ts",

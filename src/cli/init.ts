@@ -18,6 +18,10 @@ import {
   updateHook,
   isCompletionsInstalled,
   installCompletions,
+  isCompletionsOutdated,
+  updateCompletions,
+  type ShellTarget,
+  writeCompletionScript,
   resolveWorkscribeBinary,
   injectBinaryPath,
 } from '../capture/shell-hook'
@@ -34,7 +38,7 @@ import type { SkillsFolderGroup } from '../skills/types'
 
 declare const __WORKSCRIBE_VERSION__: string
 
-type Shell = { name: string; rcFile: string }
+type Shell = ShellTarget
 
 const TOTAL_STEPS = 5
 
@@ -160,9 +164,9 @@ async function runShellHookStep(program: Command): Promise<Shell | null> {
     log.info(`Shell hook up to date in ${shell.rcFile}`)
   }
 
-  // Offer completions install
+  // Offer completions install — or repair: refresh the script, and guard an older unguarded rc block
   if (isCompletionsInstalled(shell)) {
-    log.info('Shell completions already installed')
+    await refreshCompletions(shell, program)
   } else {
     const { installComps } = await prompts({
       type: 'confirm',
@@ -183,6 +187,30 @@ async function runShellHookStep(program: Command): Promise<Shell | null> {
   return shell
 }
 
+async function refreshCompletions(shell: Shell, program: Command): Promise<void> {
+  try {
+    writeCompletionScript(shell, getPublicCommands(program))
+  } catch (error) {
+    log.warn(`Could not refresh shell completions: ${(error as Error).message}`)
+  }
+  if (!isCompletionsOutdated(shell)) {
+    log.info('Shell completions already installed')
+    return
+  }
+  const { updateShellCompletions } = await prompts({
+    type: 'confirm',
+    name: 'updateShellCompletions',
+    message: `Shell completions in ${shell.rcFile} are outdated (they error in new terminals if Workscribe is removed). Update?`,
+    initial: true,
+  })
+  if (!updateShellCompletions) {
+    log.info('Shell completions update skipped')
+    return
+  }
+  updateCompletions(shell)
+  log.success(`Shell completions updated in ${shell.rcFile}`)
+}
+
 // ── Step 4: AI tools ──────────────────────────────────────────────────────
 async function runAIToolsStep(): Promise<void> {
   step(4, TOTAL_STEPS, 'Detecting AI coding tools')
@@ -201,6 +229,20 @@ async function runAIToolsStep(): Promise<void> {
 
     if (integration.isHookInstalled()) {
       log.info(`${integration.displayName} session hook already installed`)
+    } else if (integration.isHookOutdated?.()) {
+      // You opted in when you first installed it, so updating it defaults to yes
+      const { updateAiHook } = await prompts({
+        type: 'confirm',
+        name: 'updateAiHook',
+        message: `${integration.displayName} session hook is outdated. Update?`,
+        initial: true,
+      })
+      if (updateAiHook) {
+        integration.install()
+        log.success(`${integration.displayName} session hook updated`)
+      } else {
+        log.info(`${integration.displayName} hook update skipped — re-run workscribe init to update later`)
+      }
     } else {
       const { install } = await prompts({
         type: 'confirm',

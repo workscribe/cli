@@ -2,16 +2,13 @@ import fs from 'fs'
 import path from 'path'
 import os from 'os'
 import { execFileSync } from 'child_process'
-import type { AIHookIntegration } from './types'
+import type { AIHookIntegration, HookUninstallOutcome } from './types'
 import { isCommandInstalled } from './utils'
 import { resolveWorkscribeBinary } from '../shell-hook'
+import { backUpFile } from '../../utils/backup'
+import { buildHookCommand, HOOK_MARKER, isGuardedCommand, isPinnedCommand, pinnedNodePath } from './claude-code-command'
 
 const CLAUDE_SETTINGS_PATH = path.join(os.homedir(), '.claude', 'settings.json')
-
-// Identifies a workscribe hook entry regardless of whether it's the legacy
-// bare `workscribe _hook ...` form or the pinned `"<node>" "<workscribe>" _hook ...`
-// form below — both contain this exact substring.
-const HOOK_MARKER = '_hook --source claude-code'
 
 function readSettings(): Record<string, unknown> {
   if (!fs.existsSync(CLAUDE_SETTINGS_PATH)) return {}
@@ -49,19 +46,6 @@ function findWorkscribeHookCommands(settings: Record<string, unknown>): {
 }
 
 /**
- * A command is "pinned" if it starts with an absolute path (to a node
- * interpreter) rather than the bare `workscribe` string. Pinned commands are
- * immune to PATH/Node-version drift between install time and whatever
- * environment the hook actually fires in — the same class of hardening
- * WOR-75 applied to the shell hook, extended here to also cover the Node
- * interpreter itself, not just the workscribe script path.
- */
-function isPinnedCommand(command: string): boolean {
-  const trimmed = command.trimStart()
-  return trimmed.startsWith('"') || trimmed.startsWith('/')
-}
-
-/**
  * Strips any existing workscribe hook entries out of a hooks array for one
  * event type, so install() can be called repeatedly — fresh install or
  * repairing a stale/unpinned one — without ever accumulating duplicates.
@@ -83,8 +67,26 @@ function withoutWorkscribeEntries(entries: unknown[]): unknown[] {
 export interface ClaudeCodeHookHealth {
   installed: boolean
   pinned: boolean
+  /** Every Workscribe hook exits silently when the binary is gone (false for hooks from Workscribe ≤ 2.0.0). */
+  guarded: boolean
+  /** A pinned hook's Node interpreter no longer exists (e.g. removed by a version manager) — capture is off. */
+  nodeMissing: boolean
   /** Only meaningful when installed && !pinned; null otherwise. */
   confirmedBroken: boolean | null
+}
+
+function isExecutable(filePath: string): boolean {
+  try {
+    fs.accessSync(filePath, fs.constants.X_OK)
+    return true
+  } catch {
+    return false
+  }
+}
+
+function allWorkscribeCommands(): string[] {
+  const { postToolUse, userPromptSubmit } = findWorkscribeHookCommands(readSettings())
+  return [...postToolUse, ...userPromptSubmit]
 }
 
 /**
@@ -97,11 +99,17 @@ export interface ClaudeCodeHookHealth {
  * real, currently-happening problem rather than a theoretical risk.
  */
 export function checkHookHealth(): ClaudeCodeHookHealth {
-  const { postToolUse, userPromptSubmit } = findWorkscribeHookCommands(readSettings())
-  const allCommands = [...postToolUse, ...userPromptSubmit]
-  if (allCommands.length === 0) return { installed: false, pinned: true, confirmedBroken: null }
+  const allCommands = allWorkscribeCommands()
+  if (allCommands.length === 0) {
+    return { installed: false, pinned: true, guarded: true, nodeMissing: false, confirmedBroken: null }
+  }
 
-  if (allCommands.every(isPinnedCommand)) return { installed: true, pinned: true, confirmedBroken: null }
+  const guarded = allCommands.every(isGuardedCommand)
+  const nodePaths = allCommands.map(pinnedNodePath).filter((nodePath): nodePath is string => nodePath !== null)
+  const nodeMissing = nodePaths.some((nodePath) => !isExecutable(nodePath))
+  if (allCommands.every(isPinnedCommand)) {
+    return { installed: true, pinned: true, guarded, nodeMissing, confirmedBroken: null }
+  }
 
   let confirmedBroken: boolean
   try {
@@ -111,7 +119,49 @@ export function checkHookHealth(): ClaudeCodeHookHealth {
     confirmedBroken = true
   }
 
-  return { installed: true, pinned: false, confirmedBroken }
+  return { installed: true, pinned: false, guarded, nodeMissing, confirmedBroken }
+}
+
+/** Reads settings.json without forgiving a parse error — uninstall must never overwrite a file it couldn't read. */
+function readSettingsStrictly(): Record<string, unknown> | 'missing' | 'unreadable' {
+  if (!fs.existsSync(CLAUDE_SETTINGS_PATH)) return 'missing'
+  try {
+    const parsed: unknown = JSON.parse(fs.readFileSync(CLAUDE_SETTINGS_PATH, 'utf-8'))
+    return parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : 'unreadable'
+  } catch {
+    return 'unreadable'
+  }
+}
+
+/** The hooks object with Workscribe's entries removed, empty event arrays dropped — or null if there were none. */
+function hooksWithoutWorkscribe(hooks: Record<string, unknown>): Record<string, unknown> | null {
+  let removedAny = false
+  const remaining: Record<string, unknown> = {}
+  for (const [eventName, entries] of Object.entries(hooks)) {
+    if (!Array.isArray(entries)) {
+      remaining[eventName] = entries
+      continue
+    }
+    const kept = withoutWorkscribeEntries(entries)
+    if (commandsForEvent(hooks, eventName).length > 0) removedAny = true
+    if (kept.length > 0) remaining[eventName] = kept
+  }
+  return removedAny ? remaining : null
+}
+
+/**
+ * Both events have a Workscribe hook, and every one is pinned, guarded, and pinned to a Node.js that still exists.
+ * The guard keeps a hook whose Node a version manager removed quiet — and so quietly broken — unless `init` sees it.
+ */
+function isHookCurrent(): boolean {
+  const { postToolUse, userPromptSubmit } = findWorkscribeHookCommands(readSettings())
+  if (postToolUse.length === 0 || userPromptSubmit.length === 0) return false
+  return [...postToolUse, ...userPromptSubmit].every((command) => {
+    const nodePath = pinnedNodePath(command)
+    return isPinnedCommand(command) && isGuardedCommand(command) && nodePath !== null && isExecutable(nodePath)
+  })
 }
 
 export const claudeCodeIntegration: AIHookIntegration = {
@@ -121,14 +171,10 @@ export const claudeCodeIntegration: AIHookIntegration = {
     return isCommandInstalled('claude')
   },
 
-  // "Installed" means a *correctly pinned* hook is present, not just any
-  // workscribe hook — this is deliberate: it makes `workscribe init`'s
-  // existing prompt-and-install flow naturally offer to repair a stale,
-  // unpinned hook from before this fix, with no new UI code needed there.
+  // "Installed" means a *current* hook is present, not just any workscribe hook — so `workscribe init` offers to
+  // update a stale one (unpinned, unguarded, or pinned to a Node that's gone) through its outdated-hook prompt
   isHookInstalled() {
-    const { postToolUse, userPromptSubmit } = findWorkscribeHookCommands(readSettings())
-    if (postToolUse.length === 0 || userPromptSubmit.length === 0) return false
-    return [...postToolUse, ...userPromptSubmit].every(isPinnedCommand)
+    return isHookCurrent()
   },
 
   install() {
@@ -137,8 +183,8 @@ export const claudeCodeIntegration: AIHookIntegration = {
     const existingPostToolUse = withoutWorkscribeEntries((existingHooks.PostToolUse ?? []) as unknown[])
     const existingUserPromptSubmit = withoutWorkscribeEntries((existingHooks.UserPromptSubmit ?? []) as unknown[])
 
-    const workscribeBinary = resolveWorkscribeBinary()
-    const baseCommand = workscribeBinary ? `"${process.execPath}" "${workscribeBinary}"` : 'workscribe'
+    const binaryPath = resolveWorkscribeBinary()
+    const command = (args: string) => buildHookCommand({ nodePath: process.execPath, binaryPath, args })
 
     settings.hooks = {
       ...existingHooks,
@@ -146,7 +192,7 @@ export const claudeCodeIntegration: AIHookIntegration = {
         ...existingPostToolUse,
         {
           matcher: 'Bash',
-          hooks: [{ type: 'command', command: `${baseCommand} ${HOOK_MARKER}`, async: true }],
+          hooks: [{ type: 'command', command: command(HOOK_MARKER), async: true }],
         },
       ],
       UserPromptSubmit: [
@@ -155,7 +201,7 @@ export const claudeCodeIntegration: AIHookIntegration = {
           hooks: [
             {
               type: 'command',
-              command: `${baseCommand} ${HOOK_MARKER} --event UserPromptSubmit`,
+              command: command(`${HOOK_MARKER} --event UserPromptSubmit`),
             },
           ],
         },
@@ -163,5 +209,27 @@ export const claudeCodeIntegration: AIHookIntegration = {
     }
     fs.mkdirSync(path.dirname(CLAUDE_SETTINGS_PATH), { recursive: true })
     fs.writeFileSync(CLAUDE_SETTINGS_PATH, JSON.stringify(settings, null, 2))
+  },
+
+  // Some workscribe hook is present, but not all of them are current (pinned and guarded) — including a
+  // half-installed one where only PostToolUse or only UserPromptSubmit exists
+  isHookOutdated() {
+    return allWorkscribeCommands().length > 0 && !isHookCurrent()
+  },
+
+  uninstall(): HookUninstallOutcome {
+    const settings = readSettingsStrictly()
+    if (settings === 'missing') return 'not-installed'
+    if (settings === 'unreadable') return 'unreadable'
+    const hooks = settings.hooks
+    if (hooks === null || typeof hooks !== 'object' || Array.isArray(hooks)) return 'not-installed'
+    const remainingHooks = hooksWithoutWorkscribe(hooks as Record<string, unknown>)
+    if (!remainingHooks) return 'not-installed'
+
+    const updated: Record<string, unknown> = { ...settings, hooks: remainingHooks }
+    if (Object.keys(remainingHooks).length === 0) delete updated.hooks
+    backUpFile(CLAUDE_SETTINGS_PATH)
+    fs.writeFileSync(CLAUDE_SETTINGS_PATH, JSON.stringify(updated, null, 2))
+    return 'removed'
   },
 }
