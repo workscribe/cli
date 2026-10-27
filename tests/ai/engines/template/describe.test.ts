@@ -143,3 +143,65 @@ describe('describeSession', () => {
     expect(describeSession(session(events))).toEqual(describeSession(session(events)))
   })
 })
+
+describe('describeSession — work a coding agent did', () => {
+  const byAgent = (category: string, metadata: Record<string, unknown> = {}, exitCode: number | null = 0) => ({
+    ...event(category, metadata, exitCode),
+    source: 'claude-code',
+  })
+
+  it('counts every command the agent ran, including ones the summary leaves out', () => {
+    const events = [byAgent('testing'), byAgent('exploring', { tool: 'grep' }), byAgent('other'), event('testing')]
+
+    expect(describeSession(session(events))).toContain('Worked with an AI coding assistant (3 commands)')
+  })
+
+  it('sits after pushes and before IDE edits', () => {
+    const events = [event('shipping', { remote: 'origin', branch: 'main' }), byAgent('testing'), event('code_edit')]
+
+    expect(describeSession(session(events))).toEqual([
+      'Tests passing (1 run)',
+      'Pushed to origin/main',
+      'Worked with an AI coding assistant (1 command)',
+      'Edited files in the IDE (1 save)',
+    ])
+  })
+
+  it('replaces the "Worked in" fallback when the agent only explored', () => {
+    const events = [byAgent('exploring', { tool: 'cat' }), byAgent('other')]
+
+    expect(describeSession(session(events, { project: 'api' }))).toEqual([
+      'Worked with an AI coding assistant (2 commands)',
+    ])
+  })
+
+  it('stays within the bullet cap', () => {
+    const events = [
+      event('note', { text: 'one' }),
+      event('note', { text: 'two' }),
+      event('shipping', { message: 'a' }),
+      event('shipping', { message: 'b' }),
+      event('shipping', { message: 'c' }),
+      byAgent('testing'),
+      byAgent('building'),
+      event('shipping', { remote: 'origin', branch: 'main' }),
+    ]
+
+    expect(describeSession(session(events))).toHaveLength(7)
+  })
+
+  it('says nothing about an agent when none ran commands', () => {
+    expect(describeSession(session([event('testing')])).join('\n')).not.toContain('AI coding assistant')
+  })
+
+  it('never names the tool or prints the commands the agent ran', () => {
+    const events = [
+      { ...byAgent('other'), hint: 'pnpm nx test shell --skip-nx-cache 2>&1 | tail -40' },
+      byAgent('ai_session', { tool: 'claude' }),
+      byAgent('testing', { tool: 'nx', target: 'test' }),
+    ]
+    const output = describeSession(session(events)).join('\n')
+
+    expect(output).not.toMatch(/claude|pnpm|nx test|tail/i)
+  })
+})

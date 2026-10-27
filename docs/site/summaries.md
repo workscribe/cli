@@ -27,7 +27,10 @@ For each session it lists, most important first (up to 7 bullets):
 - test and build results — including "fixed after N failed runs"
 - dependencies added or removed
 - releases and pushes
+- how many commands your coding agent ran, when its session hook captured them — "Worked with an AI coding assistant (N commands)" (the tool is never named)
 - files edited in your IDE (when the VS Code extension is installed)
+
+Coding agents often run compound commands like `cd app && pnpm nx test shell 2>&1 | tail -40; npx tsc --noEmit`. Workscribe splits these into steps, sets aside shell glue (`cd`, `echo`, variable assignments, loop keywords) and classifies the command by its most telling step — here, the tests. The full command is still stored as it was run.
 
 Sessions where nothing stands out get one line saying where the work happened. Weekly digests list up to 5 bullets per day, taking the top bullet of every project before the second, so one busy repo can't fill the day.
 

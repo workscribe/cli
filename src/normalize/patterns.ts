@@ -1,6 +1,7 @@
 import { loadAIToolRegistry } from '../config/registry'
 import { getActiveProfileRules } from '../profiles/loader'
 import { debugLog } from '../utils/logger'
+import { classifyCompound, UNCLASSIFIED } from './compound'
 
 export interface NormalizedEvent {
   category: string
@@ -34,6 +35,27 @@ function extractPackages(cmd: string, afterKeyword: string): string[] {
     .trim()
     .split(/\s+/)
     .filter((part) => part && !part.startsWith('-'))
+}
+
+// Nx targets → categories: `nx build app`, `nx run app:test`, `nx run-many -t lint`, `nx affected --target=e2e`
+const NX_TARGET_CATEGORIES: Record<string, string> = {
+  build: 'building',
+  test: 'testing',
+  e2e: 'testing',
+  lint: 'linting',
+  serve: 'running',
+  dev: 'running',
+}
+const NX_COMMAND =
+  /^(?:(?:npx|pnpm|yarn|bunx)\s+)?nx\s+(?:(?:run-many|affected)\b.*?(?:-t|--targets?)[=\s]+([\w-]+)|run\s+[\w@./-]+:([\w-]+)|([\w-]+)\b)/
+
+const nxRule: Rule = {
+  match(cmd) {
+    const match = cmd.match(NX_COMMAND)
+    const target = match?.[1] ?? match?.[2] ?? match?.[3]
+    const category = target ? NX_TARGET_CATEGORIES[target] : undefined
+    return category ? { category, metadata: { tool: 'nx', target } } : null
+  },
 }
 
 const BASE_RULES: Rule[] = [
@@ -161,6 +183,9 @@ const BASE_RULES: Rule[] = [
     subcommand: cmd.split(/\s+/)[1] ?? null,
   })),
 
+  // ─── Nx (before the package-manager rules, which would read `pnpm nx` as `pnpm`) ─
+  nxRule,
+
   // ─── Tests ────────────────────────────────────────────────────────────────
   makeRule(/^npm\s+(test|run\s+test)\b/, 'testing', () => ({ tool: 'npm' })),
   makeRule(/^yarn\s+test\b/, 'testing', () => ({ tool: 'yarn' })),
@@ -232,7 +257,7 @@ const BASE_RULES: Rule[] = [
   makeRule(/^npx\s+(jest|vitest|mocha|ava|tap)\b/, 'testing', (_m, cmd) => ({
     tool: cmd.split(/\s+/)[1],
   })),
-  makeRule(/^npx\s+tsc\b/, 'building', () => ({ tool: 'tsc' })),
+  makeRule(/^(?:npx\s+)?tsc\b/, 'building', () => ({ tool: 'tsc' })),
   makeRule(/^npx\s+(eslint|tslint|biome)\b/, 'linting', (_m, cmd) => ({
     tool: cmd.split(/\s+/)[1],
   })),
@@ -302,18 +327,29 @@ export function buildRules(profileRules: Array<{ match(cmd: string): NormalizedE
   return [...BASE_RULES, ...profileRules, ...aiToolRules()]
 }
 
-export const RULES: Rule[] = buildRules(getActiveProfileRules())
+// Built on first use, not at import: the active profiles come from the config and profile files, and
+// importing this module (via capture, or the database's migrations) shouldn't read either
+let activeRules: Rule[] | null = null
 
-export function normalizeCommand(command: string): NormalizedEvent {
-  let trimmed = command.trim().replace(/\s+/g, ' ')
+function getRules(): Rule[] {
+  activeRules ??= buildRules(getActiveProfileRules())
+  return activeRules
+}
 
+function matchRules(command: string): NormalizedEvent {
   // Strip `git -C <path>` prefix so rules match regardless of working directory flag
-  trimmed = trimmed.replace(/^(git)\s+-C\s+\S+\s+/, '$1 ')
-
-  for (const rule of RULES) {
-    const result = rule.match(trimmed)
+  const flattened = command
+    .trim()
+    .replace(/\s+/g, ' ')
+    .replace(/^(git)\s+-C\s+\S+\s+/, '$1 ')
+  for (const rule of getRules()) {
+    const result = rule.match(flattened)
     if (result) return result
   }
+  return UNCLASSIFIED
+}
 
-  return { category: 'other', metadata: {} }
+/** Classifies a captured command — compound ones by their most telling step (see `./compound`). */
+export function normalizeCommand(command: string): NormalizedEvent {
+  return classifyCompound(command, matchRules)
 }

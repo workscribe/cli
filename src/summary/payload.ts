@@ -40,6 +40,7 @@ export function eventRowToPayload(row: EventRow): EventPayload {
     metadata,
     exitCode: row.exit_code,
     durationMs: row.duration_ms,
+    ...(row.source ? { source: row.source } : {}),
   }
   if (row.category !== 'other' || typeof metadata.hint !== 'string') return payload
 

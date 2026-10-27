@@ -76,6 +76,47 @@ export function containsCommandSubstitution(text: string): boolean {
   return false
 }
 
+// A `#` starts a comment only at the start of a word: `$#`, `${#x}` and `a#b` are not comments.
+// (bash and agents' shells treat it this way; interactive zsh only does with `interactivecomments` set.)
+const WORD_BOUNDARY = /[\s;&|()]/
+
+/** Where the first `# …` comment starts (outside quotes, at the start of a word), or -1. */
+export function commentStart(text: string): number {
+  for (const { index, quote } of quotedCharacters(text)) {
+    if (quote !== null || text[index] !== '#') continue
+    if (index === 0 || WORD_BOUNDARY.test(text[index - 1])) return index
+  }
+  return -1
+}
+
+/**
+ * Removes `# …` comments up to the end of each line. Quote tracking restarts after each comment, so an
+ * apostrophe inside one (`# let's check`) can't leave a quote "open" for the rest of the command.
+ */
+export function stripComments(text: string): string {
+  let result = ''
+  let rest = text
+  for (let start = commentStart(rest); start !== -1; start = commentStart(rest)) {
+    result += rest.slice(0, start)
+    const lineEnd = rest.indexOf('\n', start)
+    if (lineEnd === -1) return result
+    rest = rest.slice(lineEnd)
+  }
+  return result + rest
+}
+
+/**
+ * The text with everything inside quotes (and the quote marks and escapes themselves) replaced by `_`, keeping
+ * every position — so a pattern can be matched against the unquoted parts only and applied to the original.
+ */
+export function maskQuotedText(text: string): string {
+  const masked = Array.from({ length: text.length }, () => '_')
+  for (const { index, quote } of quotedCharacters(text)) {
+    if (quote === null) masked[index] = text[index]
+  }
+  return masked.join('')
+}
+
 export function startsWithWord(step: string, word: string): boolean {
   return step === word || step.startsWith(`${word} `) || step.startsWith(`${word}\t`)
 }

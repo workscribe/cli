@@ -3,6 +3,7 @@ import fs from 'fs'
 import { WORKSCRIBE_DIR, DB_PATH } from '../utils/paths'
 import type { EventRow, SessionRow, SessionSummaryRow } from './types'
 import { MIGRATIONS } from './migrations'
+import { applyMigrations } from './migrate'
 import type { StoredEngine } from '../ai/engine'
 export type { EventRow, SessionRow, SessionSummaryRow } from './types'
 
@@ -34,58 +35,11 @@ export function getDb(): DatabaseSync {
   }
   db.exec('PRAGMA journal_mode = WAL')
   db.exec('PRAGMA foreign_keys = ON')
-  applyMigrations(db)
+  // Parallel captures (an agent running several commands at once) wait for the write lock instead of failing
+  db.exec('PRAGMA busy_timeout = 5000')
+  applyMigrations(db, MIGRATIONS)
   _db = db
   return _db
-}
-
-function applyMigrations(db: DatabaseSync): void {
-  // Create the migration tracking table if this is the first run
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS schema_migrations (
-      version    INTEGER PRIMARY KEY,
-      applied_at TEXT    NOT NULL DEFAULT (datetime('now'))
-    )
-  `)
-
-  // Bootstrap: if the events table already exists but schema_migrations is
-  // empty, this is an existing install that predates the migration system.
-  // Seed version 1 as applied so we don't re-run the initial schema.
-  const hasEvents = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='events'").get()
-  const hasVersion1 = db.prepare('SELECT version FROM schema_migrations WHERE version = 1').get()
-
-  if (hasEvents && !hasVersion1) {
-    db.prepare("INSERT INTO schema_migrations (version, applied_at) VALUES ($version, datetime('now'))").run({
-      version: 1,
-    })
-  }
-
-  // Collect already-applied versions
-  const applied = new Set(
-    (db.prepare('SELECT version FROM schema_migrations').all() as { version: number }[]).map((row) => row.version)
-  )
-
-  // Apply each pending migration in order, wrapped in a transaction so a
-  // partial failure leaves the DB cleanly at the previous version.
-  for (const migration of MIGRATIONS) {
-    if (applied.has(migration.version)) continue
-
-    db.exec('BEGIN')
-    try {
-      db.exec(migration.sql)
-      db.prepare("INSERT INTO schema_migrations (version, applied_at) VALUES ($version, datetime('now'))").run({
-        version: migration.version,
-      })
-      db.exec('COMMIT')
-    } catch (err) {
-      try {
-        db.exec('ROLLBACK')
-      } catch {
-        /* already rolled back or connection lost */
-      }
-      throw new Error(`Migration ${migration.version} (${migration.description}) failed: ${(err as Error).message}`)
-    }
-  }
 }
 
 // ─── Typed query helpers ──────────────────────────────────────────────────────

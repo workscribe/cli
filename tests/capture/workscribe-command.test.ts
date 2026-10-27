@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { isWorkscribeOnlyCommand, splitSteps, stripHeredocBodies } from '../../src/capture/workscribe-command'
+import { isWorkscribeOnlyCommand } from '../../src/capture/workscribe-command'
 
 const SKILL_SAVE = [
   "workscribe sessions summary set --key 'api|2026-10-25T09:00:00.000Z' <<'EOF'",
@@ -7,43 +7,6 @@ const SKILL_SAVE = [
   "- Fixed the token refresh race; didn't touch the && fallback",
   'EOF',
 ].join('\n')
-
-describe('stripHeredocBodies', () => {
-  it('keeps the opening line and drops the body up to the terminator', () => {
-    expect(stripHeredocBodies(SKILL_SAVE)).toBe(
-      "workscribe sessions summary set --key 'api|2026-10-25T09:00:00.000Z' <<'EOF'"
-    )
-  })
-
-  it('keeps lines after the terminator', () => {
-    expect(stripHeredocBodies(`${SKILL_SAVE}\nnpm test`).split('\n')).toHaveLength(2)
-  })
-
-  it('does not treat a <<< here-string as a heredoc', () => {
-    expect(stripHeredocBodies('cat <<<EOF\nnpm test')).toBe('cat <<<EOF\nnpm test')
-  })
-})
-
-describe('splitSteps', () => {
-  it('splits on &&, ||, ; and newlines but not inside quotes', () => {
-    expect(splitSteps('cd api && npm test || echo "a && b"; ls\npwd')).toEqual([
-      'cd api',
-      'npm test',
-      'echo "a && b"',
-      'ls',
-      'pwd',
-    ])
-  })
-})
-
-describe('splitSteps and background jobs', () => {
-  it('splits on a background & but not on redirections', () => {
-    expect(splitSteps('npm run dev & npm test 2>&1 &> log.txt >&2')).toEqual([
-      'npm run dev',
-      'npm test 2>&1 &> log.txt >&2',
-    ])
-  })
-})
 
 describe('isWorkscribeOnlyCommand', () => {
   it.each([
@@ -91,5 +54,26 @@ describe('isWorkscribeOnlyCommand', () => {
     ['an escaped << that is not a heredoc', 'workscribe note \\<<EOF\nnpm test'],
   ])('is false for %s', (_case, command) => {
     expect(isWorkscribeOnlyCommand(command)).toBe(false)
+  })
+})
+
+describe('isWorkscribeOnlyCommand — comments and unquoted heredocs', () => {
+  it('ignores a # comment, so its text is not read as another step', () => {
+    expect(isWorkscribeOnlyCommand('workscribe note "shipped" # then npm test')).toBe(true)
+    expect(isWorkscribeOnlyCommand('workscribe note x #; npm test')).toBe(true)
+  })
+
+  it('counts $(…) inside an unquoted heredoc as real work, since the shell runs it', () => {
+    expect(isWorkscribeOnlyCommand('workscribe note <<EOF\n$(npm test)\nEOF')).toBe(false)
+  })
+
+  it("still treats a quoted heredoc's body as plain text", () => {
+    expect(isWorkscribeOnlyCommand("workscribe note <<'EOF'\n$(npm test)\nEOF")).toBe(true)
+  })
+})
+
+describe('isWorkscribeOnlyCommand — loop headers', () => {
+  it('counts a loop over a command as real work', () => {
+    expect(isWorkscribeOnlyCommand('for f in $(npm test); do workscribe note $f; done')).toBe(false)
   })
 })

@@ -39,7 +39,7 @@ workscribe config set git.qualifyRepoName true
 
 | Key | Type | Default | Description |
 |---|---|---|---|
-| `capture.ignore` | string[] | `["cd", "ls", "pwd", …]` | Commands to ignore — matched against the base command |
+| `capture.ignore` | string[] | `["cd", "ls", "pwd", …]` | Commands to ignore — matched against the base command of each step. A compound command is ignored only when every step is: `cd app && ls` is dropped, `cd app && npm test` is captured |
 | `capture.aiTools` | boolean | `true` | Set to `false` to disable all AI session capture (shell hook events and PostToolUse hook) |
 | `capture.includeAiderPrompt` | boolean | `true` | Set to `false` to skip reading Aider's history file for last-prompt context |
 
