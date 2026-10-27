@@ -17,6 +17,13 @@ vi.mock('../../src/utils/paths', () => ({
 vi.mock('../../src/capture/shell-hook', () => ({
   isHookInstalled: vi.fn(),
   removeHook: vi.fn(),
+  removeCompletions: vi.fn(() => false),
+  removeFishCompletions: vi.fn(() => false),
+}))
+
+// Mocked whole: the real module imports child_process and reads ~/.claude/settings.json
+vi.mock('../../src/capture/hooks/claude-code', () => ({
+  claudeCodeIntegration: { isInstalled: vi.fn(() => false), uninstall: vi.fn(() => 'not-installed') },
 }))
 
 // fs is mocked above, so the skill installer is too — tests/skills/installer.test.ts covers the real one
@@ -31,7 +38,8 @@ import prompts from 'prompts'
 import os from 'os'
 import { uninstallSkill } from '../../src/skills/installer'
 import { log } from '../../src/utils/logger'
-import { isHookInstalled, removeHook } from '../../src/capture/shell-hook'
+import { isHookInstalled, removeHook, removeCompletions, removeFishCompletions } from '../../src/capture/shell-hook'
+import { claudeCodeIntegration } from '../../src/capture/hooks/claude-code'
 import { Command } from 'commander'
 import { registerUninstall } from '../../src/cli/uninstall'
 
@@ -177,5 +185,63 @@ describe('workscribe uninstall — agent skills', () => {
     await makeProgram().parseAsync(['uninstall', '--hooks-only'], { from: 'user' })
 
     expect(uninstallSkill).not.toHaveBeenCalled()
+  })
+})
+
+describe('workscribe uninstall — completions and the Claude Code hook (WOR-120)', () => {
+  const mockLog = log as Record<string, ReturnType<typeof vi.fn>>
+
+  function prepare() {
+    const homeSpy = vi.spyOn(os, 'homedir').mockReturnValue('/Users/dev')
+    onTestFinished(() => homeSpy.mockRestore())
+    mockFs.existsSync.mockReturnValue(false)
+    mockIsHookInstalled.mockReturnValue(false)
+    mockPrompts.mockResolvedValue({ deleteData: false })
+    vi.mocked(removeCompletions).mockReturnValue(false)
+    vi.mocked(claudeCodeIntegration.uninstall!).mockReturnValue('not-installed')
+  }
+
+  it('removes the completions block from every rc file that has one, even without the shell hook', async () => {
+    prepare()
+    vi.mocked(removeCompletions).mockImplementation((rcFile: string) => rcFile.endsWith('.bashrc'))
+
+    await makeProgram().parseAsync(['uninstall'], { from: 'user' })
+
+    expect(vi.mocked(removeCompletions).mock.calls.map(([rcFile]) => rcFile)).toEqual([
+      '/Users/dev/.zshrc',
+      '/Users/dev/.bashrc',
+      '/Users/dev/.bash_profile',
+    ])
+    expect(mockLog.success).toHaveBeenCalledWith('Shell completions removed from /Users/dev/.bashrc')
+    expect(removeFishCompletions).toHaveBeenCalled()
+  })
+
+  it('removes the Claude Code hook even when Claude Code is no longer on PATH', async () => {
+    prepare()
+    vi.mocked(claudeCodeIntegration.uninstall!).mockReturnValue('removed')
+
+    await makeProgram().parseAsync(['uninstall'], { from: 'user' })
+
+    expect(claudeCodeIntegration.uninstall).toHaveBeenCalled()
+    expect(claudeCodeIntegration.isInstalled).not.toHaveBeenCalled()
+    expect(mockLog.success).toHaveBeenCalledWith('Claude Code session hook removed from ~/.claude/settings.json')
+  })
+
+  it('warns, with what to do, when settings.json cannot be read', async () => {
+    prepare()
+    vi.mocked(claudeCodeIntegration.uninstall!).mockReturnValue('unreadable')
+
+    await makeProgram().parseAsync(['uninstall'], { from: 'user' })
+
+    expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining('workscribe uninstall --hooks-only'))
+  })
+
+  it('removes completions and the Claude Code hook with --hooks-only too', async () => {
+    prepare()
+
+    await makeProgram().parseAsync(['uninstall', '--hooks-only'], { from: 'user' })
+
+    expect(removeCompletions).toHaveBeenCalledTimes(3)
+    expect(claudeCodeIntegration.uninstall).toHaveBeenCalled()
   })
 })

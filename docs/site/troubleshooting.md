@@ -258,28 +258,22 @@ Check each folder first if you've ever added a `workscribe` skill of your own th
 
 ---
 
-## Shell errors after uninstalling (`workscribe_precmd: unknown function`)
+## Errors after removing Workscribe without `workscribe uninstall`
 
-If you uninstalled the package without running `workscribe uninstall` first, the shell hook block may still be in your rc file. The binary is gone so you can't use the CLI to clean it up — use this one-liner instead.
+`npm uninstall -g` (and pnpm or yarn) can't clean up after Workscribe: npm 7 and later don't run package cleanup scripts. If you removed the package without running `workscribe uninstall` first, two leftovers can print errors. The shell hook itself stays silent without the binary, so it isn't one of them.
 
-**zsh:**
-
-```bash
-perl -i -0pe 's/\n?# Workscribe[^\n]*\n# Do not edit[^\n]*\n# workscribe:hook:start.*?# workscribe:hook:end\n?//s' ~/.zshrc && source ~/.zshrc
-```
-
-**bash:**
+**`no such file or directory: …/completion.zsh` in every new terminal.** Workscribe 2.0.0 and earlier added a completions line to your rc file that fails once the data folder is deleted. Remove it:
 
 ```bash
-perl -i -0pe 's/\n?# Workscribe[^\n]*\n# Do not edit[^\n]*\n# workscribe:hook:start.*?# workscribe:hook:end\n?//s' ~/.bashrc && source ~/.bashrc
+perl -i -0pe 's/\n?# Workscribe completions\n(?:autoload -Uz compinit && compinit\n)?source "[^"\n]*completion\.(?:zsh|bash)"\n?/\n/g' ~/.zshrc    # or ~/.bashrc
 ```
 
-Or open the file in any editor and manually delete everything between (and including) the two lines:
+**Hook errors in Claude Code on every prompt or tool call.** Open `~/.claude/settings.json` and delete the `hooks` entries whose `command` contains `_hook --source claude-code` — under `PostToolUse` and `UserPromptSubmit`. Leave every other hook alone. Hooks written by Workscribe 2.0.1 and later stay silent once the binary is gone.
 
-```
-# workscribe:hook:start
-...
-# workscribe:hook:end
+**Optional tidy-up: the shell hook block.** It does nothing without the binary, but you can remove it too:
+
+```bash
+perl -i -0pe 's/\n?# Workscribe[^\n]*\n# Do not edit[^\n]*\n# workscribe:hook:start.*?# workscribe:hook:end\n?//s' ~/.zshrc    # or ~/.bashrc
 ```
 
-After removing the block, restart your terminal or run `source ~/.zshrc` (or `~/.bashrc`).
+Then restart your terminal. If Workscribe is still installed, `workscribe uninstall` removes all of this for you — and `workscribe init` updates older completions and Claude Code hooks to the silent versions.

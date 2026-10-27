@@ -7,4 +7,11 @@ export interface AIHookIntegration {
   isHookInstalled(): boolean
   /** Install the workscribe hook — safe to call multiple times */
   install(): void
+  /** A workscribe hook is present but from an older version (or half-installed) — `init` offers to update it */
+  isHookOutdated?(): boolean
+  /** Remove the workscribe hook, leaving everything else in the tool's settings untouched */
+  uninstall?(): HookUninstallOutcome
 }
+
+/** `unreadable`: the tool's settings file couldn't be parsed, so it was left alone. */
+export type HookUninstallOutcome = 'removed' | 'not-installed' | 'unreadable'
