@@ -2,6 +2,8 @@ export interface EventPayload {
   category: string
   metadata: Record<string, unknown>
   hint?: string
+  /** Who captured the event (e.g. `claude-code` for a command a coding agent ran) — absent for plain shell commands. */
+  source?: string
   exitCode: number | null
   durationMs: number | null
 }

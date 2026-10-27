@@ -1,12 +1,23 @@
 import type { EventRow } from '../db/types'
 import { isWorkscribeOnlyCommand } from './workscribe-command'
+import { commandSteps, isGlueStep } from './command-steps'
 
 function normalizeForFilter(cmd: string): string {
   return cmd.trim().replace(/\s+/g, ' ')
 }
 
+function isIgnoredStep(step: string, ignoreList: string[]): boolean {
+  const normalized = normalizeForFilter(step)
+  return ignoreList.includes(normalized) || ignoreList.includes(normalized.split(' ')[0])
+}
+
 /**
  * Returns true if the command should be dropped (noise / ignore list).
+ *
+ * The ignore list applies to each step of a compound command: `cd app && npm test` is kept because
+ * `npm test` is real work, while `cd app && ls` is dropped. A step that does nothing on its own (`cd`,
+ * `echo`) can't keep a command, but a command made only of such steps is dropped only if one of them is
+ * on the ignore list — so `echo hi` on its own is still captured, as before.
  */
 export function shouldFilter(command: string, ignoreList: string[]): boolean {
   const normalized = normalizeForFilter(command)
@@ -16,14 +27,12 @@ export function shouldFilter(command: string, ignoreList: string[]): boolean {
   // compound ones an agent runs are caught too, while `workscribe note "$(npm test)"` still counts as work.
   if (isWorkscribeOnlyCommand(command)) return true
 
-  const baseCmd = normalized.split(' ')[0]
-
-  // User-configurable ignore list
   const normalizedIgnore = ignoreList.map(normalizeForFilter)
   if (normalizedIgnore.includes(normalized)) return true
-  if (normalizedIgnore.includes(baseCmd)) return true
 
-  return false
+  const steps = commandSteps(command)
+  const isQuiet = (step: string): boolean => isIgnoredStep(step, normalizedIgnore) || isGlueStep(step)
+  return steps.every(isQuiet) && steps.some((step) => isIgnoredStep(step, normalizedIgnore))
 }
 
 /**

@@ -1,5 +1,12 @@
 import { buildExcludedSet } from '../../../summary/exclusions'
-import { BUILD_WORDING, MAX_COMMIT_BULLETS, MAX_LISTED_PACKAGES, MAX_SESSION_BULLETS, TEST_WORDING } from './constants'
+import {
+  AGENT_SOURCES,
+  BUILD_WORDING,
+  MAX_COMMIT_BULLETS,
+  MAX_LISTED_PACKAGES,
+  MAX_SESSION_BULLETS,
+  TEST_WORDING,
+} from './constants'
 import { eventsOf, pluralize, stringsIn, unique } from './utils'
 import type { EventPayload, SessionPayload } from '../../types'
 import type { OutcomeWording } from './types'
@@ -82,6 +89,14 @@ function describePushes(events: EventPayload[]): string | null {
   return targets.length > 0 ? `Pushed to ${targets.join(', ')}` : null
 }
 
+/** Commands a coding agent ran in the session — counted from all of them, including ones the summary leaves out. */
+function describeAgentWork(events: EventPayload[]): string | null {
+  const agentCommands = events.filter((event) => event.source !== undefined && AGENT_SOURCES.includes(event.source))
+  return agentCommands.length > 0
+    ? `Worked with an AI coding assistant (${pluralize(agentCommands.length, 'command')})`
+    : null
+}
+
 function describeEdits(events: EventPayload[]): string | null {
   const saves = eventsOf(events, 'code_edit').length
   return saves > 0 ? `Edited files in the IDE (${pluralize(saves, 'save')})` : null
@@ -104,6 +119,7 @@ export function describeActivity(session: SessionPayload, includeCategories: str
     ...describeDependencies(events),
     describeReleases(events),
     describePushes(events),
+    describeAgentWork(session.events),
     describeEdits(events),
   ]
     .filter((bullet): bullet is string => bullet !== null)

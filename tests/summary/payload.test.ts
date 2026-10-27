@@ -54,7 +54,16 @@ describe('eventRowToPayload', () => {
       metadata: { message: 'fix: bug' },
       exitCode: 0,
       durationMs: 50,
+      source: 'shell',
     })
+  })
+
+  it('carries no source for an event that has none', () => {
+    expect(eventRowToPayload(makeEvent({ source: null }))).not.toHaveProperty('source')
+  })
+
+  it('carries the source of a command a coding agent ran', () => {
+    expect(eventRowToPayload(makeEvent({ source: 'claude-code' })).source).toBe('claude-code')
   })
 
   it('falls back to empty metadata when the JSON is invalid', () => {
@@ -81,6 +90,7 @@ describe('eventRowToPayload', () => {
       metadata: { target: 'prod' },
       exitCode: 0,
       durationMs: 50,
+      source: 'shell',
     })
   })
 
@@ -92,6 +102,7 @@ describe('eventRowToPayload', () => {
       metadata: { hint: 'vitest', tool: 'npx' },
       exitCode: 0,
       durationMs: 50,
+      source: 'shell',
     })
   })
 })
@@ -105,7 +116,9 @@ describe('sessionToPayload', () => {
       startTime: 'time:2026-08-17T09:00:00.000Z',
       endTime: 'time:2026-08-17T10:00:00.000Z',
       durationMinutes: 60,
-      events: [{ category: 'shipping', metadata: { message: 'fix: bug' }, exitCode: 0, durationMs: 50 }],
+      events: [
+        { category: 'shipping', metadata: { message: 'fix: bug' }, exitCode: 0, durationMs: 50, source: 'shell' },
+      ],
     })
   })
 

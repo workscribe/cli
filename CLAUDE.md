@@ -61,8 +61,10 @@ Tests import from these pure modules directly. Never import from `src/db/index.t
 |---|---|
 | `src/index.ts` | CLI entry point — registers all commands with commander |
 | `src/cli/` | One file per command (`init`, `capture`, `summary`, `sessions`, `events`, `export`, `config`, `status`) |
-| `src/capture/` | `index.ts` orchestrates capture; `filter.ts` noise/dedup; `redact.ts` credential scrubbing; `git.ts` repo context |
-| `src/normalize/patterns.ts` | Ordered rule array — first match wins. Add new categories here |
+| `src/capture/` | `index.ts` orchestrates capture; `filter.ts` noise/dedup (ignore list applied per step); `command-steps.ts` splits compound shell commands into the commands they run (pure, shared by the filter, the normalizer and `workscribe-command.ts`); `redact.ts` credential scrubbing; `git.ts` repo context |
+| `src/normalize/patterns.ts` | Ordered rule array (`BASE_RULES`, incl. the nx rule) — first match wins, built on first use. Add new categories here |
+| `src/normalize/compound.ts` | Classifies compound commands by their most telling step (`STEP_CATEGORY_PRIORITY`); pure, takes the rule matcher as a parameter |
+| `src/normalize/reclassify.ts` | Pure helper that decides a stored `other` event's new category (used by migration 006) |
 | `src/sessions/` | `detector.ts` orchestrates DB read/write; `grouper.ts` contains pure grouping logic |
 | `src/summary/` | Shared by `summary`/`week`/`export`/`context`: `payload.ts` builds payloads from sessions and names non-git sessions by directory (pure); `heading.ts` the `## project (branch) — duration` line; `store.ts` session keys and which stored summary to serve (pure); `weekly.ts` the weekly flow (rendered fresh, no cache); `writer.ts` what writes summaries (the template); `legacy-ai.ts` detection, notice and cleanup of 1.x AI settings (pure); `webhook.ts` posts finished summaries; `exclusions.ts` default-excluded categories (dependency-free); `contract/` the versioned `--json` contract (types, `SCHEMA_VERSION`, pure builders — key sets are pinned by tests); `git-commits.ts` `git log`/`rev-parse` lookups via `execFileSync`; `write-back.ts` limits and messages for `sessions summary set` (pure; the command, `src/cli/session-summary.ts`, reads stdin via `src/utils/stdin.ts`). No barrel — import by module path |
 | `skills/workscribe/` | The portable Agent Skill (`SKILL.md` + `references/`) shipped in the npm package. It reads `sessions --json` and saves via `sessions summary set`; it must only run commands that start with `workscribe` (see `src/capture/workscribe-command.ts`, which keeps them out of capture, built on the quote-aware helpers in `src/capture/shell-syntax.ts`) |
@@ -70,11 +72,14 @@ Tests import from these pure modules directly. Never import from `src/db/index.t
 | `src/ai/` | `types.ts` payload types and the `AIProvider` writer interface; `engine.ts` the `StoredEngine` names of stored summaries; `engines/template/` the offline template engine (pure). The name is historical — there are no AI providers since 2.0 |
 | `src/config/index.ts` | Read/write `~/.workscribe/config.json`; `setConfigValue` coerces strings to number/boolean |
 | `src/db/index.ts` | SQLite connection singleton, migrations, typed query functions |
+| `src/db/migrate.ts` | Applies migrations in per-migration transactions; `node:sqlite`-free so tests run it on an in-memory DB. A migration is SQL plus an optional `run(db)` for changes that need code (`migration-types.ts`) |
 | `shell/` | Static hook scripts appended to `~/.zshrc` / `~/.bashrc` by `workscribe init` |
 
 ### Adding a new command category
 
-Add a rule to the `RULES` array in `src/normalize/patterns.ts`. Rules are evaluated in order — more specific patterns go before generic ones (e.g. `npm run build` before `npm run <anything>`). Add corresponding test cases in `tests/normalize.test.ts`.
+Add a rule to the `BASE_RULES` array in `src/normalize/patterns.ts`. Rules are evaluated in order — more specific patterns go before generic ones (e.g. `npm run build` before `npm run <anything>`). Add corresponding test cases in `tests/normalize/normalize.test.ts`.
+
+Rules match one simple command. `normalizeCommand` splits compound commands with `src/capture/command-steps.ts` (`cd x && … | tail; …` → steps, glue and assignments set aside, `pnpm exec X` read as `npx X`) and, when several steps match, keeps the one highest in `STEP_CATEGORY_PRIORITY`. New categories that describe outcomes belong in that list. Stored events aren't reclassified automatically — a migration with a `run` step (like `006_reclassify_other`) can do it.
 
 ### Data location
 

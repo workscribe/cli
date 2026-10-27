@@ -110,6 +110,36 @@ describe('shouldFilter', () => {
   })
 })
 
+describe('shouldFilter — compound commands', () => {
+  it('keeps a compound command that does real work after an ignored step', () => {
+    expect(shouldFilter('cd app && npm test', DEFAULT_IGNORE)).toBe(false)
+    expect(shouldFilter('cd app && pnpm nx build shell 2>&1 | tail -20', DEFAULT_IGNORE)).toBe(false)
+  })
+
+  it('drops a compound command made only of ignored steps', () => {
+    expect(shouldFilter('cd app && ls', DEFAULT_IGNORE)).toBe(true)
+    expect(shouldFilter('cd app && ls | grep y', DEFAULT_IGNORE)).toBe(true)
+  })
+
+  it('drops ignored steps wrapped in glue', () => {
+    expect(shouldFilter('cd app; echo "here"', DEFAULT_IGNORE)).toBe(true)
+  })
+
+  it('still matches an exact multi-word entry on a single step', () => {
+    expect(shouldFilter('ls -la', ['ls -la'])).toBe(true)
+    expect(shouldFilter('ls -la && npm test', ['ls -la'])).toBe(false)
+  })
+
+  it('keeps glue that nothing on the ignore list covers, as before', () => {
+    expect(shouldFilter('echo hi', DEFAULT_IGNORE)).toBe(false)
+  })
+
+  it('treats a comment as nothing', () => {
+    expect(shouldFilter('cd app # go home', DEFAULT_IGNORE)).toBe(true)
+    expect(shouldFilter('npm test # quick check', DEFAULT_IGNORE)).toBe(false)
+  })
+})
+
 describe('isDuplicate', () => {
   const base = {
     command: 'npm test',
