@@ -1,5 +1,35 @@
 # Changelog
 
+## [2.0.0](https://github.com/workscribe/cli/compare/v1.15.6...v2.0.0) (2026-10-27)
+
+### ⚠ BREAKING CHANGES
+
+* **summary:** AI providers (Anthropic, OpenAI, Gemini, Groq,
+OpenAI-compatible and Ollama) are removed. The ai.* and summary.engine
+settings no longer have any effect and can't be set; summaries use the
+offline template engine. For AI-written summaries, run
+`workscribe skill install` and ask your coding agent. Run
+`workscribe init` to remove the old settings. See
+docs/site/migrating-to-2.md.
+
+Closes WOR-117
+
+### Features
+
+* **capture:** classify compound agent commands by their main step ([cf7ac94](https://github.com/workscribe/cli/commit/cf7ac946ff11bcfc860b8c0bf0318d4c5cc63bca))
+* **cli:** add versioned --json output to sessions and events ([7366165](https://github.com/workscribe/cli/commit/7366165de8707b3a63fe87cfd5b7ee580b61c0f2))
+* **skill:** add the Workscribe agent skill and summary write-back ([25817dc](https://github.com/workscribe/cli/commit/25817dc5643f39a7d6b64267f8810db5f6c2b08c))
+* **skills:** install the agent skill into coding agents ([6a75a5b](https://github.com/workscribe/cli/commit/6a75a5b2e48d8952b2a4e5bb114b2f14e1c5d766))
+* **summary:** add offline template engine and per-engine store ([2c26257](https://github.com/workscribe/cli/commit/2c26257002a002a27f9d6ff2b905f143d40f7975))
+* **summary:** prefer a saved agent-skill summary per session ([b43a06c](https://github.com/workscribe/cli/commit/b43a06c731b37fbc899516b382a00ae8d9e230d7))
+* **summary:** remove AI providers in favor of the template and skill ([9aa8bf7](https://github.com/workscribe/cli/commit/9aa8bf7b0b031d007580aa431485b1458a08f8f0))
+
+### Bug Fixes
+
+* **capture:** keep Workscribe's own commands out of capture ([b182382](https://github.com/workscribe/cli/commit/b1823822c858049ff9df8cce6ca2ee3a52c1bc61))
+* **normalize:** capture whole git commit messages ([5500f5a](https://github.com/workscribe/cli/commit/5500f5a1fbfa3349f1ea4a26f1b5bdec96757ef3))
+* **normalize:** skip git push flags and mark dependency removals ([3326627](https://github.com/workscribe/cli/commit/3326627d5e6c0c6d934afdd5b5e9694bd13a08e7))
+
 ## [1.15.6](https://github.com/workscribe/cli/compare/v1.15.5...v1.15.6) (2026-10-14)
 
 ### Bug Fixes
