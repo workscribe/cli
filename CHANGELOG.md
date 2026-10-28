@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.1.0](https://github.com/workscribe/cli/compare/v2.0.1...v2.1.0) (2026-10-28)
+
+### Features
+
+* **context:** add file details and on-demand grouping to context --file ([db457b1](https://github.com/workscribe/cli/commit/db457b103e805300820a7b4c65587285aaff213e))
+
 ## [2.0.1](https://github.com/workscribe/cli/compare/v2.0.0...v2.0.1) (2026-10-28)
 
 ### Bug Fixes
