@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.1](https://github.com/workscribe/cli/compare/v2.0.0...v2.0.1) (2026-10-28)
+
+### Bug Fixes
+
+* **capture:** name repos the same way in capture, notes and context ([ee98fd8](https://github.com/workscribe/cli/commit/ee98fd8b8f674ca72752aa813ee67d2f0e1de299))
+* **uninstall:** stop leftover completions and Claude hooks erroring ([ace29ee](https://github.com/workscribe/cli/commit/ace29ee02625a24d57befe16e00ac9e4f61d502f))
+
 ## [2.0.0](https://github.com/workscribe/cli/compare/v1.15.6...v2.0.0) (2026-10-27)
 
 ### ⚠ BREAKING CHANGES
