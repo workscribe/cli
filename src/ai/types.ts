@@ -1,3 +1,5 @@
+import type { StoryCommit } from '../summary/story-commits'
+
 export interface EventPayload {
   category: string
   metadata: Record<string, unknown>
@@ -21,6 +23,8 @@ export interface SessionPayload {
   endTime: string
   durationMinutes: number
   events: EventPayload[]
+  /** The session's commits, each under the branch it was made on — captured ones, plus git's when it was asked */
+  commits: StoryCommit[]
 }
 
 export interface DaySummaryPayload {

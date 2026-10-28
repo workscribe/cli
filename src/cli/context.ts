@@ -16,10 +16,8 @@ import { formatDuration, timeAgo } from '../utils/format'
 import { log } from '../utils/logger'
 import { getFileDetails, groupDayOfLatestSave } from './context-file'
 import type { FileDetails } from '../summary/file-details'
-import { describeSession } from '../ai/engines/template/describe'
-import { toBulletList } from '../ai/engines/template/utils'
+import { renderSessionStory } from '../ai/engines/template/story'
 import { sessionToPayload, locationContextFrom } from '../summary/payload'
-import { formatSessionHeading } from '../summary/heading'
 import { sessionKey, pickBestSummary } from '../summary/store'
 import type { SessionRow } from '../db/types'
 import type { Session } from '../sessions/detector'
@@ -54,12 +52,14 @@ function toSession(row: SessionRow): Session {
   }
 }
 
-/** A template summary rendered from the session's current events — templates are never stored, so it can't go stale. */
+/**
+ * A template summary rendered from the session's current events — templates are never stored, so it can't go stale.
+ * It tells only the commits Workscribe captured: no git lookups, so the VS Code extension's 5 s answer holds.
+ */
 function renderTemplateSummary(row: SessionRow): string {
   const config = readConfig()
-  const payload = sessionToPayload(toSession(row), row.date, locationContextFrom(config))
-  const bullets = describeSession(payload, config.summary?.includeCategories ?? [])
-  return `${formatSessionHeading(payload)}\n${toBulletList(bullets)}`
+  const payload = sessionToPayload(toSession(row), row.date, { context: locationContextFrom(config) })
+  return renderSessionStory(payload, config.summary?.includeCategories ?? [])
 }
 
 /** The best stored summary (skill > AI > template), or a template one so the VS Code status bar is never empty. */

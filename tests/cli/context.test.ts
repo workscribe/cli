@@ -8,6 +8,9 @@ vi.mock('../../src/db', () => ({
   getEventsBySessionId: vi.fn(),
 }))
 
+// The template summary must tell captured commits only: the VS Code extension gives context 5 s
+vi.mock('child_process', () => ({ execFileSync: vi.fn() }))
+
 vi.mock('../../src/config', () => ({
   readConfig: vi.fn(),
 }))
@@ -28,6 +31,7 @@ vi.mock('../../src/capture/git', () => ({
   getRepoContext: vi.fn(),
 }))
 
+import { execFileSync } from 'child_process'
 import { Command } from 'commander'
 import {
   getRecentSessionsForRepo,
@@ -134,6 +138,7 @@ describe('workscribe context --file', () => {
       const parsed = JSON.parse(mockLog.plain.mock.calls[0][0] as string)
       expect(parsed.summary).toBe('## myapp (feature/auth) — 2h 14m\n- Committed: add auth middleware')
       expect(parsed.branch).toBeNull()
+      expect(execFileSync).not.toHaveBeenCalled()
     })
 
     it('prefers a skill summary over a provider one, and either over the template', async () => {

@@ -72,13 +72,19 @@ Then run `workscribe summary --slack` to post. The summary is automatically form
 **Output format:**
 
 ```
-## project-name (branch) — 2h 15m
-- Implemented auth middleware and JWT validation
-- Resolved failing test suite
-- Committed fixes and pushed to remote
+## api (main, feat/auth) — 2h 15m
+- Note: blocked on staging credentials
+On main:
+- Committed: fix: token refresh race
+- Tests now passing
+On feat/auth:
+- Committed: feat: add auth middleware
+- Added dependencies: bcrypt
+- Pushed to origin/feat/auth
+With an AI coding assistant (126 commands) · 3 file saves in the editor
 ```
 
-Each session gets its own heading. The heading is always generated from your captured data — project name, branch, and duration.
+Each session gets its own heading, always generated from your captured data: the project, every branch the session touched (in the order you worked on them), and the duration. When a session spans several branches, its work is grouped under a plain `On <branch>:` line for each, so you can see what happened where. Commits come from what Workscribe captured and from `git log` in the session's repo (your commits only, looked up within 3 seconds per run). The last line sums up how you worked: commands your coding agent ran, and files saved in the editor.
 
 **Saved summaries:**
 - A summary the agent skill saved for a session is shown instead of the template
@@ -105,7 +111,7 @@ workscribe week --webhook <url>
 | `--slack` | Post the digest to your configured Slack webhook |
 | `--webhook <url>` | Post the digest to a custom webhook URL |
 
-The natural pre-standup ritual for Monday morning or end-of-week reporting. Output is markdown grouped by day, with each session summarised under its project and branch.
+The natural pre-standup ritual for Monday morning or end-of-week reporting. Output is markdown grouped by day, with up to 5 bullets per day, each prefixed with the project it happened in.
 
 **Slack:**
 
@@ -329,6 +335,8 @@ workscribe export --output ~/Desktop/standup.md
 | `--date <YYYY-MM-DD>` | Export a specific date |
 | `--output <path>` | Custom output path (default: `~/.workscribe/exports/workscribe-<date>.md`) |
 
+Each session is written under its own `## ` heading, in the same format as `workscribe summary`.
+
 ---
 
 ## JSON output contract
@@ -347,7 +355,7 @@ Session = {
   repoName: string | null
   repoPath: string | null  // git toplevel; null outside a git repo
   cwd: string | null       // directory most commands ran in
-  branch: string | null    // the branch of the session's first event
+  branch: string | null    // the latest branch the session was on
   branches: string[]       // every branch the session touched, in the order first seen
   startedAt: string        // ISO 8601
   endedAt: string

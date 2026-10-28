@@ -49,6 +49,11 @@ vi.mock('../../src/utils/format', () => ({
   eachDayOfRange: vi.fn(() => ['2026-08-17']),
 }))
 
+vi.mock('../../src/summary/day-commits', () => ({
+  DAY_GIT_BUDGET_MS: 3000,
+  lookupDayCommits: vi.fn((sessions: unknown[]) => sessions.map(() => [])),
+}))
+
 vi.mock('../../src/summary/exclusions', () => ({
   buildExcludedSet: vi.fn(() => new Set()),
   countExcludedEvents: vi.fn(() => new Map()),
@@ -64,6 +69,9 @@ import { postToWebhook } from '../../src/integrations/webhook'
 import { isSlackWebhookUrl } from '../../src/integrations/slack'
 import { log } from '../../src/utils/logger'
 import { parseBullets, registerSummary } from '../../src/cli/summary'
+import { lookupDayCommits } from '../../src/summary/day-commits'
+import { formatSessionHeading } from '../../src/summary/heading'
+import type { DaySummaryPayload } from '../../src/ai/types'
 
 const mockFs = fs as unknown as Record<string, ReturnType<typeof vi.fn>>
 const mockGetOrBuildSessions = getOrBuildSessions as ReturnType<typeof vi.fn>
@@ -182,8 +190,11 @@ describe('workscribe summary (daily)', () => {
     return { session_key: 'my-app|2026-08-17T09:00:00.000Z', engine, text, created_at: '2026-08-17T10:00:00.000Z' }
   }
 
+  // The writer returns each session's finished story, heading included
   function mockSummarize(bullets = '- Shipped a fix') {
-    const summarize = vi.fn().mockResolvedValue(bullets)
+    const summarize = vi.fn(
+      async (payload: DaySummaryPayload) => `${formatSessionHeading(payload.sessions[0])}\n${bullets}`
+    )
     mockCreateSummaryWriter.mockReturnValue({ summarize })
     return summarize
   }
@@ -229,6 +240,7 @@ describe('workscribe summary (daily)', () => {
               capturedAt: '2026-08-17T09:00:00.000Z',
             },
           ],
+          commits: [{ hash: null, subject: 'fix: bug', committedAt: '2026-08-17T09:00:00.000Z', branch: 'main' }],
         },
       ],
     })
@@ -372,6 +384,24 @@ describe('workscribe summary (daily)', () => {
     await makeProgram().parseAsync(['summary'], { from: 'user' })
 
     expect(mockLog.plain).toHaveBeenCalledWith('## my-app — 1h\n- Skill text')
+  })
+
+  it('asks git only about the sessions the template tells, and hands their commits to the writer', async () => {
+    const api = { ...FAKE_SESSION, id: 2, repoName: 'api' }
+    mockGetOrBuildSessions.mockReturnValue([{ ...FAKE_SESSION, id: 1 }, api])
+    mockGetSessionSummaries.mockImplementation((key: string) =>
+      key.startsWith('my-app|') ? [cachedRow('skill', '## my-app — 1h\n- From the skill')] : []
+    )
+    const gitCommit = { hash: 'a1b2c3d', subject: 'feat: refresh tokens', committedAt: '2026-08-17T09:30:00.000Z' }
+    vi.mocked(lookupDayCommits).mockReturnValue([[gitCommit]])
+    const summarize = mockSummarize()
+
+    await makeProgram().parseAsync(['summary'], { from: 'user' })
+
+    expect(lookupDayCommits).toHaveBeenCalledWith([api], { budgetMs: 3000 })
+    expect(summarize.mock.calls[0][0].sessions[0].commits).toContainEqual(
+      expect.objectContaining({ hash: 'a1b2c3d', subject: 'feat: refresh tokens' })
+    )
   })
 
   it('generates only the sessions without a saved summary', async () => {

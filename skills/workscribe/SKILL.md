@@ -27,7 +27,7 @@ Add `--date YYYY-MM-DD` for another day. For "this week", run it once per day (M
 Follow [references/summary-format.md](references/summary-format.md). In short:
 
 ```
-## <project> (<branch>) — <duration>
+## <project> (<branches>) — <duration>
 - <outcome>
 ```
 

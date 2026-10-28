@@ -11,16 +11,19 @@
 ```
 $ workscribe summary
 
-## api-service (feature/auth) — 2h 15m
-- Committed: add JWT validation middleware
+## api-service (main, feature/auth) — 2h 15m
+On main:
 - Committed: fix token expiry check
-- Resolved failing tests (9 runs, now passing)
+- Tests now passing
+On feature/auth:
+- Committed: add JWT validation middleware
 - Added dependencies: bcrypt, jsonwebtoken
 - Pushed to origin/feature/auth
+With an AI coding assistant (126 commands) · 3 file saves in the editor
 
 ## infrastructure — 45m
 - Note: staging was flaky after the compose upgrade
-- Builds passing (2 runs)
+- Build passing
 ```
 
 Want prose instead? Ask your coding agent to *"summarize my work today"* — see [Summaries](#summaries).

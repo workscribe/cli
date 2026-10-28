@@ -7,6 +7,7 @@ vi.mock('../../src/utils/format', () => ({
 import {
   branchesOf,
   eventRowToPayload,
+  sessionBranch,
   sessionToPayload,
   buildDayPayload,
   sessionLocation,
@@ -135,6 +136,7 @@ describe('sessionToPayload', () => {
           source: 'shell',
         },
       ],
+      commits: [{ hash: null, subject: 'fix: bug', committedAt: '2026-08-17T09:00:00.000Z', branch: 'main' }],
     })
   })
 
@@ -143,6 +145,47 @@ describe('sessionToPayload', () => {
 
     expect(payload.branch).toBeNull()
     expect(payload.branches).toEqual([])
+  })
+})
+
+describe('sessionBranch', () => {
+  it('is the latest branch the session was on, where the work was heading', () => {
+    const events = ['main', 'feat/auth', 'main', 'feat/auth'].map((branch) => makeEvent({ branch }))
+
+    expect(sessionBranch(events)).toBe('feat/auth')
+  })
+
+  it('skips later events outside a repo', () => {
+    expect(sessionBranch([makeEvent({ branch: 'main' }), makeEvent({ branch: null })])).toBe('main')
+  })
+
+  it('is null when no event has a branch', () => {
+    expect(sessionBranch([makeEvent({ branch: null })])).toBeNull()
+    expect(sessionBranch([])).toBeNull()
+  })
+})
+
+describe('sessionToPayload — branch and commits', () => {
+  it('takes the latest branch, and git commits passed in, each under its branch', () => {
+    const events = [
+      makeEvent({ id: 1, branch: 'main', captured_at: '2026-08-17T09:00:00.000Z' }),
+      makeEvent({
+        id: 2,
+        branch: 'feat/auth',
+        captured_at: '2026-08-17T09:30:00.000Z',
+        category: 'testing',
+        metadata: null,
+      }),
+    ]
+    const gitCommits = [{ hash: 'a1b2c3d', subject: 'feat: add login', committedAt: '2026-08-17T10:40:00+01:00' }]
+
+    const payload = sessionToPayload(makeSession({ events }), '2026-08-17', { gitCommits })
+
+    expect(payload.branch).toBe('feat/auth')
+    expect(payload.commits).toEqual([
+      { hash: 'a1b2c3d', subject: 'feat: add login', committedAt: '2026-08-17T10:40:00+01:00', branch: 'feat/auth' },
+      { hash: null, subject: 'fix: bug', committedAt: '2026-08-17T09:00:00.000Z', branch: 'main' },
+    ])
   })
 })
 
@@ -230,7 +273,7 @@ describe('sessionLocation', () => {
   it('becomes the payload project', () => {
     const session = makeSession({ repoName: null, events: [makeEvent({ repo_name: null, cwd: '/Users/dev/scripts' })] })
 
-    expect(sessionToPayload(session, '2026-08-17', NO_OVERRIDES).project).toBe('~/scripts')
+    expect(sessionToPayload(session, '2026-08-17', { context: NO_OVERRIDES }).project).toBe('~/scripts')
   })
 })
 

@@ -1,7 +1,8 @@
-import { branchesOf, eventRowToPayload, mostFrequentCwd, sessionLocation } from '../payload'
+import { branchesOf, eventRowToPayload, mostFrequentCwd, sessionBranch, sessionLocation } from '../payload'
 import { sessionKey } from '../store'
 import { SCHEMA_VERSION } from './constants'
-import { collectCapturedCommits, collectNotes, contractEvents, mergeCommits } from './utils'
+import { collectNotes, contractEvents } from './utils'
+import { collectCapturedCommits, mergeCommits } from '../commits'
 import type { EventRow } from '../../db/types'
 import type { Session } from '../../sessions/detector'
 import type { EventJson, EventsJson, EventsJsonOptions, SessionJson, SessionJsonOptions, SessionsJson } from './types'
@@ -27,7 +28,7 @@ export function sessionToJson(session: Session, { location, git, includeCategori
     repoName: session.repoName,
     repoPath: git.repoPath,
     cwd: mostFrequentCwd(session),
-    branch: session.events[0]?.branch ?? null,
+    branch: sessionBranch(session.events),
     branches: branchesOf(session.events),
     startedAt: session.startedAt,
     endedAt: session.endedAt,

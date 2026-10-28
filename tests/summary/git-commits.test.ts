@@ -7,6 +7,7 @@ import {
   getRepoRoot,
   getUserEmail,
   getCommitsInWindow,
+  findCommitsInWindow,
   getOthersSubjects,
   getFileCommits,
 } from '../../src/summary/git-commits'
@@ -124,6 +125,22 @@ describe('getCommitsInWindow', () => {
     gitFails()
 
     expect(getCommitsInWindow(WINDOW)).toEqual([])
+  })
+
+  it('looks on every local branch when asked, not just HEAD', () => {
+    gitOutput('')
+
+    findCommitsInWindow({ ...WINDOW, allBranches: true })
+
+    expect(mockExecFileSync).toHaveBeenCalledWith('git', expect.arrayContaining(['--branches']), expect.any(Object))
+  })
+
+  it('tells "git could not answer" (null) apart from "no commits" ([])', () => {
+    gitFails()
+    expect(findCommitsInWindow(WINDOW)).toBeNull()
+
+    gitOutput('')
+    expect(findCommitsInWindow(WINDOW)).toEqual([])
   })
 })
 
