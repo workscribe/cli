@@ -6,7 +6,8 @@ vi.mock('fs', () => ({ default: { readFileSync: vi.fn() } }))
 
 import { execSync } from 'child_process'
 import fs from 'fs'
-import { getGitContext } from '../../src/capture/git'
+import { getRepoContext } from '../../src/capture/git'
+import { createTestConfig } from '../helpers/config'
 
 const mockExecSync = execSync as ReturnType<typeof vi.fn>
 const mockReadFileSync = fs.readFileSync as ReturnType<typeof vi.fn>
@@ -26,20 +27,20 @@ beforeEach(() => {
   })
 })
 
-describe('getGitContext — nameOverride', () => {
-  it('nameOverride always wins over remote and package.json', () => {
+describe('getRepoContext — the projects override', () => {
+  it('the projects override always wins over remote and package.json', () => {
     mockExecSync.mockImplementation((cmd: string) => {
       if (cmd === 'git rev-parse --show-toplevel') return Buffer.from('/root\n')
       if (cmd === 'git branch --show-current') return Buffer.from('main\n')
       if (cmd === 'git remote get-url origin') return Buffer.from('https://github.com/org/remote-name.git\n')
       throw new Error(`unexpected: ${cmd}`)
     })
-    const { repoName } = getGitContext('/root', 'my-override')
+    const { repoName } = getRepoContext('/root', createTestConfig({ projects: { '/root': 'my-override' } }))
     expect(repoName).toBe('my-override')
   })
 })
 
-describe('getGitContext — remote URL', () => {
+describe('getRepoContext — remote URL', () => {
   it('extracts repo name from HTTPS URL with .git suffix', () => {
     mockExecSync.mockImplementation((cmd: string) => {
       if (cmd === 'git rev-parse --show-toplevel') return Buffer.from('/home/user/chronicle\n')
@@ -47,7 +48,7 @@ describe('getGitContext — remote URL', () => {
       if (cmd === 'git remote get-url origin') return Buffer.from('https://github.com/org/workscribe.git\n')
       throw new Error(`unexpected: ${cmd}`)
     })
-    const { repoName } = getGitContext('/home/user/chronicle')
+    const { repoName } = getRepoContext('/home/user/chronicle', createTestConfig())
     expect(repoName).toBe('workscribe')
   })
 
@@ -58,7 +59,7 @@ describe('getGitContext — remote URL', () => {
       if (cmd === 'git remote get-url origin') return Buffer.from('https://gitlab.com/org/workscribe\n')
       throw new Error(`unexpected: ${cmd}`)
     })
-    const { repoName } = getGitContext('/home/user/chronicle')
+    const { repoName } = getRepoContext('/home/user/chronicle', createTestConfig())
     expect(repoName).toBe('workscribe')
   })
 
@@ -69,20 +70,20 @@ describe('getGitContext — remote URL', () => {
       if (cmd === 'git remote get-url origin') return Buffer.from('git@github.com:org/workscribe.git\n')
       throw new Error(`unexpected: ${cmd}`)
     })
-    const { repoName } = getGitContext('/home/user/chronicle')
+    const { repoName } = getRepoContext('/home/user/chronicle', createTestConfig())
     expect(repoName).toBe('workscribe')
   })
 })
 
-describe('getGitContext — qualifyRepoName', () => {
-  it('returns bare repo name by default (qualifyRepoName not passed)', () => {
+describe('getRepoContext — qualifyRepoName', () => {
+  it('returns bare repo name by default (qualifyRepoName off)', () => {
     mockExecSync.mockImplementation((cmd: string) => {
       if (cmd === 'git rev-parse --show-toplevel') return Buffer.from('/home/user/vscode\n')
       if (cmd === 'git branch --show-current') return Buffer.from('main\n')
       if (cmd === 'git remote get-url origin') return Buffer.from('https://github.com/workscribe/vscode.git\n')
       throw new Error(`unexpected: ${cmd}`)
     })
-    const { repoName } = getGitContext('/home/user/vscode')
+    const { repoName } = getRepoContext('/home/user/vscode', createTestConfig())
     expect(repoName).toBe('vscode')
   })
 
@@ -93,7 +94,7 @@ describe('getGitContext — qualifyRepoName', () => {
       if (cmd === 'git remote get-url origin') return Buffer.from('https://github.com/workscribe/vscode.git\n')
       throw new Error(`unexpected: ${cmd}`)
     })
-    const { repoName } = getGitContext('/home/user/vscode', null, true)
+    const { repoName } = getRepoContext('/home/user/vscode', createTestConfig({ git: { qualifyRepoName: true } }))
     expect(repoName).toBe('workscribe/vscode')
   })
 
@@ -104,50 +105,115 @@ describe('getGitContext — qualifyRepoName', () => {
       if (cmd === 'git remote get-url origin') return Buffer.from('git@github.com:workscribe/vscode.git\n')
       throw new Error(`unexpected: ${cmd}`)
     })
-    const { repoName } = getGitContext('/home/user/vscode', null, true)
+    const { repoName } = getRepoContext('/home/user/vscode', createTestConfig({ git: { qualifyRepoName: true } }))
     expect(repoName).toBe('workscribe/vscode')
   })
 
-  it('nameOverride still wins over qualifyRepoName', () => {
+  it('the projects override still wins over qualifyRepoName', () => {
     mockExecSync.mockImplementation((cmd: string) => {
       if (cmd === 'git rev-parse --show-toplevel') return Buffer.from('/home/user/vscode\n')
       if (cmd === 'git branch --show-current') return Buffer.from('main\n')
       if (cmd === 'git remote get-url origin') return Buffer.from('https://github.com/workscribe/vscode.git\n')
       throw new Error(`unexpected: ${cmd}`)
     })
-    const { repoName } = getGitContext('/home/user/vscode', 'my-override', true)
+    const { repoName } = getRepoContext(
+      '/home/user/vscode',
+      createTestConfig({ git: { qualifyRepoName: true }, projects: { '/home/user/vscode': 'my-override' } })
+    )
     expect(repoName).toBe('my-override')
   })
 })
 
-describe('getGitContext — package.json fallback', () => {
+describe('getRepoContext — package.json fallback', () => {
   it('uses package.json name when remote fails', () => {
     setupGitRoot('/home/user/chronicle')
     mockReadFileSync.mockReturnValue(JSON.stringify({ name: 'workscribe' }))
-    const { repoName } = getGitContext('/home/user/chronicle')
+    const { repoName } = getRepoContext('/home/user/chronicle', createTestConfig())
     expect(repoName).toBe('workscribe')
   })
 
   it('strips @scope/ prefix from scoped package name', () => {
     setupGitRoot('/home/user/chronicle')
     mockReadFileSync.mockReturnValue(JSON.stringify({ name: '@workscribe/cli' }))
-    const { repoName } = getGitContext('/home/user/chronicle')
+    const { repoName } = getRepoContext('/home/user/chronicle', createTestConfig())
     expect(repoName).toBe('cli')
   })
 
   it('falls back to folder name when package.json has no name field', () => {
     setupGitRoot('/home/user/chronicle')
     mockReadFileSync.mockReturnValue(JSON.stringify({}))
-    const { repoName } = getGitContext('/home/user/chronicle')
+    const { repoName } = getRepoContext('/home/user/chronicle', createTestConfig())
     expect(repoName).toBe('chronicle')
   })
 })
 
-describe('getGitContext — folder name fallback', () => {
+describe('getRepoContext — folder name fallback', () => {
   it('uses folder name when remote and package.json both fail', () => {
     setupGitRoot('/home/user/chronicle')
     // readFileSync already throws by default from beforeEach
-    const { repoName } = getGitContext('/home/user/chronicle')
+    const { repoName } = getRepoContext('/home/user/chronicle', createTestConfig())
     expect(repoName).toBe('chronicle')
+  })
+})
+
+describe('getRepoContext — one name for every caller (WOR-118)', () => {
+  const ROOT = '/home/user/vscode'
+
+  function setupRemote(url: string | null) {
+    mockExecSync.mockImplementation((cmd: string) => {
+      if (cmd === 'git rev-parse --show-toplevel') return Buffer.from(`${ROOT}\n`)
+      if (cmd === 'git branch --show-current') return Buffer.from('main\n')
+      if (cmd === 'git remote get-url origin') {
+        if (url) return Buffer.from(`${url}\n`)
+        throw new Error('no remote')
+      }
+      throw new Error(`unexpected: ${cmd}`)
+    })
+  }
+
+  it('applies git.qualifyRepoName, and reports the root and the remote it named the repo from', () => {
+    setupRemote('git@github.com:workscribe/vscode.git')
+    const config = createTestConfig({ git: { qualifyRepoName: true } })
+
+    expect(getRepoContext(ROOT, config)).toEqual({
+      repoName: 'workscribe/vscode',
+      branch: 'main',
+      root: ROOT,
+      remote: { owner: 'workscribe', repo: 'vscode' },
+    })
+  })
+
+  it('uses the bare name when git.qualifyRepoName is off', () => {
+    setupRemote('git@github.com:workscribe/vscode.git')
+    expect(getRepoContext(ROOT, createTestConfig()).repoName).toBe('vscode')
+  })
+
+  it('applies the projects override for the folder, with no remote to match against', () => {
+    setupRemote('git@github.com:workscribe/vscode.git')
+    const config = createTestConfig({ git: { qualifyRepoName: true }, projects: { [ROOT]: 'my-name' } })
+
+    expect(getRepoContext(ROOT, config)).toMatchObject({ repoName: 'my-name', root: ROOT, remote: null })
+  })
+
+  it('keeps an empty-string override as the name, as before', () => {
+    setupRemote('git@github.com:workscribe/vscode.git')
+    expect(getRepoContext(ROOT, createTestConfig({ projects: { [ROOT]: '' } })).repoName).toBe('')
+  })
+
+  it('has no remote when the name came from the folder', () => {
+    setupRemote(null)
+    expect(getRepoContext(ROOT, createTestConfig())).toMatchObject({ repoName: 'vscode', remote: null })
+  })
+
+  it('is all null outside a git repository', () => {
+    mockExecSync.mockImplementation(() => {
+      throw new Error('not a git repository')
+    })
+    expect(getRepoContext('/tmp', createTestConfig())).toEqual({
+      repoName: null,
+      branch: null,
+      root: null,
+      remote: null,
+    })
   })
 })

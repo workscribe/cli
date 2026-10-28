@@ -1,16 +1,21 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.mock('../../src/db', () => ({ insertEvent: vi.fn() }))
-vi.mock('../../src/capture/git', () => ({ getGitContext: vi.fn() }))
+vi.mock('../../src/capture/git', () => ({ getRepoContext: vi.fn() }))
+vi.mock('../../src/config', () => ({ readConfig: vi.fn() }))
+vi.mock('../../src/utils/working-directory', () => ({ currentDirectory: vi.fn(() => '/Users/dev/link/my-app') }))
 
 import { Command } from 'commander'
 import { insertEvent } from '../../src/db'
-import { getGitContext } from '../../src/capture/git'
+import { getRepoContext } from '../../src/capture/git'
+import { readConfig } from '../../src/config'
+import { createTestConfig } from '../helpers/config'
 import { log } from '../../src/utils/logger'
 import { registerNote } from '../../src/cli/note'
 
 const mockInsertEvent = insertEvent as ReturnType<typeof vi.fn>
-const mockGetGitContext = getGitContext as ReturnType<typeof vi.fn>
+const mockGetRepoContext = getRepoContext as ReturnType<typeof vi.fn>
+const mockReadConfig = readConfig as ReturnType<typeof vi.fn>
 const mockLog = log as Record<string, ReturnType<typeof vi.fn>>
 
 function makeProgram() {
@@ -21,7 +26,8 @@ function makeProgram() {
 }
 
 beforeEach(() => {
-  mockGetGitContext.mockReturnValue({ repoName: 'my-app', branch: 'main' })
+  mockReadConfig.mockReturnValue(createTestConfig())
+  mockGetRepoContext.mockReturnValue({ repoName: 'my-app', branch: 'main', root: '/repo', remote: null })
 })
 
 describe('workscribe note', () => {
@@ -48,7 +54,7 @@ describe('workscribe note', () => {
   })
 
   it('works when not in a git repo (null context)', () => {
-    mockGetGitContext.mockReturnValue({ repoName: null, branch: null })
+    mockGetRepoContext.mockReturnValue({ repoName: null, branch: null, root: null, remote: null })
     makeProgram().parse(['note', 'some note'], { from: 'user' })
     expect(mockInsertEvent).toHaveBeenCalledWith(expect.objectContaining({ repo_name: null, branch: null }))
   })
@@ -59,7 +65,7 @@ describe('workscribe note', () => {
   })
 
   it('confirms success without repo name when outside a git repo', () => {
-    mockGetGitContext.mockReturnValue({ repoName: null, branch: null })
+    mockGetRepoContext.mockReturnValue({ repoName: null, branch: null, root: null, remote: null })
     makeProgram().parse(['note', 'some note'], { from: 'user' })
     expect(mockLog.success).toHaveBeenCalledWith('Note saved')
   })
@@ -67,5 +73,21 @@ describe('workscribe note', () => {
   it('sets exit_code and duration_ms to null', () => {
     makeProgram().parse(['note', 'some note'], { from: 'user' })
     expect(mockInsertEvent).toHaveBeenCalledWith(expect.objectContaining({ exit_code: null, duration_ms: null }))
+  })
+})
+
+describe('workscribe note — repo naming (WOR-118)', () => {
+  it('names the repo from the config, so notes land in the same session as shell and IDE activity', () => {
+    const config = createTestConfig({ git: { qualifyRepoName: true } })
+    mockReadConfig.mockReturnValue(config)
+
+    makeProgram().parse(['note', 'some note'], { from: 'user' })
+
+    expect(mockGetRepoContext).toHaveBeenCalledWith('/Users/dev/link/my-app', config)
+  })
+
+  it('stores the folder as reached, like the shell hook does', () => {
+    makeProgram().parse(['note', 'some note'], { from: 'user' })
+    expect(mockInsertEvent).toHaveBeenCalledWith(expect.objectContaining({ cwd: '/Users/dev/link/my-app' }))
   })
 })

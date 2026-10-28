@@ -1,6 +1,8 @@
 import { Command } from 'commander'
 import { insertEvent } from '../db'
-import { getGitContext } from '../capture/git'
+import { getRepoContext } from '../capture/git'
+import { readConfig } from '../config'
+import { currentDirectory } from '../utils/working-directory'
 import { log } from '../utils/logger'
 
 export function registerNote(program: Command): void {
@@ -8,11 +10,13 @@ export function registerNote(program: Command): void {
     .command('note <text>')
     .description('Attach a free-text annotation to the current session')
     .action((text: string) => {
-      const { repoName, branch } = getGitContext(process.cwd())
+      // As you reached it, like the shell hook's `$PWD`, so a `projects.<path>` override and `context` match it
+      const directory = currentDirectory()
+      const { repoName, branch } = getRepoContext(directory, readConfig())
       insertEvent({
         captured_at: new Date().toISOString(),
         command: 'workscribe note',
-        cwd: process.cwd(),
+        cwd: directory,
         exit_code: null,
         duration_ms: null,
         repo_name: repoName,
