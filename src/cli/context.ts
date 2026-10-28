@@ -2,13 +2,15 @@ import path from 'path'
 import { Command } from 'commander'
 import chalk from 'chalk'
 import {
-  getRecentSessionsByRepo,
+  getRecentSessionsForRepo,
   getLastSessionTouchingFile,
   getSessionBranch,
   getSessionSummaries,
   getEventsBySessionId,
 } from '../db'
-import { getGitContext } from '../capture/git'
+import { getRepoContext } from '../capture/git'
+import { formatRepoName } from '../capture/repo-name'
+import { currentDirectory, rootForms } from '../utils/working-directory'
 import { readConfig } from '../config'
 import { formatDuration, timeAgo } from '../utils/format'
 import { log } from '../utils/logger'
@@ -119,14 +121,19 @@ export function registerContext(program: Command): void {
         return
       }
 
-      const { repoName } = getGitContext(process.cwd(), null, readConfig().git.qualifyRepoName)
+      const config = readConfig()
+      const directory = currentDirectory()
+      const { repoName, root, remote } = getRepoContext(directory, config)
       if (!repoName) {
         if (opts.json) log.plain(JSON.stringify(null))
         else log.plain('  Not in a git repository. Run workscribe context from a project directory.')
         return
       }
 
-      const sessions = getRecentSessionsByRepo(repoName, 1)
+      // Also finds sessions stored under the other name form — captured before the setting changed, or before WOR-118
+      const otherRepoName = remote ? formatRepoName(remote, !config.git.qualifyRepoName) : null
+      const roots = root ? rootForms(directory, root) : []
+      const sessions = getRecentSessionsForRepo({ repoName, otherRepoName, roots }, 1)
       if (sessions.length === 0) {
         if (opts.json) log.plain(JSON.stringify(null))
         else log.plain(`  No sessions found for ${repoName}`)

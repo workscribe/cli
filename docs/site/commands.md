@@ -400,7 +400,7 @@ workscribe context --file src/auth.ts --json
 | `--file <path>` | Show the last session that touched this file (requires IDE integration) |
 | `--json` | Output structured JSON instead of formatted text — `null` when no session is found |
 
-**Without `--file`:** shows the most recent session for the current git repo — date, duration, branch, event count, and the session's summary — one the agent skill saved, one an AI provider wrote in 1.x, or else the template.
+**Without `--file`:** shows the most recent session for the current git repo — date, duration, branch, event count, and the session's summary — one the agent skill saved, one an AI provider wrote in 1.x, or else the template. The repo is named exactly as capture names it: a `projects.<path>` override for the current folder wins, and otherwise `git.qualifyRepoName` decides between `owner/repo` and bare `repo`. Sessions stored under the other form, from before you changed that setting, are found too when they ran inside this repo's folder.
 
 **With `--file`:** narrows to the most recent session that included a `code_edit` event for that path. This is what powers the [VS Code extension](https://marketplace.visualstudio.com/items?itemName=workscribe.workscribe)'s status bar "last worked on" indicator — surfacing "3 days ago" when you switch to a file you haven't touched recently. Neovim and other editor integrations aren't built yet.
 

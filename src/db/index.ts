@@ -4,6 +4,7 @@ import { WORKSCRIBE_DIR, DB_PATH } from '../utils/paths'
 import type { EventRow, SessionRow, SessionSummaryRow } from './types'
 import { MIGRATIONS } from './migrations'
 import { applyMigrations } from './migrate'
+import { findRecentSessionsForRepo, type RepoLookup } from './session-lookup'
 import type { StoredEngine } from '../ai/engine'
 export type { EventRow, SessionRow, SessionSummaryRow } from './types'
 
@@ -65,11 +66,8 @@ export function insertEvent(params: {
   stmt.run(params)
 }
 
-export function getRecentSessionsByRepo(repoName: string, limit: number): SessionRow[] {
-  const db = getDb()
-  return db
-    .prepare('SELECT * FROM sessions WHERE repo_name = $repo_name ORDER BY started_at DESC LIMIT $limit')
-    .all({ repo_name: repoName, limit }) as unknown as SessionRow[]
+export function getRecentSessionsForRepo(lookup: RepoLookup, limit: number): SessionRow[] {
+  return findRecentSessionsForRepo(getDb(), lookup, limit)
 }
 
 export function getLastSessionTouchingFile(filePath: string): SessionRow | undefined {

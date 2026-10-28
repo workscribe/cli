@@ -52,6 +52,8 @@ workscribe summary → session detector → template engine → markdown output
 - `src/capture/filter.ts` — `shouldFilter` and `isDuplicate` (pure, no DB)
 - `src/sessions/grouper.ts` — `splitByIdleGap`, `splitByRepo`, `minutesBetween` (pure, no DB)
 - `src/db/types.ts` — `EventRow` / `SessionRow` interfaces with no `node:sqlite` import (safe to import in tests)
+- `src/capture/repo-name.ts` — parses the `origin` remote and formats `owner/repo` or bare `repo` (pure)
+- `src/db/session-lookup.ts` — the session query `context` uses, taking the connection as a parameter (no `node:sqlite` import, so tests run it on an in-memory DB)
 
 Tests import from these pure modules directly. Never import from `src/db/index.ts` in tests — it triggers the `node:sqlite` import on load.
 
@@ -61,7 +63,7 @@ Tests import from these pure modules directly. Never import from `src/db/index.t
 |---|---|
 | `src/index.ts` | CLI entry point — registers all commands with commander |
 | `src/cli/` | One file per command (`init`, `capture`, `summary`, `sessions`, `events`, `export`, `config`, `status`) |
-| `src/capture/` | `index.ts` orchestrates capture; `filter.ts` noise/dedup (ignore list applied per step); `command-steps.ts` splits compound shell commands into the commands they run (pure, shared by the filter, the normalizer and `workscribe-command.ts`); `redact.ts` credential scrubbing; `git.ts` repo context |
+| `src/capture/` | `index.ts` orchestrates capture; `filter.ts` noise/dedup (ignore list applied per step); `command-steps.ts` splits compound shell commands into the commands they run (pure, shared by the filter, the normalizer and `workscribe-command.ts`); `redact.ts` credential scrubbing; `git.ts` repo context — `getRepoContext(cwd, config)` is the one way to name a repo (projects override, then the remote in the `git.qualifyRepoName` form, then package.json or the folder), used by both capture paths, `note` and `context` so names always match; `repo-name.ts` the remote parsing and name formats (pure) |
 | `src/normalize/patterns.ts` | Ordered rule array (`BASE_RULES`, incl. the nx rule) — first match wins, built on first use. Add new categories here |
 | `src/normalize/compound.ts` | Classifies compound commands by their most telling step (`STEP_CATEGORY_PRIORITY`); pure, takes the rule matcher as a parameter |
 | `src/normalize/reclassify.ts` | Pure helper that decides a stored `other` event's new category (used by migration 006) |
@@ -72,6 +74,7 @@ Tests import from these pure modules directly. Never import from `src/db/index.t
 | `src/ai/` | `types.ts` payload types and the `AIProvider` writer interface; `engine.ts` the `StoredEngine` names of stored summaries; `engines/template/` the offline template engine (pure). The name is historical — there are no AI providers since 2.0 |
 | `src/config/index.ts` | Read/write `~/.workscribe/config.json`; `setConfigValue` coerces strings to number/boolean |
 | `src/db/index.ts` | SQLite connection singleton, migrations, typed query functions |
+| `src/db/session-lookup.ts` | `context`'s repo lookup: the configured name, plus the other `qualifyRepoName` form for sessions with activity inside the repo's tree (in each form of its root — see `src/utils/working-directory.ts`, which reads paths the way the shell hook's `$PWD` stores them) |
 | `src/db/migrate.ts` | Applies migrations in per-migration transactions; `node:sqlite`-free so tests run it on an in-memory DB. A migration is SQL plus an optional `run(db)` for changes that need code (`migration-types.ts`) |
 | `shell/` | Static hook scripts appended to `~/.zshrc` / `~/.bashrc` by `workscribe init` |
 

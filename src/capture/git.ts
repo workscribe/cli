@@ -1,26 +1,24 @@
 import { execSync } from 'child_process'
 import path from 'path'
 import fs from 'fs'
+import type { WorkscribeConfig } from '../config'
+import { formatRepoName, parseOwnerAndRepo, type RemoteRepo } from './repo-name'
 
-export interface GitContext {
+/** Everything known about the repo at a path — `root` and `remote` let `context` find the other name form too. */
+export interface RepoContext {
   repoName: string | null
   branch: string | null
+  root: string | null
+  /** The `origin` remote, set only when `repoName` came from it (not an override, package.json or the folder) */
+  remote: RemoteRepo | null
 }
 
-// Handles SSH (git@host:owner/repo.git), HTTPS (https://host/owner/repo.git),
-// and bare git:// / ssh:// forms uniformly by normalizing the SSH scp-like
-// syntax's first ':' to '/' (but not the '://' in URLs with a real scheme),
-// then splitting on '/'.
-function parseOwnerAndRepo(url: string): { owner: string; repo: string } | null {
-  const normalized = url.trim().replace(/^[^/]+:(?!\/\/)/, (match) => match.replace(':', '/'))
-  const segments = normalized.split('/').filter(Boolean)
-  if (segments.length < 2) return null
-  const repo = segments[segments.length - 1].replace(/\.git$/, '')
-  const owner = segments[segments.length - 2]
-  return owner && repo ? { owner, repo } : null
-}
+/** The settings that decide what a repo is called. */
+export type RepoNamingConfig = Pick<WorkscribeConfig, 'projects' | 'git'>
 
-function nameFromRemote(root: string, qualifyWithOwner: boolean): string | null {
+const NOT_A_REPO: RepoContext = { repoName: null, branch: null, root: null, remote: null }
+
+function remoteOf(root: string): RemoteRepo | null {
   try {
     const url = execSync('git remote get-url origin', {
       cwd: root,
@@ -29,9 +27,7 @@ function nameFromRemote(root: string, qualifyWithOwner: boolean): string | null 
     })
       .toString()
       .trim()
-    const parsed = parseOwnerAndRepo(url)
-    if (!parsed) return null
-    return qualifyWithOwner ? `${parsed.owner}/${parsed.repo}` : parsed.repo
+    return parseOwnerAndRepo(url)
   } catch {
     return null
   }
@@ -48,35 +44,52 @@ function nameFromPackageJson(root: string): string | null {
   }
 }
 
-export function getGitContext(cwd: string, nameOverride?: string | null, qualifyRepoName = false): GitContext {
+function currentBranch(cwd: string): string | null {
   try {
-    const root = execSync('git rev-parse --show-toplevel', {
+    return (
+      execSync('git branch --show-current', {
+        cwd,
+        timeout: 2000,
+        stdio: 'pipe',
+      })
+        .toString()
+        .trim() || null
+    )
+  } catch {
+    return null // Detached HEAD or not a git repo
+  }
+}
+
+/** The repo's name, and the remote it came from — set only when the name did come from the remote. */
+function nameRepo(
+  root: string,
+  nameOverride: string | null,
+  qualifyRepoName: boolean
+): Pick<RepoContext, 'repoName' | 'remote'> {
+  if (nameOverride !== null) return { repoName: nameOverride, remote: null }
+  const remote = remoteOf(root)
+  if (remote) return { repoName: formatRepoName(remote, qualifyRepoName), remote }
+  return { repoName: nameFromPackageJson(root) ?? path.basename(root), remote: null }
+}
+
+/**
+ * The repo at `cwd`, named the way the config says: the `projects.<cwd>` override, else the `origin` remote in the
+ * `git.qualifyRepoName` form, else package.json or the folder. Everything that stores or looks up a repo name uses
+ * this, so shell, IDE, notes and `context` always agree.
+ */
+export function getRepoContext(cwd: string, config: RepoNamingConfig): RepoContext {
+  let root: string
+  try {
+    root = execSync('git rev-parse --show-toplevel', {
       cwd,
       timeout: 2000,
       stdio: 'pipe',
     })
       .toString()
       .trim()
-
-    const repoName =
-      nameOverride ?? nameFromRemote(root, qualifyRepoName) ?? nameFromPackageJson(root) ?? path.basename(root)
-
-    let branch: string | null = null
-    try {
-      branch =
-        execSync('git branch --show-current', {
-          cwd,
-          timeout: 2000,
-          stdio: 'pipe',
-        })
-          .toString()
-          .trim() || null
-    } catch {
-      // Detached HEAD or not a git repo
-    }
-
-    return { repoName, branch }
   } catch {
-    return { repoName: null, branch: null }
+    return NOT_A_REPO
   }
+  const naming = nameRepo(root, config.projects?.[cwd] ?? null, config.git.qualifyRepoName)
+  return { ...naming, branch: currentBranch(cwd), root }
 }

@@ -14,7 +14,9 @@ vi.mock('../../src/config', async () => {
   const { createTestConfig } = await import('../helpers/config')
   return { readConfig: vi.fn(() => createTestConfig()) }
 })
-vi.mock('../../src/capture/git', () => ({ getGitContext: vi.fn(() => ({ repoName: 'api', branch: 'main' })) }))
+vi.mock('../../src/capture/git', () => ({
+  getRepoContext: vi.fn(() => ({ repoName: 'api', branch: 'main', root: '/repo', remote: null })),
+}))
 vi.mock('../../src/capture/git-snapshot', () => ({ getCommitsSince: vi.fn(() => []) }))
 vi.mock('../../src/capture/aider', () => ({ readLastAiderPrompt: vi.fn(() => null) }))
 vi.mock('../../src/utils/paths', () => ({ PAUSE_FLAG_PATH: '/home/user/.workscribe/paused' }))

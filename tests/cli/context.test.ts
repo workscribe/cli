@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.mock('../../src/db', () => ({
-  getRecentSessionsByRepo: vi.fn(),
+  getRecentSessionsForRepo: vi.fn(),
   getLastSessionTouchingFile: vi.fn(),
   getSessionBranch: vi.fn(),
   getSessionSummaries: vi.fn(),
@@ -12,13 +12,19 @@ vi.mock('../../src/config', () => ({
   readConfig: vi.fn(),
 }))
 
+// The folder as reached through a symlink, and both forms of its repo root
+vi.mock('../../src/utils/working-directory', () => ({
+  currentDirectory: vi.fn(() => '/Users/dev/link/myapp'),
+  rootForms: vi.fn(() => ['/Users/dev/myapp', '/Users/dev/link/myapp']),
+}))
+
 vi.mock('../../src/capture/git', () => ({
-  getGitContext: vi.fn(),
+  getRepoContext: vi.fn(),
 }))
 
 import { Command } from 'commander'
 import {
-  getRecentSessionsByRepo,
+  getRecentSessionsForRepo,
   getLastSessionTouchingFile,
   getSessionBranch,
   getSessionSummaries,
@@ -26,14 +32,14 @@ import {
 } from '../../src/db'
 import { readConfig } from '../../src/config'
 import { createTestConfig } from '../helpers/config'
-import { getGitContext } from '../../src/capture/git'
+import { getRepoContext } from '../../src/capture/git'
 import { log } from '../../src/utils/logger'
 import { registerContext } from '../../src/cli/context'
 
-const mockGetRecentSessionsByRepo = getRecentSessionsByRepo as ReturnType<typeof vi.fn>
+const mockGetRecentSessionsForRepo = getRecentSessionsForRepo as ReturnType<typeof vi.fn>
 const mockGetLastSessionTouchingFile = getLastSessionTouchingFile as ReturnType<typeof vi.fn>
 const mockGetSessionBranch = getSessionBranch as ReturnType<typeof vi.fn>
-const mockGetGitContext = getGitContext as ReturnType<typeof vi.fn>
+const mockGetRepoContext = getRepoContext as ReturnType<typeof vi.fn>
 const mockGetSessionSummaries = getSessionSummaries as ReturnType<typeof vi.fn>
 const mockGetEventsBySessionId = getEventsBySessionId as ReturnType<typeof vi.fn>
 const mockReadConfig = readConfig as ReturnType<typeof vi.fn>
@@ -161,7 +167,7 @@ describe('workscribe context --file', () => {
 
 describe('workscribe context (repo mode)', () => {
   it('prints null with --json when not in a git repository', async () => {
-    mockGetGitContext.mockReturnValue({ repoName: null, branch: null })
+    mockGetRepoContext.mockReturnValue({ repoName: null, branch: null, root: null, remote: null })
 
     await makeProgram().parseAsync(['context', '--json'], { from: 'user' })
 
@@ -169,8 +175,8 @@ describe('workscribe context (repo mode)', () => {
   })
 
   it('prints null with --json when no sessions exist for the repo', async () => {
-    mockGetGitContext.mockReturnValue({ repoName: 'myapp', branch: 'main' })
-    mockGetRecentSessionsByRepo.mockReturnValue([])
+    mockGetRepoContext.mockReturnValue({ repoName: 'myapp', branch: 'main', root: '/Users/dev/myapp', remote: null })
+    mockGetRecentSessionsForRepo.mockReturnValue([])
 
     await makeProgram().parseAsync(['context', '--json'], { from: 'user' })
 
@@ -178,8 +184,8 @@ describe('workscribe context (repo mode)', () => {
   })
 
   it('prints a structured object with --json when a session exists', async () => {
-    mockGetGitContext.mockReturnValue({ repoName: 'myapp', branch: 'main' })
-    mockGetRecentSessionsByRepo.mockReturnValue([SAMPLE_SESSION])
+    mockGetRepoContext.mockReturnValue({ repoName: 'myapp', branch: 'main', root: '/Users/dev/myapp', remote: null })
+    mockGetRecentSessionsForRepo.mockReturnValue([SAMPLE_SESSION])
     mockGetSessionBranch.mockReturnValue('main')
 
     await makeProgram().parseAsync(['context', '--json'], { from: 'user' })
@@ -192,12 +198,87 @@ describe('workscribe context (repo mode)', () => {
 describe('workscribe context — old AI settings', () => {
   it('never prints the 2.0 notice, even for a 1.x config — the VS Code extension reads this output', async () => {
     mockReadConfig.mockReturnValue(createTestConfig({ ai: { provider: 'anthropic', apiKey: 'sk-old' } }))
-    mockGetGitContext.mockReturnValue({ repoName: 'myapp', branch: 'main' })
-    mockGetRecentSessionsByRepo.mockReturnValue([SAMPLE_SESSION])
+    mockGetRepoContext.mockReturnValue({ repoName: 'myapp', branch: 'main', root: '/Users/dev/myapp', remote: null })
+    mockGetRecentSessionsForRepo.mockReturnValue([SAMPLE_SESSION])
     mockGetSessionBranch.mockReturnValue('main')
 
     await makeProgram().parseAsync(['context', '--json'], { from: 'user' })
 
     expect(mockLog.notice).not.toHaveBeenCalled()
+  })
+})
+
+// WOR-118: with git.qualifyRepoName on, shell activity was stored as bare `repo` while context looked up `owner/repo`
+describe('workscribe context (repo mode) — both name forms', () => {
+  const REMOTE = { owner: 'acme', repo: 'myapp' }
+
+  it('looks up the qualified name and, inside this repo, the bare one', async () => {
+    mockReadConfig.mockReturnValue(createTestConfig({ git: { qualifyRepoName: true } }))
+    mockGetRepoContext.mockReturnValue({
+      repoName: 'acme/myapp',
+      branch: 'main',
+      root: '/Users/dev/myapp',
+      remote: REMOTE,
+    })
+    mockGetRecentSessionsForRepo.mockReturnValue([])
+
+    await makeProgram().parseAsync(['context'], { from: 'user' })
+
+    expect(mockGetRecentSessionsForRepo).toHaveBeenCalledWith(
+      { repoName: 'acme/myapp', otherRepoName: 'myapp', roots: ['/Users/dev/myapp', '/Users/dev/link/myapp'] },
+      1
+    )
+    expect(mockLog.plain).toHaveBeenCalledWith('  No sessions found for acme/myapp')
+  })
+
+  it('looks up the bare name and the qualified one when the setting is off', async () => {
+    mockGetRepoContext.mockReturnValue({ repoName: 'myapp', branch: 'main', root: '/Users/dev/myapp', remote: REMOTE })
+    mockGetRecentSessionsForRepo.mockReturnValue([])
+
+    await makeProgram().parseAsync(['context'], { from: 'user' })
+
+    expect(mockGetRecentSessionsForRepo).toHaveBeenCalledWith(
+      { repoName: 'myapp', otherRepoName: 'acme/myapp', roots: ['/Users/dev/myapp', '/Users/dev/link/myapp'] },
+      1
+    )
+  })
+
+  it('looks up only the configured name for an override or a repo without a remote', async () => {
+    mockGetRepoContext.mockReturnValue({ repoName: 'my-name', branch: 'main', root: '/Users/dev/myapp', remote: null })
+    mockGetRecentSessionsForRepo.mockReturnValue([])
+
+    await makeProgram().parseAsync(['context'], { from: 'user' })
+
+    expect(mockGetRecentSessionsForRepo).toHaveBeenCalledWith(
+      { repoName: 'my-name', otherRepoName: null, roots: ['/Users/dev/myapp', '/Users/dev/link/myapp'] },
+      1
+    )
+  })
+
+  it('returns, with --json, a session stored under the bare name before the fix', async () => {
+    mockReadConfig.mockReturnValue(createTestConfig({ git: { qualifyRepoName: true } }))
+    mockGetRepoContext.mockReturnValue({
+      repoName: 'acme/myapp',
+      branch: 'main',
+      root: '/Users/dev/myapp',
+      remote: REMOTE,
+    })
+    mockGetRecentSessionsForRepo.mockReturnValue([SAMPLE_SESSION]) // repo_name: 'myapp'
+    mockGetSessionBranch.mockReturnValue('main')
+
+    await makeProgram().parseAsync(['context', '--json'], { from: 'user' })
+
+    expect(JSON.parse(mockLog.plain.mock.calls[0][0] as string)).toMatchObject({ eventCount: 42, branch: 'main' })
+  })
+
+  it("names the folder as reached (like the shell hook's $PWD), so a projects override matches as in capture", async () => {
+    const config = createTestConfig({ projects: { '/Users/dev/link/myapp': 'my-name' } })
+    mockReadConfig.mockReturnValue(config)
+    mockGetRepoContext.mockReturnValue({ repoName: 'my-name', branch: 'main', root: '/Users/dev/myapp', remote: null })
+    mockGetRecentSessionsForRepo.mockReturnValue([])
+
+    await makeProgram().parseAsync(['context'], { from: 'user' })
+
+    expect(mockGetRepoContext).toHaveBeenCalledWith('/Users/dev/link/myapp', config)
   })
 })

@@ -33,6 +33,8 @@ workscribe config set session.idleTimeout 20
 workscribe config set git.qualifyRepoName true
 ```
 
+The setting applies to activity captured from then on — events already stored keep their name. So a day that mixes both forms can show the repo twice in `workscribe summary`. `workscribe context` finds the repo under either form, matching the other form only for activity inside the repo's own folder, so a same-named repo from another owner never shows up.
+
 ---
 
 ## Capture

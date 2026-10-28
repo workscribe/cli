@@ -1,7 +1,7 @@
 import fs from 'fs'
 import { insertEvent, getLastEvent, getLastEventForFile, getLastEventForCwd } from '../db'
 import { redact } from './redact'
-import { getGitContext } from './git'
+import { getRepoContext } from './git'
 import { getCommitsSince } from './git-snapshot'
 import { readLastAiderPrompt } from './aider'
 import { normalizeCommand } from '../normalize/patterns'
@@ -52,8 +52,7 @@ export function captureCommand(opts: {
     }
 
     const command = opts.command ?? opts.file ?? opts.type
-    const nameOverride = config.projects?.[cwd] ?? null
-    const { repoName, branch } = getGitContext(cwd, nameOverride, config.git.qualifyRepoName)
+    const { repoName, branch } = getRepoContext(cwd, config)
 
     insertEvent({
       captured_at: new Date().toISOString(),
@@ -84,9 +83,8 @@ export function captureCommand(opts: {
   // 3. Redact sensitive patterns
   const safeCommand = redact(command, config.redact.extra)
 
-  // 4. Extract git context (with optional per-project name override)
-  const nameOverride = config.projects?.[cwd] ?? null
-  const { repoName, branch } = getGitContext(cwd, nameOverride)
+  // 4. Extract git context — named exactly as the IDE path, notes and `context` name it
+  const { repoName, branch } = getRepoContext(cwd, config)
 
   // 5. Normalize to typed event
   const { category, metadata } = normalizeCommand(safeCommand)

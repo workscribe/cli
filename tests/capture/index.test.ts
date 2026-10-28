@@ -20,7 +20,7 @@ vi.mock('../../src/capture/filter', () => ({
 
 vi.mock('../../src/capture/redact', () => ({ redact: vi.fn() }))
 
-vi.mock('../../src/capture/git', () => ({ getGitContext: vi.fn() }))
+vi.mock('../../src/capture/git', () => ({ getRepoContext: vi.fn() }))
 
 vi.mock('../../src/capture/git-snapshot', () => ({ getCommitsSince: vi.fn() }))
 
@@ -42,7 +42,7 @@ import { readConfig } from '../../src/config'
 import { normalizeCommand } from '../../src/normalize/patterns'
 import { shouldFilter, isDuplicate } from '../../src/capture/filter'
 import { redact } from '../../src/capture/redact'
-import { getGitContext } from '../../src/capture/git'
+import { getRepoContext } from '../../src/capture/git'
 import { readLastAiderPrompt } from '../../src/capture/aider'
 import { captureCommand } from '../../src/capture'
 
@@ -53,7 +53,7 @@ const mockNormalize = normalizeCommand as ReturnType<typeof vi.fn>
 const mockShouldFilter = shouldFilter as ReturnType<typeof vi.fn>
 const mockIsDuplicate = isDuplicate as ReturnType<typeof vi.fn>
 const mockRedact = redact as ReturnType<typeof vi.fn>
-const mockGetGitContext = getGitContext as ReturnType<typeof vi.fn>
+const mockGetRepoContext = getRepoContext as ReturnType<typeof vi.fn>
 const mockGetLastEvent = getLastEvent as ReturnType<typeof vi.fn>
 const mockGetLastEventForCwd = getLastEventForCwd as ReturnType<typeof vi.fn>
 const mockReadLastAiderPrompt = readLastAiderPrompt as ReturnType<typeof vi.fn>
@@ -73,7 +73,7 @@ beforeEach(() => {
   mockGetLastEvent.mockReturnValue(undefined)
   mockGetLastEventForCwd.mockReturnValue(undefined)
   mockRedact.mockImplementation((cmd: string) => cmd)
-  mockGetGitContext.mockReturnValue({ repoName: 'myapp', branch: 'main' })
+  mockGetRepoContext.mockReturnValue({ repoName: 'myapp', branch: 'main', root: '/repo', remote: null })
   mockNormalize.mockReturnValue({ category: 'shipping', metadata: {} })
   mockReadLastAiderPrompt.mockReturnValue(null)
 })
@@ -221,5 +221,29 @@ describe('captureCommand — task_run cross-source dedup', () => {
     })
     captureCommand({ cwd: '/repo', exitCode: null, durationMs: null, type: 'debug_start', source: 'vscode' })
     expect(mockInsertEvent).toHaveBeenCalledOnce()
+  })
+})
+
+// WOR-118: the shell path once skipped git.qualifyRepoName, so shell and IDE events for one repo got different names
+describe('captureCommand — repo naming', () => {
+  const QUALIFIED_CONFIG = { ...BASE_CONFIG, git: { qualifyRepoName: true }, projects: { '/repo': 'my-name' } }
+
+  beforeEach(() => {
+    mockReadConfig.mockReturnValue(QUALIFIED_CONFIG)
+    mockGetRepoContext.mockReturnValue({ repoName: 'acme/api', branch: 'main', root: '/repo', remote: null })
+  })
+
+  it('names shell (and AI-tool hook) events from the full config', () => {
+    captureCommand({ command: 'npm test', cwd: '/repo', exitCode: 0, durationMs: 10 })
+
+    expect(mockGetRepoContext).toHaveBeenCalledWith('/repo', QUALIFIED_CONFIG)
+    expect(mockInsertEvent).toHaveBeenCalledWith(expect.objectContaining({ repo_name: 'acme/api' }))
+  })
+
+  it('names IDE events from the same config, so both paths agree', () => {
+    captureCommand({ cwd: '/repo', exitCode: null, durationMs: null, type: 'task_run', source: 'vscode' })
+
+    expect(mockGetRepoContext).toHaveBeenCalledWith('/repo', QUALIFIED_CONFIG)
+    expect(mockInsertEvent).toHaveBeenCalledWith(expect.objectContaining({ repo_name: 'acme/api' }))
   })
 })
