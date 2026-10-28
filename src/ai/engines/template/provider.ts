@@ -5,7 +5,7 @@ import { pluralize, toBulletList } from './utils'
 import type { AIProvider, DaySummaryPayload, SessionPayload, WeekSummaryPayload } from '../../types'
 
 /** One entry per location for the day — several sessions in the same repo read as one block of work. */
-function mergeByLocation(sessions: SessionPayload[]): SessionPayload[] {
+export function mergeByLocation(sessions: SessionPayload[]): SessionPayload[] {
   const merged = new Map<string, SessionPayload>()
   for (const session of sessions) {
     const location = session.project ?? UNKNOWN_LOCATION
@@ -16,6 +16,7 @@ function mergeByLocation(sessions: SessionPayload[]): SessionPayload[] {
         ? {
             ...existing,
             events: [...existing.events, ...session.events],
+            branches: [...new Set([...existing.branches, ...session.branches])],
             durationMinutes: existing.durationMinutes + session.durationMinutes,
           }
         : { ...session, project: location }

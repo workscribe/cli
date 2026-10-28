@@ -16,6 +16,8 @@ export interface EventJson {
 export interface CommitJson {
   hash: string | null
   subject: string
+  /** When it was made: git's committer date, or when Workscribe captured the `git commit`; null for an AI session's commits */
+  committedAt: string | null
   source: 'git' | 'captured'
 }
 
@@ -26,6 +28,8 @@ export interface SessionJson {
   repoPath: string | null
   cwd: string | null
   branch: string | null
+  /** Every branch the session touched, in the order first seen */
+  branches: string[]
   startedAt: string
   endedAt: string
   durationMinutes: number

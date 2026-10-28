@@ -75,7 +75,7 @@ describe('getCommitsInWindow', () => {
         'log',
         '--since=2026-10-25T08:58:00.000Z',
         '--until=2026-10-25T10:01:00.000Z',
-        '--format=%h%x09%ce%x09%s',
+        '--format=%h%x09%ce%x09%cI%x09%s',
         '--reverse',
       ],
       expect.objectContaining({ cwd: '/Users/dev/api' })
@@ -84,28 +84,40 @@ describe('getCommitsInWindow', () => {
 
   it('keeps only commits by the author, matching email case-insensitively', () => {
     gitOutput(
-      'a1b2c3d\tdev@example.com\tfix: token validation\n' +
-        'e4f5a6b\tteammate@example.com\tunrelated change\n' +
+      'a1b2c3d\tdev@example.com\t2026-10-25T09:15:00+01:00\tfix: token validation\n' +
+        'e4f5a6b\tteammate@example.com\t2026-10-25T09:15:00+01:00\tunrelated change\n' +
         '\n' +
-        'c7d8e9f\tDEV@example.com\tadd refresh endpoint\n'
+        'c7d8e9f\tDEV@example.com\t2026-10-25T09:40:00+01:00\tadd refresh endpoint\n'
     )
 
     expect(getCommitsInWindow(WINDOW)).toEqual([
-      { hash: 'a1b2c3d', subject: 'fix: token validation' },
-      { hash: 'c7d8e9f', subject: 'add refresh endpoint' },
+      { hash: 'a1b2c3d', subject: 'fix: token validation', committedAt: '2026-10-25T09:15:00+01:00' },
+      { hash: 'c7d8e9f', subject: 'add refresh endpoint', committedAt: '2026-10-25T09:40:00+01:00' },
     ])
   })
 
   it('keeps every commit when there is no author to filter by', () => {
-    gitOutput('a1b2c3d\tdev@example.com\tone\ne4f5a6b\tteammate@example.com\ttwo\n')
+    gitOutput(
+      'a1b2c3d\tdev@example.com\t2026-10-25T09:15:00+01:00\tone\ne4f5a6b\tteammate@example.com\t2026-10-25T09:15:00+01:00\ttwo\n'
+    )
 
     expect(getCommitsInWindow({ ...WINDOW, author: null })).toHaveLength(2)
   })
 
   it('keeps tabs inside a subject', () => {
-    gitOutput('a1b2c3d\tdev@example.com\tsubject\twith tab\n')
+    gitOutput('a1b2c3d\tdev@example.com\t2026-10-25T09:15:00+01:00\tsubject\twith tab\n')
 
-    expect(getCommitsInWindow(WINDOW)).toEqual([{ hash: 'a1b2c3d', subject: 'subject\twith tab' }])
+    expect(getCommitsInWindow(WINDOW)).toEqual([
+      { hash: 'a1b2c3d', subject: 'subject\twith tab', committedAt: '2026-10-25T09:15:00+01:00' },
+    ])
+  })
+
+  it('skips a line with no commit time, rather than reading the subject as one', () => {
+    gitOutput('a1b2c3d\tdev@example.com\t\tno date\nc7d8e9f\tdev@example.com\t2026-10-25T09:40:00+01:00\tdated\n')
+
+    expect(getCommitsInWindow(WINDOW)).toEqual([
+      { hash: 'c7d8e9f', subject: 'dated', committedAt: '2026-10-25T09:40:00+01:00' },
+    ])
   })
 
   it('returns nothing when git fails', () => {

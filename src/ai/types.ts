@@ -6,12 +6,17 @@ export interface EventPayload {
   source?: string
   exitCode: number | null
   durationMs: number | null
+  /** The branch the event happened on (read just after the command ran), or null outside a repo */
+  branch: string | null
+  capturedAt: string
 }
 
 export interface SessionPayload {
   date: string
   project: string | null
   branch: string | null
+  /** Every branch the session touched, in the order first seen — a session can span several */
+  branches: string[]
   startTime: string
   endTime: string
   durationMinutes: number

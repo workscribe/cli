@@ -347,7 +347,8 @@ Session = {
   repoName: string | null
   repoPath: string | null  // git toplevel; null outside a git repo
   cwd: string | null       // directory most commands ran in
-  branch: string | null
+  branch: string | null    // the branch of the session's first event
+  branches: string[]       // every branch the session touched, in the order first seen
   startedAt: string        // ISO 8601
   endedAt: string
   durationMinutes: number
@@ -357,7 +358,12 @@ Session = {
   events: Event[]
 }
 
-Commit = { hash: string | null, subject: string, source: "git" | "captured" }
+Commit = {
+  hash: string | null
+  subject: string
+  committedAt: string | null  // ISO 8601; null for commits an AI-tool session recorded
+  source: "git" | "captured"
+}
 
 // workscribe events --json
 { schemaVersion: 1, date: string, total: number, events: Event[] }
@@ -381,6 +387,7 @@ Event = {
 **Commits** combine two sources, git commits first (oldest first), then captured-only ones:
 
 - `git` — commits found with `git log` in the session's repo from two minutes before its start (covering commit hooks) to a minute after its end, limited to commits *committed* by your `user.email` when one is configured (so cherry-picks you made count). Matched on committer date, so a commit rebased or amended later may fall outside the window, and only commits reachable from `HEAD` are seen; after a rebase leaves commit dates out of order, `git log` can stop early and miss a few. Two commits with the same subject are both listed. Because of the grace period, a commit right at the boundary between two nearby sessions in the same repo can appear in both.
+- `committedAt` — for a `git` commit, its committer date from git; for a `captured` one, when Workscribe recorded the `git commit` finishing. An AI-tool session records which commits reached `HEAD` but not when, so those are `null`.
 - `captured` — commit messages Workscribe recorded itself (`git commit -m`, AI-tool sessions) that git didn't return, with `hash: null`. A `git commit` that failed (rejected by a hook, nothing staged) is not listed, and neither is a subject that recent history shows was committed only by someone else (an AI session records every commit that reaches `HEAD`, including ones it pulled in).
 
 If git isn't installed, the session isn't in a repo, or git times out, `commits` falls back to the captured ones — the command never fails because of git.
@@ -434,7 +441,7 @@ It finds today's work too, without running `workscribe summary` first: if the da
     "lastSavedAt": "2026-08-20T11:40:00.000Z",
     "saveCount": 6,                          // saves recorded: one per file per 30 seconds at most
     "branch": "feature/auth",
-    "commits": [{ "hash": "a1b2c3d", "subject": "add auth middleware" }], // your commits in the session that changed it
+    "commits": [{ "hash": "a1b2c3d", "subject": "add auth middleware", "committedAt": "2026-10-25T09:20:00+01:00" }], // your commits in the session that changed it
     "editedAlongside": { "files": ["src/routes.ts"], "total": 1 }         // up to 5 other files saved in the session
   }
 }

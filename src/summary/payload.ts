@@ -40,6 +40,8 @@ export function eventRowToPayload(row: EventRow): EventPayload {
     metadata,
     exitCode: row.exit_code,
     durationMs: row.duration_ms,
+    branch: row.branch,
+    capturedAt: row.captured_at,
     ...(row.source ? { source: row.source } : {}),
   }
   if (row.category !== 'other' || typeof metadata.hint !== 'string') return payload
@@ -47,6 +49,11 @@ export function eventRowToPayload(row: EventRow): EventPayload {
   // Unclassified commands carry their raw hint separately so the prompt can show it on its own
   const { hint, tool: _tool, ...rest } = metadata
   return { ...payload, hint, metadata: rest }
+}
+
+/** The branches a session's events happened on: distinct, in the order first seen, events outside a repo skipped. */
+export function branchesOf(events: Pick<EventRow, 'branch'>[]): string[] {
+  return [...new Set(events.map((event) => event.branch).filter((branch): branch is string => branch !== null))]
 }
 
 function mostFrequentCwdOf(events: EventRow[]): string | null {
@@ -100,6 +107,7 @@ export function sessionToPayload(
     date,
     project: sessionLocation(session, context),
     branch: session.events[0]?.branch ?? null,
+    branches: branchesOf(session.events),
     startTime: formatDate(session.startedAt),
     endTime: formatDate(session.endedAt),
     durationMinutes: session.durationMinutes,

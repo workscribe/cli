@@ -169,7 +169,9 @@ describe('workscribe sessions --json', () => {
     vi.mocked(readConfig).mockReturnValue(createTestConfig())
     vi.mocked(getRepoRoot).mockReturnValue('/Users/dev/myapp')
     vi.mocked(getUserEmail).mockReturnValue('dev@example.com')
-    vi.mocked(getCommitsInWindow).mockReturnValue([{ hash: 'a1b2c3d', subject: 'fix: login redirect' }])
+    vi.mocked(getCommitsInWindow).mockReturnValue([
+      { hash: 'a1b2c3d', subject: 'fix: login redirect', committedAt: '2026-10-25T09:20:00+01:00' },
+    ])
     vi.mocked(getOthersSubjects).mockReturnValue([])
   })
 
@@ -184,7 +186,9 @@ describe('workscribe sessions --json', () => {
     expect(json.sessions[0]).toMatchObject({
       key: 'myapp|2026-05-28T09:00:00Z',
       repoPath: '/Users/dev/myapp',
-      commits: [{ hash: 'a1b2c3d', subject: 'fix: login redirect', source: 'git' }],
+      commits: [
+        { hash: 'a1b2c3d', subject: 'fix: login redirect', committedAt: '2026-10-25T09:20:00+01:00', source: 'git' },
+      ],
     })
     expect(getCommitsInWindow).toHaveBeenCalledWith({
       repoRoot: '/Users/dev/myapp',

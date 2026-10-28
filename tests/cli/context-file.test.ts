@@ -83,7 +83,10 @@ describe('getFileDetails — a repo opened through a symlink', () => {
     const linkedFile = path.join(base, 'link', 'api', 'README.md')
     const linkedOther = path.join(base, 'link', 'api', 'src', 'a.ts')
 
-    vi.mocked(getFileCommits).mockReturnValue({ repoRoot: realRoot, commits: [{ hash: 'a1b2c3d', subject: 'docs' }] })
+    vi.mocked(getFileCommits).mockReturnValue({
+      repoRoot: realRoot,
+      commits: [{ hash: 'a1b2c3d', subject: 'docs', committedAt: '2026-10-25T09:20:00+01:00' }],
+    })
     const saveOf = (filePath: string, capturedAt: string) => ({
       id: 1,
       captured_at: capturedAt,
@@ -114,7 +117,7 @@ describe('getFileDetails — a repo opened through a symlink', () => {
     expect(details).toMatchObject({
       path: linkedFile,
       relativePath: 'README.md',
-      commits: [{ hash: 'a1b2c3d', subject: 'docs' }],
+      commits: [{ hash: 'a1b2c3d', subject: 'docs', committedAt: '2026-10-25T09:20:00+01:00' }],
       editedAlongside: { files: [path.join('src', 'a.ts')], total: 1 },
     })
   })
