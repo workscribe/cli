@@ -1,32 +1,36 @@
 import { describe, it, expect } from 'vitest'
 import { TemplateProvider, mergeByLocation } from '../../../../src/ai/engines/template/provider'
-import { event, session } from './fixtures'
+import { commit, event, session } from './fixtures'
 
 describe('TemplateProvider.summarize', () => {
-  it('returns a bullet list for a single session', async () => {
-    const payload = { date: '2026-10-20', sessions: [session([event('shipping', { message: 'fix: token' })])] }
+  it("tells a single session's story under its heading", async () => {
+    const payload = { date: '2026-10-20', sessions: [session([event('testing')], { commits: [commit('fix: token')] })] }
 
-    expect(await new TemplateProvider().summarize(payload)).toBe('- Committed: fix: token')
+    expect(await new TemplateProvider().summarize(payload)).toBe(
+      '## api-service (feature/auth) — 2h\n- Committed: fix: token\n- Tests passing'
+    )
   })
 
   it('gives each session its own heading when summarizing a whole day', async () => {
     const payload = {
       date: '2026-10-20',
       sessions: [
-        session([event('shipping', { message: 'fix: token' })]),
-        session([event('testing', {}, 0)], { project: 'web', branch: null, durationMinutes: 30 }),
+        session([event('testing')], { commits: [commit('fix: token')] }),
+        session([event('testing', {}, 0)], { project: 'web', branch: null, branches: [], durationMinutes: 30 }),
       ],
     }
 
     expect(await new TemplateProvider().summarize(payload)).toBe(
-      '## api-service (feature/auth) — 2h\n- Committed: fix: token\n\n## web — 30m\n- Tests passing (1 run)'
+      '## api-service (feature/auth) — 2h\n- Committed: fix: token\n- Tests passing\n\n## web — 30m\n- Tests passing'
     )
   })
 
   it('passes includeCategories through', async () => {
     const payload = { date: '2026-10-20', sessions: [session([event('linting', {}, 0)])] }
 
-    expect(await new TemplateProvider(['linting']).summarize(payload)).toBe('- Worked in api-service (1 command)')
+    expect(await new TemplateProvider(['linting']).summarize(payload)).toBe(
+      '## api-service (feature/auth) — 2h\n- Explored and ran commands'
+    )
   })
 
   it('validates without doing anything', async () => {

@@ -1,6 +1,8 @@
 import type { OutcomeWording } from './types'
 
 export const MAX_SESSION_BULLETS = 7
+// A story shows every branch's first bullet; past this many branches, the rest are named in one line
+export const MAX_STORY_BRANCHES = 6
 export const MAX_COMMIT_BULLETS = 3
 export const MAX_DAY_BULLETS = 5
 export const MAX_LISTED_PACKAGES = 6
@@ -23,4 +25,18 @@ export const BUILD_WORDING: OutcomeWording = {
   passing: 'Builds passing',
   failing: 'Build still failing',
   ran: 'Ran builds',
+}
+
+// A day's story says how runs turned out, not how many there were (the week digest above still counts them)
+export const STORY_TEST_WORDING: OutcomeWording = {
+  ...TEST_WORDING,
+  resolved: 'Tests now passing',
+  failing: 'Tests failing',
+}
+
+export const STORY_BUILD_WORDING: OutcomeWording = {
+  ...BUILD_WORDING,
+  resolved: 'Build now passing',
+  passing: 'Build passing',
+  failing: 'Build failing',
 }

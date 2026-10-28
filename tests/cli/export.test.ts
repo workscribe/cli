@@ -106,7 +106,7 @@ describe('workscribe export', () => {
       expect(mockFs.writeFileSync).toHaveBeenCalledOnce()
     })
 
-    it('exports offline with the template engine', async () => {
+    it('exports offline with the template engine, every session under its heading', async () => {
       mockGetOrBuildSessions.mockReturnValue([
         { ...SAMPLE_SESSIONS[0], events: [{ ...SAMPLE_SESSIONS[0].events[0], metadata: '{"message":"fix: login"}' }] },
       ])
@@ -116,7 +116,7 @@ describe('workscribe export', () => {
 
       expect(mockFs.writeFileSync).toHaveBeenCalledWith(
         expect.any(String),
-        '# Work Summary — 2026-05-28\n\n- Committed: fix: login\n',
+        '# Work Summary — 2026-05-28\n\n## myapp (main) — 1h 30m\n- Committed: fix: login\n',
         expect.any(Object)
       )
     })

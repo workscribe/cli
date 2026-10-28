@@ -81,7 +81,7 @@ workscribe config set redact.extra '["MY_INTERNAL_TOKEN"]'
 | `summary.format` | `"markdown"` \| `"json"` | `"markdown"` | Output format for daily summaries |
 | `summary.includeCategories` | string[] | `[]` | Event categories to re-include in summaries (overrides built-in exclusions). Excluded by default: `exploring`, `linting`. Example: `["linting"]` to include lint pass/fail results. |
 
-Summaries come from Workscribe's offline template engine — up to 7 outcome bullets per session built from your captured activity (notes, commit messages, test and build results, dependencies, releases and pushes), and up to 5 bullets per day in weekly digests. There's no engine to choose: for AI-written summaries, use the agent skill. See [Summaries](/summaries).
+Summaries come from Workscribe's offline template engine. Each session is told branch by branch from your captured activity (notes, commits, test and build results, dependencies, releases and pushes), in up to 7 work bullets, and weekly digests have up to 5 bullets per day. There's no engine to choose: for AI-written summaries, use the agent skill. See [Summaries](/summaries).
 
 > **Removed in 2.0:** the `ai.*` keys (`ai.provider`, `ai.apiKey`, `ai.model`, `ai.baseUrl`) and `summary.engine`. `workscribe config set` refuses them, and `workscribe init` offers to delete them from an old config. See [Migrating to 2.0](/migrating-to-2).
 
@@ -98,14 +98,19 @@ In `json` mode, `workscribe summary` outputs structured data instead of markdown
       "branch": "feature/auth",
       "durationMinutes": 135,
       "bullets": [
-        "Added authentication dependencies (bcrypt, JWT)",
-        "Resolved failing auth tests",
-        "Committed and pushed authentication fixes"
+        "On main:",
+        "Committed: fix: token refresh race",
+        "Tests now passing",
+        "On feature/auth:",
+        "Added dependencies: bcrypt",
+        "With an AI coding assistant (126 commands)"
       ]
     }
   ]
 }
 ```
+
+`bullets` holds every line of the session's summary under its heading, the `On <branch>:` lines and the closing activity line included, and `branch` is the latest branch the session was on. For a structured view of each session (commits, events, every branch), use [`workscribe sessions --json`](/commands#json-output-contract).
 
 Weekly summaries (`--week`) always output markdown regardless of this setting.
 

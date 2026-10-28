@@ -1,9 +1,20 @@
 import { describe, it, expect } from 'vitest'
-import { collectCommits, describeOutcome, describeSession } from '../../../../src/ai/engines/template/describe'
+import {
+  collectCommits,
+  countIncludedEvents,
+  describeActivity,
+  describeOutcome,
+} from '../../../../src/ai/engines/template/describe'
 import { TEST_WORDING } from '../../../../src/ai/engines/template/constants'
 import { event, session } from './fixtures'
 
 describe('collectCommits', () => {
+  it('skips a git commit that failed, which made no commit', () => {
+    const events = [event('shipping', { message: 'rejected by hook' }, 1), event('shipping', { message: 'landed' })]
+
+    expect(collectCommits(events)).toEqual(['landed'])
+  })
+
   it('collects git commit messages and AI-session commits in order without repeats', () => {
     const events = [
       event('shipping', { message: 'fix: token validation' }),
@@ -49,7 +60,8 @@ describe('describeOutcome', () => {
   })
 })
 
-describe('describeSession', () => {
+// The week digest's bullets — a day's own summary tells the story instead (story.test.ts)
+describe('describeActivity', () => {
   it('orders bullets notes, commits, tests, builds, dependencies, releases, pushes, edits', () => {
     const events = [
       event('code_edit'),
@@ -62,7 +74,7 @@ describe('describeSession', () => {
       event('note', { text: 'blocked on staging creds' }),
     ]
 
-    expect(describeSession(session(events))).toEqual([
+    expect(describeActivity(session(events))).toEqual([
       'Note: blocked on staging creds',
       'Committed: fix: token validation',
       'Tests passing (1 run)',
@@ -76,13 +88,13 @@ describe('describeSession', () => {
   it('caps a session at 7 bullets', () => {
     const notes = Array.from({ length: 9 }, (_unused, index) => event('note', { text: `note ${index}` }))
 
-    expect(describeSession(session(notes))).toHaveLength(7)
+    expect(describeActivity(session(notes))).toHaveLength(7)
   })
 
   it('folds commits beyond the third into the third bullet', () => {
     const commits = ['one', 'two', 'three', 'four', 'five'].map((message) => event('shipping', { message }))
 
-    expect(describeSession(session([...commits, event('testing', {}, 0)]))).toEqual([
+    expect(describeActivity(session([...commits, event('testing', {}, 0)]))).toEqual([
       'Committed: one',
       'Committed: two',
       'Committed: three, plus 2 more changes',
@@ -96,13 +108,13 @@ describe('describeSession', () => {
       event('dependencies', { tool: 'npm', packages: ['lodash'], action: 'remove' }),
     ]
 
-    expect(describeSession(session(events))).toEqual(['Added dependencies: zod', 'Removed dependencies: lodash'])
+    expect(describeActivity(session(events))).toEqual(['Added dependencies: zod', 'Removed dependencies: lodash'])
   })
 
   it('lists at most six packages', () => {
     const packages = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
 
-    expect(describeSession(session([event('dependencies', { packages })]))).toEqual([
+    expect(describeActivity(session([event('dependencies', { packages })]))).toEqual([
       'Added dependencies: a, b, c, d, e, f, plus 2 more',
     ])
   })
@@ -110,19 +122,20 @@ describe('describeSession', () => {
   it('skips categories excluded by default but keeps notes', () => {
     const events = [event('linting', {}, 1), event('exploring', { tool: 'grep' }), event('note', { text: 'kept' })]
 
-    expect(describeSession(session(events))).toEqual(['Note: kept'])
+    expect(describeActivity(session(events))).toEqual(['Note: kept'])
   })
 
-  it('includes a default-excluded category when includeCategories opts in', () => {
+  it('counts a default-excluded category when includeCategories opts in', () => {
     const events = [event('linting', {}, 1), event('linting', {}, 0)]
 
-    expect(describeSession(session(events), ['linting'])).toEqual(['Worked in api-service (2 commands)'])
+    expect(countIncludedEvents(session(events))).toBe(0)
+    expect(countIncludedEvents(session(events), ['linting'])).toBe(2)
   })
 
-  it('falls back to where the work happened when nothing else applies', () => {
+  it('is empty when nothing notable happened', () => {
     const events = [event('other', { target: 'deploy' }), event('versioning', { subcommand: 'status' })]
 
-    expect(describeSession(session(events, { project: '~/scripts' }))).toEqual(['Worked in ~/scripts (2 commands)'])
+    expect(describeActivity(session(events))).toEqual([])
   })
 
   it('never names the AI tool or prints raw hints', () => {
@@ -130,7 +143,7 @@ describe('describeSession', () => {
       { ...event('other', {}), hint: 'curl -H "Authorization: secret" https://example.com' },
       event('ai_session', { tool: 'claude', commits: ['add refresh endpoint'] }),
     ]
-    const output = describeSession(session(events)).join('\n')
+    const output = describeActivity(session(events)).join('\n')
 
     expect(output).not.toContain('claude')
     expect(output).not.toContain('curl')
@@ -140,11 +153,11 @@ describe('describeSession', () => {
   it('is deterministic', () => {
     const events = [event('testing', {}, 1), event('testing', {}, 0), event('shipping', { message: 'fix' })]
 
-    expect(describeSession(session(events))).toEqual(describeSession(session(events)))
+    expect(describeActivity(session(events))).toEqual(describeActivity(session(events)))
   })
 })
 
-describe('describeSession — work a coding agent did', () => {
+describe('describeActivity — work a coding agent did', () => {
   const byAgent = (category: string, metadata: Record<string, unknown> = {}, exitCode: number | null = 0) => ({
     ...event(category, metadata, exitCode),
     source: 'claude-code',
@@ -153,13 +166,13 @@ describe('describeSession — work a coding agent did', () => {
   it('counts every command the agent ran, including ones the summary leaves out', () => {
     const events = [byAgent('testing'), byAgent('exploring', { tool: 'grep' }), byAgent('other'), event('testing')]
 
-    expect(describeSession(session(events))).toContain('Worked with an AI coding assistant (3 commands)')
+    expect(describeActivity(session(events))).toContain('Worked with an AI coding assistant (3 commands)')
   })
 
   it('sits after pushes and before IDE edits', () => {
     const events = [event('shipping', { remote: 'origin', branch: 'main' }), byAgent('testing'), event('code_edit')]
 
-    expect(describeSession(session(events))).toEqual([
+    expect(describeActivity(session(events))).toEqual([
       'Tests passing (1 run)',
       'Pushed to origin/main',
       'Worked with an AI coding assistant (1 command)',
@@ -167,10 +180,10 @@ describe('describeSession — work a coding agent did', () => {
     ])
   })
 
-  it('replaces the "Worked in" fallback when the agent only explored', () => {
+  it('is the only bullet when the agent only explored', () => {
     const events = [byAgent('exploring', { tool: 'cat' }), byAgent('other')]
 
-    expect(describeSession(session(events, { project: 'api' }))).toEqual([
+    expect(describeActivity(session(events, { project: 'api' }))).toEqual([
       'Worked with an AI coding assistant (2 commands)',
     ])
   })
@@ -187,11 +200,11 @@ describe('describeSession — work a coding agent did', () => {
       event('shipping', { remote: 'origin', branch: 'main' }),
     ]
 
-    expect(describeSession(session(events))).toHaveLength(7)
+    expect(describeActivity(session(events))).toHaveLength(7)
   })
 
   it('says nothing about an agent when none ran commands', () => {
-    expect(describeSession(session([event('testing')])).join('\n')).not.toContain('AI coding assistant')
+    expect(describeActivity(session([event('testing')])).join('\n')).not.toContain('AI coding assistant')
   })
 
   it('never names the tool or prints the commands the agent ran', () => {
@@ -200,7 +213,7 @@ describe('describeSession — work a coding agent did', () => {
       byAgent('ai_session', { tool: 'claude' }),
       byAgent('testing', { tool: 'nx', target: 'test' }),
     ]
-    const output = describeSession(session(events)).join('\n')
+    const output = describeActivity(session(events)).join('\n')
 
     expect(output).not.toMatch(/claude|pnpm|nx test|tail/i)
   })

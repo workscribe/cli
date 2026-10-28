@@ -1,10 +1,13 @@
 import os from 'os'
 import path from 'path'
 import { formatDate } from '../utils/format'
+import { parseMetadata } from './event-metadata'
+import { storyCommitsOf } from './story-commits'
 import type { DaySummaryPayload, EventPayload, SessionPayload } from '../ai/types'
 import type { EventRow } from '../db/types'
 import type { Session } from '../sessions/detector'
 import type { WorkscribeConfig } from '../config'
+import type { GitCommit } from './git-commits'
 
 /** What sessionLocation needs to name a session that isn't in a git repo. */
 export interface LocationContext {
@@ -17,21 +20,6 @@ export function locationContextFrom(config: Pick<WorkscribeConfig, 'projects'>):
 }
 
 const DEFAULT_LOCATION_CONTEXT: LocationContext = { projects: {}, homeDir: os.homedir() }
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
-// Metadata is best-effort context for the summary — a corrupt or non-object row must not fail it
-function parseMetadata(raw: string | null): Record<string, unknown> {
-  if (!raw) return {}
-  try {
-    const parsed: unknown = JSON.parse(raw)
-    return isPlainObject(parsed) ? parsed : {}
-  } catch {
-    return {}
-  }
-}
 
 export function eventRowToPayload(row: EventRow): EventPayload {
   const metadata = parseMetadata(row.metadata)
@@ -51,9 +39,18 @@ export function eventRowToPayload(row: EventRow): EventPayload {
   return { ...payload, hint, metadata: rest }
 }
 
+function branchesOnly(events: Pick<EventRow, 'branch'>[]): string[] {
+  return events.map((event) => event.branch).filter((branch): branch is string => branch !== null)
+}
+
 /** The branches a session's events happened on: distinct, in the order first seen, events outside a repo skipped. */
 export function branchesOf(events: Pick<EventRow, 'branch'>[]): string[] {
-  return [...new Set(events.map((event) => event.branch).filter((branch): branch is string => branch !== null))]
+  return [...new Set(branchesOnly(events))]
+}
+
+/** The session's branch: the latest it was on — where the work was heading by the end. Null outside a repo. */
+export function sessionBranch(events: Pick<EventRow, 'branch'>[]): string | null {
+  return branchesOnly(events).at(-1) ?? null
 }
 
 function mostFrequentCwdOf(events: EventRow[]): string | null {
@@ -98,20 +95,28 @@ export function sessionLocation(session: Session, context: LocationContext = DEF
   return context.projects[cwd] ?? homeRelative(cwd, context.homeDir)
 }
 
+export interface SessionPayloadOptions {
+  /** How to name a session outside git */
+  context?: LocationContext
+  /** The session's commits from `git log`, or null when git wasn't asked — captured ones are always used */
+  gitCommits?: GitCommit[] | null
+}
+
 export function sessionToPayload(
   session: Session,
   date: string,
-  context: LocationContext = DEFAULT_LOCATION_CONTEXT
+  { context = DEFAULT_LOCATION_CONTEXT, gitCommits = null }: SessionPayloadOptions = {}
 ): SessionPayload {
   return {
     date,
     project: sessionLocation(session, context),
-    branch: session.events[0]?.branch ?? null,
+    branch: sessionBranch(session.events),
     branches: branchesOf(session.events),
     startTime: formatDate(session.startedAt),
     endTime: formatDate(session.endedAt),
     durationMinutes: session.durationMinutes,
     events: session.events.map(eventRowToPayload),
+    commits: storyCommitsOf(session.events, gitCommits),
   }
 }
 
@@ -120,5 +125,5 @@ export function buildDayPayload(
   sessions: Session[],
   context: LocationContext = DEFAULT_LOCATION_CONTEXT
 ): DaySummaryPayload {
-  return { date, sessions: sessions.map((session) => sessionToPayload(session, date, context)) }
+  return { date, sessions: sessions.map((session) => sessionToPayload(session, date, { context })) }
 }

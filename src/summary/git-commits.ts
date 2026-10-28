@@ -5,8 +5,8 @@ const GIT_TIMEOUT_MS = 3000
 // Commands are captured when they finish, so a `git commit` that opens a session is stamped after
 // its committer time — by however long the commit hooks ran. A commit closing a session can land
 // just after its event.
-const WINDOW_LEAD_MS = 120_000
-const WINDOW_TRAIL_MS = 60_000
+export const WINDOW_LEAD_MS = 120_000
+export const WINDOW_TRAIL_MS = 60_000
 // How far back to look when checking who made a captured commit (pulled commits can be old)
 const AUTHORSHIP_HISTORY_DEPTH = 500
 
@@ -27,6 +27,8 @@ interface CommitWindow {
   filePath?: string
   /** This call's git timeout (default GIT_TIMEOUT_MS) — `getFileCommits` passes what's left of its budget */
   timeoutMs?: number
+  /** Look on every local branch, not just HEAD — a commit made on `feat/x` still counts after you're back on `main` */
+  allBranches?: boolean
 }
 
 /**
@@ -82,7 +84,20 @@ export function getOthersSubjects(repoRoot: string, author: string | null): stri
  * that leaves dates out of order a few in-window commits can be missed. Captured commit messages
  * cover what this misses.
  */
-export function getCommitsInWindow({ repoRoot, since, until, author, filePath, timeoutMs }: CommitWindow): GitCommit[] {
+export function getCommitsInWindow(window: CommitWindow): GitCommit[] {
+  return findCommitsInWindow(window) ?? []
+}
+
+/** Like `getCommitsInWindow`, but null when git couldn't answer (missing, not a repo, timed out), not just found none. */
+export function findCommitsInWindow({
+  repoRoot,
+  since,
+  until,
+  author,
+  filePath,
+  timeoutMs,
+  allBranches = false,
+}: CommitWindow): GitCommit[] | null {
   const shiftedBy = (iso: string, milliseconds: number): string =>
     new Date(new Date(iso).getTime() + milliseconds).toISOString()
   const output = runGit(
@@ -93,11 +108,13 @@ export function getCommitsInWindow({ repoRoot, since, until, author, filePath, t
       `--until=${shiftedBy(until, WINDOW_TRAIL_MS)}`,
       '--format=%h%x09%ce%x09%cI%x09%s',
       '--reverse',
+      ...(allBranches ? ['--branches'] : []),
       ...(filePath ? ['--', filePath] : []),
     ],
     timeoutMs
   )
-  if (!output) return []
+  if (output === null) return null
+  if (output === '') return []
 
   const wantedAuthor = author?.toLowerCase() ?? null
   return output.split('\n').flatMap((line) => {

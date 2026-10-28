@@ -8,12 +8,13 @@ import { todayDate, parseDate } from '../utils/format'
 import type { AIProvider, DaySummaryPayload, SessionPayload } from '../ai/types'
 import { buildExcludedSet, countExcludedEvents } from '../summary/exclusions'
 import { sessionToPayload, locationContextFrom } from '../summary/payload'
-import { formatSessionHeading, formatSessionLabel } from '../summary/heading'
+import { formatSessionLabel } from '../summary/heading'
 import { sessionKey, pickSavedSummary, type SavedSummary } from '../summary/store'
 import { createSummaryWriter } from '../summary/writer'
 import { printLegacyAiNotice } from './notices'
 import { postSummary } from '../summary/webhook'
 import { runWeeklySummary } from '../summary/weekly'
+import { DAY_GIT_BUDGET_MS, lookupDayCommits } from '../summary/day-commits'
 
 interface SessionSummaryJson {
   project: string | null
@@ -76,8 +77,8 @@ async function generateSessionSummary(input: {
 }): Promise<string> {
   const daySummaryPayload: DaySummaryPayload = { date: input.date, sessions: [input.sessionPayload] }
   try {
-    const bullets = (await input.provider.summarize(daySummaryPayload)).trim()
-    return `${formatSessionHeading(input.sessionPayload)}\n${bullets}`
+    // The writer returns the session's finished story, heading included
+    return (await input.provider.summarize(daySummaryPayload)).trim()
   } catch (error) {
     log.error(`Summary failed: ${(error as Error).message}`)
     process.exit(1)
@@ -140,13 +141,20 @@ export function registerSummary(program: Command): void {
         return
       }
 
-      const sessionPayloads = sessions.map((session) => sessionToPayload(session, date, locationContextFrom(config)))
       const keys = sessions.map((session) => sessionKey(session.repoName, session.startedAt))
       const jsonMode = config.summary?.format === 'json'
 
       // A summary the agent skill (or a 1.x AI provider) saved — `--fresh` ignores both and renders the template
       const saved = keys.map((key) => (options.fresh ? null : pickSavedSummary(getSessionSummaries(key))))
       const needsGeneration = saved.some((entry) => entry === null)
+      // git is only asked about the sessions the template tells, within one budget for the run
+      const toRender = sessions.filter((_session, index) => saved[index] === null)
+      const commitsToRender = lookupDayCommits(toRender, { budgetMs: DAY_GIT_BUDGET_MS })
+      const gitCommitsBySession = new Map(toRender.map((session, index) => [session, commitsToRender[index]]))
+      const context = locationContextFrom(config)
+      const sessionPayloads = sessions.map((session) =>
+        sessionToPayload(session, date, { context, gitCommits: gitCommitsBySession.get(session) ?? null })
+      )
       const excluded = buildExcludedSet(config.summary?.includeCategories ?? [])
       if (needsGeneration && options.verbose) {
         if (jsonMode) log.notice('--verbose is skipped when summary.format is json, to keep the JSON output clean')

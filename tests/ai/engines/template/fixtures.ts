@@ -1,4 +1,5 @@
 import type { EventPayload, SessionPayload } from '../../../../src/ai/types'
+import type { StoryCommit } from '../../../../src/summary/story-commits'
 
 export function event(
   category: string,
@@ -25,6 +26,16 @@ export function session(events: EventPayload[], overrides: Partial<SessionPayloa
     endTime: '11:00',
     durationMinutes: 120,
     events,
+    commits: [],
     ...overrides,
   }
+}
+
+/** An event on a given branch — the session's timeline decides which branch group it tells under. */
+export function onBranch(branch: string | null, base: EventPayload): EventPayload {
+  return { ...base, branch }
+}
+
+export function commit(subject: string, branch: string | null = 'feature/auth'): StoryCommit {
+  return { subject, hash: null, committedAt: '2026-10-20T09:30:00.000Z', branch }
 }

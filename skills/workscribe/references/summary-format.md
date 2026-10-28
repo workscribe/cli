@@ -5,10 +5,11 @@ One block per session, in exactly the shape Workscribe uses everywhere else, so 
 ## Heading
 
 ```
-## <project> (<branch>) — <duration>
+## <project> (<branches>) — <duration>
 ```
 
-- Leave out ` (<branch>)` when `branch` is `null`.
+- `<branches>` is every branch in `branches`, in order, separated by `, ` — for example `## api (main, feature/auth) — 1h 30m`. With one branch it's just that branch.
+- Leave out the parentheses when `branches` is empty.
 - If `project` is `null` (no repo and no events), use `unknown`, as Workscribe does.
 - Duration from `durationMinutes`: under an hour as `45m`; otherwise `1h` or `1h 30m`.
 

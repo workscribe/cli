@@ -100,15 +100,19 @@ describe('sessionToJson', () => {
     })
   })
 
-  it("lists every branch the session touched, while branch stays the first event's", () => {
+  it('lists every branch the session touched, with branch the latest of them', () => {
     const events = [
       capturedRow('npm test', { branch: 'main' }),
       capturedRow('npm test', { branch: 'feat/x' }),
-      capturedRow('npm test', { branch: null }),
       capturedRow('npm test', { branch: 'main' }),
+      capturedRow('npm test', { branch: 'fix/typo' }),
+      capturedRow('npm test', { branch: null }),
     ]
 
-    expect(sessionToJson(session(events), OPTIONS)).toMatchObject({ branch: 'main', branches: ['main', 'feat/x'] })
+    expect(sessionToJson(session(events), OPTIONS)).toMatchObject({
+      branch: 'fix/typo',
+      branches: ['main', 'feat/x', 'fix/typo'],
+    })
   })
 
   it('names a session outside git by its directory, with no repo path', () => {

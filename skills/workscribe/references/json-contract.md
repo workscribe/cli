@@ -35,7 +35,7 @@ The full contract is documented at workscribe.co/docs/commands#json-output-contr
 |---|---|
 | `key` | The `--key` when saving this session's summary. Copy it exactly. |
 | `project`, `branch`, `durationMinutes` | The block heading. `project` is the repo name, a `~/path` for work outside git, or `null` (write `unknown`). |
-| `branches` | Every branch the session touched, in the order first seen. `branch` is the first of them. Each commit's `committedAt` says when it was made. |
+| `branches` | Every branch the session touched, in the order first seen. `branch` is the latest of them, the one the session ended on. Each commit's `committedAt` says when it was made. |
 | `repoPath` | Where to read files if a commit needs context. `null` outside a git repo. |
 | `notes` | The developer's own notes — always include them. |
 | `commits` | The main source of outcomes. `source: "git"` has a short `hash` to cite; `"captured"` commits have `hash: null` (amended or rebased). |

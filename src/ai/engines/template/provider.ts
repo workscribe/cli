@@ -1,6 +1,7 @@
-import { formatSessionHeading, UNKNOWN_LOCATION } from '../../../summary/heading'
+import { UNKNOWN_LOCATION } from '../../../summary/heading'
 import { MAX_DAY_BULLETS } from './constants'
-import { countIncludedEvents, describeActivity, describeSession } from './describe'
+import { countIncludedEvents, describeActivity } from './describe'
+import { renderSessionStory } from './story'
 import { pluralize, toBulletList } from './utils'
 import type { AIProvider, DaySummaryPayload, SessionPayload, WeekSummaryPayload } from '../../types'
 
@@ -45,18 +46,9 @@ function pickDayBullets(sessions: SessionPayload[], includeCategories: string[])
 export class TemplateProvider implements AIProvider {
   constructor(private includeCategories: string[] = []) {}
 
+  /** Each session's story, heading included, separated by a blank line. */
   async summarize(payload: DaySummaryPayload): Promise<string> {
-    const [onlySession, ...otherSessions] = payload.sessions
-    if (onlySession && otherSessions.length === 0) {
-      return toBulletList(describeSession(onlySession, this.includeCategories))
-    }
-    // `export` summarizes a whole day at once, so each session gets its own heading
-    return payload.sessions
-      .map(
-        (session) =>
-          `${formatSessionHeading(session)}\n${toBulletList(describeSession(session, this.includeCategories))}`
-      )
-      .join('\n\n')
+    return payload.sessions.map((session) => renderSessionStory(session, this.includeCategories)).join('\n\n')
   }
 
   async summarizeWeek(payload: WeekSummaryPayload): Promise<string> {
