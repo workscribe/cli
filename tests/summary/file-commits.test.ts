@@ -38,6 +38,10 @@ describe('getFileCommits — a real repo', () => {
 
     expect(result.repoRoot).toBe(root)
     expect(result.commits.map((commit) => commit.subject)).toEqual(['first readme edit', 'tighten readme copy'])
+    // Each carries git's committer date, in ISO 8601
+    for (const commit of result.commits) {
+      expect(commit.committedAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$/)
+    }
   })
 
   it('finds a file in a subfolder', () => {

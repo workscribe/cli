@@ -22,22 +22,42 @@ function isFailedCommand(row: EventRow): boolean {
   return row.exit_code !== null && row.exit_code !== 0
 }
 
+/** A commit Workscribe captured itself, and when — null when only the subject is known. */
+export interface CapturedCommit {
+  subject: string
+  committedAt: string | null
+}
+
 /**
- * Commit subjects Workscribe captured itself: `git commit -m` messages and AI-session commits.
- * A `git commit` that failed (rejected by a hook, nothing staged) made no commit, so it is skipped.
+ * Commits Workscribe captured itself: `git commit -m` messages, at the time the commit finished, and AI-session
+ * commits (subjects only — the session records which commits reached HEAD, not when). A `git commit` that failed
+ * (rejected by a hook, nothing staged) made no commit, so it is skipped. A repeated subject keeps its first place,
+ * and the first time any capture of it recorded.
  */
-export function collectCapturedCommits(rows: EventRow[]): string[] {
-  const subjects = rows.flatMap((row) => {
+export function collectCapturedCommits(rows: EventRow[]): CapturedCommit[] {
+  const commits = rows.flatMap((row): CapturedCommit[] => {
     const { metadata } = eventRowToPayload(row)
     if (row.category === 'shipping' && typeof metadata.message === 'string' && !isFailedCommand(row)) {
-      return [metadata.message]
+      return [{ subject: metadata.message, committedAt: row.captured_at }]
     }
     if (row.category === 'ai_session' && Array.isArray(metadata.commits)) {
-      return metadata.commits.filter((subject): subject is string => typeof subject === 'string')
+      return metadata.commits
+        .filter((subject): subject is string => typeof subject === 'string')
+        .map((subject) => ({ subject, committedAt: null }))
     }
     return []
   })
-  return [...new Set(subjects.filter((subject) => subject !== ''))]
+  const bySubject = new Map<string, CapturedCommit>()
+  for (const commit of commits) {
+    if (commit.subject === '') continue
+    const earlier = bySubject.get(commit.subject)
+    // An AI session recorded before its `git commit -m` mustn't hide the time that capture has
+    bySubject.set(
+      commit.subject,
+      earlier ? { ...earlier, committedAt: earlier.committedAt ?? commit.committedAt } : commit
+    )
+  }
+  return [...bySubject.values()]
 }
 
 /**
@@ -60,12 +80,21 @@ export function isSameCommit(captured: string, gitSubject: string): boolean {
  * Captured subjects git attributes only to other people are dropped: an AI session records every
  * commit that reached HEAD, including ones pulled or rebased in.
  */
-export function mergeCommits(captured: string[], fromGit: GitCommit[], othersSubjects: string[] = []): CommitJson[] {
+export function mergeCommits(
+  captured: CapturedCommit[],
+  fromGit: GitCommit[],
+  othersSubjects: string[] = []
+): CommitJson[] {
   const others = new Set(othersSubjects)
-  const gitCommits: CommitJson[] = fromGit.map((commit) => ({ ...commit, source: 'git' }))
+  const gitCommits: CommitJson[] = fromGit.map(({ hash, subject, committedAt }) => ({
+    hash,
+    subject,
+    committedAt,
+    source: 'git',
+  }))
   const capturedOnly: CommitJson[] = captured
-    .filter((subject) => !others.has(subject))
-    .filter((subject) => !fromGit.some((commit) => isSameCommit(subject, commit.subject)))
-    .map((subject) => ({ hash: null, subject, source: 'captured' }))
+    .filter(({ subject }) => !others.has(subject))
+    .filter(({ subject }) => !fromGit.some((commit) => isSameCommit(subject, commit.subject)))
+    .map(({ subject, committedAt }) => ({ hash: null, subject, committedAt, source: 'captured' }))
   return [...gitCommits, ...capturedOnly]
 }

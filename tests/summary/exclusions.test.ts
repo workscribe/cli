@@ -8,11 +8,14 @@ function session(categories: string[]): SessionPayload {
     metadata: {},
     exitCode: 0,
     durationMs: null,
+    branch: null,
+    capturedAt: '2026-10-26T09:00:00.000Z',
   }))
   return {
     date: '2026-10-26',
     project: 'api',
     branch: null,
+    branches: [],
     startTime: '09:00',
     endTime: '10:00',
     durationMinutes: 60,

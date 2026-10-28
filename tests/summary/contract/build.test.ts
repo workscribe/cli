@@ -10,6 +10,7 @@ const OPTIONS = { location: { projects: {}, homeDir: HOME }, git: NO_GIT, includ
 const EVENT_KEYS = ['capturedAt', 'category', 'durationMs', 'exitCode', 'metadata', 'source']
 const SESSION_KEYS = [
   'branch',
+  'branches',
   'commits',
   'cwd',
   'durationMinutes',
@@ -94,8 +95,20 @@ describe('sessionToJson', () => {
       repoName: 'api',
       cwd: '/Users/dev/api',
       branch: 'feature/auth',
+      branches: ['feature/auth'],
       eventCount: 1,
     })
+  })
+
+  it("lists every branch the session touched, while branch stays the first event's", () => {
+    const events = [
+      capturedRow('npm test', { branch: 'main' }),
+      capturedRow('npm test', { branch: 'feat/x' }),
+      capturedRow('npm test', { branch: null }),
+      capturedRow('npm test', { branch: 'main' }),
+    ]
+
+    expect(sessionToJson(session(events), OPTIONS)).toMatchObject({ branch: 'main', branches: ['main', 'feat/x'] })
   })
 
   it('names a session outside git by its directory, with no repo path', () => {
@@ -117,14 +130,16 @@ describe('sessionToJson', () => {
     ]
     const git = {
       repoPath: '/Users/dev/api',
-      commits: [{ hash: 'a1b2c3d', subject: 'fix: token' }],
+      commits: [{ hash: 'a1b2c3d', subject: 'fix: token', committedAt: '2026-10-25T09:20:00+01:00' }],
       othersSubjects: [],
     }
     const json = sessionToJson(session(events), { ...OPTIONS, git })
 
     expect(json.repoPath).toBe('/Users/dev/api')
-    expect(json.commits).toEqual([{ hash: 'a1b2c3d', subject: 'fix: token', source: 'git' }])
-    expect(Object.keys(json.commits[0]).sort()).toEqual(['hash', 'source', 'subject'])
+    expect(json.commits).toEqual([
+      { hash: 'a1b2c3d', subject: 'fix: token', committedAt: '2026-10-25T09:20:00+01:00', source: 'git' },
+    ])
+    expect(Object.keys(json.commits[0]).sort()).toEqual(['committedAt', 'hash', 'source', 'subject'])
     expect(json.notes).toEqual(['blocked on creds'])
     expect(json.events.map((event) => event.category)).toEqual(['shipping'])
   })

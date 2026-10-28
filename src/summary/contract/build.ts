@@ -1,4 +1,4 @@
-import { eventRowToPayload, mostFrequentCwd, sessionLocation } from '../payload'
+import { branchesOf, eventRowToPayload, mostFrequentCwd, sessionLocation } from '../payload'
 import { sessionKey } from '../store'
 import { SCHEMA_VERSION } from './constants'
 import { collectCapturedCommits, collectNotes, contractEvents, mergeCommits } from './utils'
@@ -28,6 +28,7 @@ export function sessionToJson(session: Session, { location, git, includeCategori
     repoPath: git.repoPath,
     cwd: mostFrequentCwd(session),
     branch: session.events[0]?.branch ?? null,
+    branches: branchesOf(session.events),
     startedAt: session.startedAt,
     endedAt: session.endedAt,
     durationMinutes: session.durationMinutes,

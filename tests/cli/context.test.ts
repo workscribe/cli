@@ -299,7 +299,7 @@ describe('workscribe context --file — file details and grouping', () => {
     lastSavedAt: '2026-08-20T11:40:00.000Z',
     saveCount: 6,
     branch: 'feature/auth',
-    commits: [{ hash: 'a1b2c3d', subject: 'add auth middleware' }],
+    commits: [{ hash: 'a1b2c3d', subject: 'add auth middleware', committedAt: '2026-10-25T09:20:00+01:00' }],
     editedAlongside: { files: ['src/routes.ts'], total: 1 },
   }
 

@@ -12,13 +12,14 @@ The full contract is documented at workscribe.co/docs/commands#json-output-contr
       "project": "api",
       "repoPath": "/Users/dev/api",
       "branch": "feature/auth",
+      "branches": ["feature/auth", "main"],
       "startedAt": "2026-10-25T09:00:00.000Z",
       "endedAt": "2026-10-25T10:30:00.000Z",
       "durationMinutes": 90,
       "notes": ["blocked on staging credentials"],
       "commits": [
-        { "hash": "a1b2c3d", "subject": "fix: token refresh race", "source": "git" },
-        { "hash": null, "subject": "wip: amended away", "source": "captured" }
+        { "hash": "a1b2c3d", "subject": "fix: token refresh race", "committedAt": "2026-10-25T10:12:00+01:00", "source": "git" },
+        { "hash": null, "subject": "wip: amended away", "committedAt": "2026-10-25T09:41:07.000Z", "source": "captured" }
       ],
       "events": [
         { "category": "testing", "exitCode": 1, "metadata": { "tool": "npm" } },
@@ -34,6 +35,7 @@ The full contract is documented at workscribe.co/docs/commands#json-output-contr
 |---|---|
 | `key` | The `--key` when saving this session's summary. Copy it exactly. |
 | `project`, `branch`, `durationMinutes` | The block heading. `project` is the repo name, a `~/path` for work outside git, or `null` (write `unknown`). |
+| `branches` | Every branch the session touched, in the order first seen. `branch` is the first of them. Each commit's `committedAt` says when it was made. |
 | `repoPath` | Where to read files if a commit needs context. `null` outside a git repo. |
 | `notes` | The developer's own notes — always include them. |
 | `commits` | The main source of outcomes. `source: "git"` has a short `hash` to cite; `"captured"` commits have `hash: null` (amended or rebased). |

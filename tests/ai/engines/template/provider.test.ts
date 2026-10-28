@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { TemplateProvider } from '../../../../src/ai/engines/template/provider'
+import { TemplateProvider, mergeByLocation } from '../../../../src/ai/engines/template/provider'
 import { event, session } from './fixtures'
 
 describe('TemplateProvider.summarize', () => {
@@ -94,5 +94,17 @@ describe('TemplateProvider.summarizeWeek', () => {
         '- api: Committed: three',
       ].join('\n')
     )
+  })
+})
+
+describe('mergeByLocation', () => {
+  it('joins sessions in the same location, keeping every branch they touched once, in order', () => {
+    const morning = session([event('testing')], { branch: 'main', branches: ['main', 'feat/auth'] })
+    const afternoon = session([event('building')], { branch: 'feat/auth', branches: ['feat/auth', 'fix/typo'] })
+
+    const [merged] = mergeByLocation([morning, afternoon])
+
+    expect(merged.branches).toEqual(['main', 'feat/auth', 'fix/typo'])
+    expect(merged.events.map((mergedEvent) => mergedEvent.category)).toEqual(['testing', 'building'])
   })
 })

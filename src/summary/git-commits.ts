@@ -13,6 +13,8 @@ const AUTHORSHIP_HISTORY_DEPTH = 500
 export interface GitCommit {
   hash: string
   subject: string
+  /** When it was committed (ISO 8601, committer date) — to place it on the session's branch timeline */
+  committedAt: string
 }
 
 interface CommitWindow {
@@ -89,7 +91,7 @@ export function getCommitsInWindow({ repoRoot, since, until, author, filePath, t
       'log',
       `--since=${shiftedBy(since, -WINDOW_LEAD_MS)}`,
       `--until=${shiftedBy(until, WINDOW_TRAIL_MS)}`,
-      '--format=%h%x09%ce%x09%s',
+      '--format=%h%x09%ce%x09%cI%x09%s',
       '--reverse',
       ...(filePath ? ['--', filePath] : []),
     ],
@@ -99,11 +101,12 @@ export function getCommitsInWindow({ repoRoot, since, until, author, filePath, t
 
   const wantedAuthor = author?.toLowerCase() ?? null
   return output.split('\n').flatMap((line) => {
-    const [hash, email, ...subjectParts] = line.split('\t')
+    // The subject goes last, since only it can contain a tab
+    const [hash, email, committedAt, ...subjectParts] = line.split('\t')
     const subject = subjectParts.join('\t')
-    if (!hash || !subject) return []
+    if (!hash || !committedAt || !subject) return []
     if (wantedAuthor && email?.toLowerCase() !== wantedAuthor) return []
-    return [{ hash, subject }]
+    return [{ hash, subject, committedAt }]
   })
 }
 

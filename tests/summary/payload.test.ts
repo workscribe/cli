@@ -5,6 +5,7 @@ vi.mock('../../src/utils/format', () => ({
 }))
 
 import {
+  branchesOf,
   eventRowToPayload,
   sessionToPayload,
   buildDayPayload,
@@ -54,6 +55,8 @@ describe('eventRowToPayload', () => {
       metadata: { message: 'fix: bug' },
       exitCode: 0,
       durationMs: 50,
+      branch: 'main',
+      capturedAt: '2026-08-17T09:00:00.000Z',
       source: 'shell',
     })
   })
@@ -90,6 +93,8 @@ describe('eventRowToPayload', () => {
       metadata: { target: 'prod' },
       exitCode: 0,
       durationMs: 50,
+      branch: 'main',
+      capturedAt: '2026-08-17T09:00:00.000Z',
       source: 'shell',
     })
   })
@@ -102,6 +107,8 @@ describe('eventRowToPayload', () => {
       metadata: { hint: 'vitest', tool: 'npx' },
       exitCode: 0,
       durationMs: 50,
+      branch: 'main',
+      capturedAt: '2026-08-17T09:00:00.000Z',
       source: 'shell',
     })
   })
@@ -113,17 +120,47 @@ describe('sessionToPayload', () => {
       date: '2026-08-17',
       project: 'my-app',
       branch: 'main',
+      branches: ['main'],
       startTime: 'time:2026-08-17T09:00:00.000Z',
       endTime: 'time:2026-08-17T10:00:00.000Z',
       durationMinutes: 60,
       events: [
-        { category: 'shipping', metadata: { message: 'fix: bug' }, exitCode: 0, durationMs: 50, source: 'shell' },
+        {
+          category: 'shipping',
+          metadata: { message: 'fix: bug' },
+          exitCode: 0,
+          durationMs: 50,
+          branch: 'main',
+          capturedAt: '2026-08-17T09:00:00.000Z',
+          source: 'shell',
+        },
       ],
     })
   })
 
-  it('has a null branch when the session has no events', () => {
-    expect(sessionToPayload(makeSession({ events: [] }), '2026-08-17').branch).toBeNull()
+  it('has a null branch and no branches when the session has no events', () => {
+    const payload = sessionToPayload(makeSession({ events: [] }), '2026-08-17')
+
+    expect(payload.branch).toBeNull()
+    expect(payload.branches).toEqual([])
+  })
+})
+
+describe('branchesOf', () => {
+  it('lists each branch once, in the order first seen', () => {
+    const events = ['main', 'feat/auth', 'main', 'fix/typo', 'feat/auth'].map((branch) => makeEvent({ branch }))
+
+    expect(branchesOf(events)).toEqual(['main', 'feat/auth', 'fix/typo'])
+  })
+
+  it('skips events outside a repo, which have no branch', () => {
+    const events = [makeEvent({ branch: null }), makeEvent({ branch: 'main' }), makeEvent({ branch: null })]
+
+    expect(branchesOf(events)).toEqual(['main'])
+  })
+
+  it('is empty when no event has a branch', () => {
+    expect(branchesOf([makeEvent({ branch: null })])).toEqual([])
   })
 })
 

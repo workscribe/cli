@@ -82,7 +82,14 @@ const FAKE_SESSION = {
   endedAt: '2026-08-17T10:00:00.000Z',
   summary: null,
   events: [
-    { category: 'shipping', metadata: '{"message":"fix: bug"}', exit_code: 0, duration_ms: null, branch: 'main' },
+    {
+      category: 'shipping',
+      metadata: '{"message":"fix: bug"}',
+      exit_code: 0,
+      duration_ms: null,
+      branch: 'main',
+      captured_at: '2026-08-17T09:00:00.000Z',
+    },
   ],
 }
 
@@ -168,6 +175,7 @@ describe('workscribe summary (daily)', () => {
     exit_code: 0,
     duration_ms: 1200,
     branch: 'main',
+    captured_at: '2026-08-17T09:30:00.000Z',
   }
 
   function cachedRow(engine: string, text: string) {
@@ -207,10 +215,20 @@ describe('workscribe summary (daily)', () => {
           date: '2026-08-17',
           project: 'my-app',
           branch: 'main',
+          branches: ['main'],
           startTime: '09:00',
           endTime: '09:00',
           durationMinutes: 60,
-          events: [{ category: 'shipping', metadata: { message: 'fix: bug' }, exitCode: 0, durationMs: null }],
+          events: [
+            {
+              category: 'shipping',
+              metadata: { message: 'fix: bug' },
+              exitCode: 0,
+              durationMs: null,
+              branch: 'main',
+              capturedAt: '2026-08-17T09:00:00.000Z',
+            },
+          ],
         },
       ],
     })
@@ -231,6 +249,8 @@ describe('workscribe summary (daily)', () => {
       metadata: { target: 'deploy' },
       exitCode: 0,
       durationMs: 1200,
+      branch: 'main',
+      capturedAt: '2026-08-17T09:30:00.000Z',
     })
   })
 
