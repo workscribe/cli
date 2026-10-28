@@ -5,6 +5,7 @@ import type { EventRow, SessionRow, SessionSummaryRow } from './types'
 import { MIGRATIONS } from './migrations'
 import { applyMigrations } from './migrate'
 import { findRecentSessionsForRepo, type RepoLookup } from './session-lookup'
+import { BUSY_TIMEOUT_MS, withImmediateTransaction, type TransactionOptions } from './transaction'
 import type { StoredEngine } from '../ai/engine'
 export type { EventRow, SessionRow, SessionSummaryRow } from './types'
 
@@ -37,7 +38,7 @@ export function getDb(): DatabaseSync {
   db.exec('PRAGMA journal_mode = WAL')
   db.exec('PRAGMA foreign_keys = ON')
   // Parallel captures (an agent running several commands at once) wait for the write lock instead of failing
-  db.exec('PRAGMA busy_timeout = 5000')
+  db.exec(`PRAGMA busy_timeout = ${BUSY_TIMEOUT_MS}`)
   applyMigrations(db, MIGRATIONS)
   _db = db
   return _db
@@ -123,9 +124,43 @@ export function getEventsForDate(date: string): EventRow[] {
   const stmt = db.prepare(`
     SELECT * FROM events
     WHERE date(captured_at, 'localtime') = $date
-    ORDER BY captured_at ASC
+    ORDER BY captured_at ASC, id ASC
   `)
   return stmt.all({ date }) as unknown as EventRow[]
+}
+
+/** Events captured in [start, end) — ISO bounds, so the `captured_at` index is used (unlike a `localtime` match). */
+export function countEventsBetween(start: string, end: string): number {
+  const row = getDb()
+    .prepare('SELECT COUNT(*) AS count FROM events WHERE captured_at >= $start AND captured_at < $end')
+    .get({ start, end }) as { count: number }
+  return row.count
+}
+
+/** How many events the day's grouped sessions hold — equal to the day's event count when the day is up to date. */
+export function sumSessionEventCounts(date: string): number {
+  const row = getDb()
+    .prepare('SELECT COALESCE(SUM(event_count), 0) AS total FROM sessions WHERE date = $date')
+    .get({ date }) as { total: number }
+  return row.total
+}
+
+/** When this file was last saved in an editor (its newest `code_edit` event), or null if never. */
+export function getLatestFileSaveAt(filePath: string): string | null {
+  const row = getDb()
+    .prepare(
+      `SELECT captured_at FROM events
+       WHERE file_path = $file_path AND category = 'code_edit'
+       ORDER BY captured_at DESC
+       LIMIT 1`
+    )
+    .get({ file_path: filePath }) as { captured_at: string } | undefined
+  return row?.captured_at ?? null
+}
+
+/** Runs `work` holding the database's write lock — see `withImmediateTransaction`. */
+export function runInImmediateTransaction<T>(work: () => T, options?: TransactionOptions): T {
+  return withImmediateTransaction(getDb(), work, options)
 }
 
 export function getRecentEvents(limit = 20): EventRow[] {
@@ -172,7 +207,7 @@ export function getEventsBySessionId(sessionId: number): EventRow[] {
     SELECT e.* FROM events e
     INNER JOIN session_events se ON se.event_id = e.id
     WHERE se.session_id = $session_id
-    ORDER BY e.captured_at ASC
+    ORDER BY e.captured_at ASC, e.id ASC
   `)
   return stmt.all({ session_id: sessionId }) as unknown as EventRow[]
 }

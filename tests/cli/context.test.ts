@@ -12,6 +12,12 @@ vi.mock('../../src/config', () => ({
   readConfig: vi.fn(),
 }))
 
+// The --file I/O (grouping the day, git, file details) is tested in context-file.test.ts
+vi.mock('../../src/cli/context-file', () => ({
+  groupDayOfLatestSave: vi.fn(),
+  getFileDetails: vi.fn(() => null),
+}))
+
 // The folder as reached through a symlink, and both forms of its repo root
 vi.mock('../../src/utils/working-directory', () => ({
   currentDirectory: vi.fn(() => '/Users/dev/link/myapp'),
@@ -35,6 +41,7 @@ import { createTestConfig } from '../helpers/config'
 import { getRepoContext } from '../../src/capture/git'
 import { log } from '../../src/utils/logger'
 import { registerContext } from '../../src/cli/context'
+import { getFileDetails, groupDayOfLatestSave } from '../../src/cli/context-file'
 
 const mockGetRecentSessionsForRepo = getRecentSessionsForRepo as ReturnType<typeof vi.fn>
 const mockGetLastSessionTouchingFile = getLastSessionTouchingFile as ReturnType<typeof vi.fn>
@@ -280,5 +287,76 @@ describe('workscribe context (repo mode) — both name forms', () => {
     await makeProgram().parseAsync(['context'], { from: 'user' })
 
     expect(mockGetRepoContext).toHaveBeenCalledWith('/Users/dev/link/myapp', config)
+  })
+})
+
+// WOR-123: the VS Code tooltip is about the file, and today's saves should show without running `summary` first
+describe('workscribe context --file — file details and grouping', () => {
+  const FILE_DETAILS = {
+    path: '/Users/dev/myapp/src/auth.ts',
+    relativePath: 'src/auth.ts',
+    firstSavedAt: '2026-08-20T10:05:00.000Z',
+    lastSavedAt: '2026-08-20T11:40:00.000Z',
+    saveCount: 6,
+    branch: 'feature/auth',
+    commits: [{ hash: 'a1b2c3d', subject: 'add auth middleware' }],
+    editedAlongside: { files: ['src/routes.ts'], total: 1 },
+  }
+
+  it('adds the file details and the repo name to --json, keeping every existing field', async () => {
+    mockGetLastSessionTouchingFile.mockReturnValue(SAMPLE_SESSION)
+    mockGetSessionBranch.mockReturnValue('feature/auth')
+    vi.mocked(getFileDetails).mockReturnValue(FILE_DETAILS)
+
+    await makeProgram().parseAsync(['context', '--file', '/Users/dev/myapp/src/auth.ts', '--json'], { from: 'user' })
+
+    const parsed = JSON.parse(mockLog.plain.mock.calls[0][0] as string)
+    expect(parsed).toMatchObject({ repoName: 'myapp', eventCount: 42, branch: 'feature/auth', file: FILE_DETAILS })
+    expect(Object.keys(parsed)).toEqual(
+      expect.arrayContaining([
+        'date',
+        'startedAt',
+        'endedAt',
+        'timeAgo',
+        'durationMinutes',
+        'branch',
+        'eventCount',
+        'summary',
+      ])
+    )
+    expect(getFileDetails).toHaveBeenCalledWith('/Users/dev/myapp/src/auth.ts', SAMPLE_SESSION)
+  })
+
+  it('groups the day of the latest save before looking the file up', async () => {
+    mockGetLastSessionTouchingFile.mockReturnValue(undefined)
+
+    await makeProgram().parseAsync(['context', '--file', '/Users/dev/myapp/./src/auth.ts', '--json'], { from: 'user' })
+
+    expect(groupDayOfLatestSave).toHaveBeenCalledWith('/Users/dev/myapp/src/auth.ts')
+    expect(vi.mocked(groupDayOfLatestSave).mock.invocationCallOrder[0]).toBeLessThan(
+      mockGetLastSessionTouchingFile.mock.invocationCallOrder[0]
+    )
+    expect(mockLog.plain).toHaveBeenCalledWith('null')
+  })
+
+  it('keeps the human-readable output as it was', async () => {
+    mockGetLastSessionTouchingFile.mockReturnValue(SAMPLE_SESSION)
+
+    await makeProgram().parseAsync(['context', '--file', 'src/auth.ts'], { from: 'user' })
+
+    expect(getFileDetails).not.toHaveBeenCalled()
+  })
+})
+
+describe('workscribe context (repo mode) — repoName', () => {
+  it('adds the repo name to --json', async () => {
+    mockGetRepoContext.mockReturnValue({ repoName: 'myapp', branch: 'main', root: '/Users/dev/myapp', remote: null })
+    mockGetRecentSessionsForRepo.mockReturnValue([SAMPLE_SESSION])
+
+    await makeProgram().parseAsync(['context', '--json'], { from: 'user' })
+
+    const parsed = JSON.parse(mockLog.plain.mock.calls[0][0] as string)
+    expect(parsed.repoName).toBe('myapp')
+    expect(parsed).not.toHaveProperty('file')
   })
 })

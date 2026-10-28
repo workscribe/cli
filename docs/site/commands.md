@@ -402,7 +402,9 @@ workscribe context --file src/auth.ts --json
 
 **Without `--file`:** shows the most recent session for the current git repo — date, duration, branch, event count, and the session's summary — one the agent skill saved, one an AI provider wrote in 1.x, or else the template. The repo is named exactly as capture names it: a `projects.<path>` override for the current folder wins, and otherwise `git.qualifyRepoName` decides between `owner/repo` and bare `repo`. Sessions stored under the other form, from before you changed that setting, are found too when they ran inside this repo's folder.
 
-**With `--file`:** narrows to the most recent session that included a `code_edit` event for that path. This is what powers the [VS Code extension](https://marketplace.visualstudio.com/items?itemName=workscribe.workscribe)'s status bar "last worked on" indicator — surfacing "3 days ago" when you switch to a file you haven't touched recently. Neovim and other editor integrations aren't built yet.
+**With `--file`:** narrows to the most recent session that included a `code_edit` event (a save in your editor) for that path. This is what powers the [VS Code extension](https://marketplace.visualstudio.com/items?itemName=workscribe.workscribe)'s status bar "last worked on" indicator — surfacing "3 days ago" when you switch to a file you haven't touched recently. Neovim and other editor integrations aren't built yet.
+
+It finds today's work too, without running `workscribe summary` first: if the day the file was last saved hasn't been grouped into sessions yet, `context --file` groups it. It answers within a couple of seconds even when another Workscribe command is busy with the database, or git is slow — at worst with slightly older sessions, or without the file's commits.
 
 **If no summary exists** for the session, the default text output includes the command to generate one:
 
@@ -414,6 +416,7 @@ workscribe context --file src/auth.ts --json
 
 ```json
 {
+  "repoName": "acme/api",
   "date": "2026-08-20",
   "startedAt": "2026-08-20T10:00:00.000Z",
   "endedAt": "2026-08-20T12:14:00.000Z",
@@ -421,7 +424,17 @@ workscribe context --file src/auth.ts --json
   "durationMinutes": 134,
   "branch": "feature/auth",
   "eventCount": 42,
-  "summary": "Implemented authentication middleware." // or null if no summary has been generated yet
+  "summary": "Implemented authentication middleware.", // or null if no summary has been generated yet
+  "file": {                                  // with --file only; null if the session has no saves of the file
+    "path": "/Users/me/api/src/auth.ts",
+    "relativePath": "src/auth.ts",           // relative to the repo root, or just the file name
+    "firstSavedAt": "2026-08-20T10:05:00.000Z",
+    "lastSavedAt": "2026-08-20T11:40:00.000Z",
+    "saveCount": 6,                          // saves recorded: one per file per 30 seconds at most
+    "branch": "feature/auth",
+    "commits": [{ "hash": "a1b2c3d", "subject": "add auth middleware" }], // your commits in the session that changed it
+    "editedAlongside": { "files": ["src/routes.ts"], "total": 1 }         // up to 5 other files saved in the session
+  }
 }
 ```
 

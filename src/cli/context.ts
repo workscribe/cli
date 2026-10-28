@@ -14,6 +14,8 @@ import { currentDirectory, rootForms } from '../utils/working-directory'
 import { readConfig } from '../config'
 import { formatDuration, timeAgo } from '../utils/format'
 import { log } from '../utils/logger'
+import { getFileDetails, groupDayOfLatestSave } from './context-file'
+import type { FileDetails } from '../summary/file-details'
 import { describeSession } from '../ai/engines/template/describe'
 import { toBulletList } from '../ai/engines/template/utils'
 import { sessionToPayload, locationContextFrom } from '../summary/payload'
@@ -23,6 +25,7 @@ import type { SessionRow } from '../db/types'
 import type { Session } from '../sessions/detector'
 
 export interface SessionContextJson {
+  repoName: string | null
   date: string
   startedAt: string
   endedAt: string
@@ -66,6 +69,7 @@ function resolveContextSummary(row: SessionRow): string {
 
 function toContextJson(session: SessionRow): SessionContextJson {
   return {
+    repoName: session.repo_name,
     date: session.date,
     startedAt: session.started_at,
     endedAt: session.ended_at,
@@ -75,6 +79,11 @@ function toContextJson(session: SessionRow): SessionContextJson {
     eventCount: session.event_count,
     summary: resolveContextSummary(session),
   }
+}
+
+/** `context --file --json`: the session, plus what it says about this file (`file` is null without saves of it). */
+function toFileContextJson(session: SessionRow, filePath: string): SessionContextJson & { file: FileDetails | null } {
+  return { ...toContextJson(session), file: getFileDetails(filePath, session) }
 }
 
 function printSessionContext(session: SessionRow, heading: string): void {
@@ -107,6 +116,7 @@ export function registerContext(program: Command): void {
     .action((opts) => {
       if (opts.file) {
         const normalizedFile = path.normalize(opts.file)
+        groupDayOfLatestSave(normalizedFile)
         const session = getLastSessionTouchingFile(normalizedFile)
         if (!session) {
           if (opts.json) log.plain(JSON.stringify(null))
@@ -114,7 +124,7 @@ export function registerContext(program: Command): void {
           return
         }
         if (opts.json) {
-          log.plain(JSON.stringify(toContextJson(session)))
+          log.plain(JSON.stringify(toFileContextJson(session, normalizedFile)))
           return
         }
         printSessionContext(session, `Last session touching ${path.basename(normalizedFile)}`)
