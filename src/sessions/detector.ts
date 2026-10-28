@@ -1,4 +1,4 @@
-import type { EventRow } from '../db/types'
+import type { EventRow, SessionRow } from '../db/types'
 import {
   insertSession,
   insertSessionEvent,
@@ -6,8 +6,12 @@ import {
   getSessionsForDate,
   getEventsForDate,
   getEventsBySessionId,
+  countEventsBetween,
+  sumSessionEventCounts,
+  runInImmediateTransaction,
 } from '../db'
 import { readConfig } from '../config'
+import { localDayBounds } from '../utils/format'
 import { splitByIdleGap, splitByRepo, minutesBetween, REPO_SWITCH_GAP_MS } from './grouper'
 
 export interface Session {
@@ -22,46 +26,69 @@ export interface Session {
   events: EventRow[]
 }
 
-export function getOrBuildSessions(date: string): Session[] {
-  // Check if sessions already exist for this date
-  const existing = getSessionsForDate(date)
-  const events = getEventsForDate(date)
-
-  if (events.length === 0) return []
-
-  // If sessions exist and event count matches, use cached
-  const cachedEventCount = existing.reduce((sum, sessionRow) => sum + sessionRow.event_count, 0)
-  if (existing.length > 0 && cachedEventCount === events.length) {
-    return existing.map((sessionRow) => ({
-      id: sessionRow.id,
-      date: sessionRow.date,
-      startedAt: sessionRow.started_at,
-      endedAt: sessionRow.ended_at,
-      repoName: sessionRow.repo_name,
-      durationMinutes: minutesBetween(sessionRow.started_at, sessionRow.ended_at),
-      eventCount: sessionRow.event_count,
-      summary: sessionRow.summary,
-      events: getEventsBySessionId(sessionRow.id),
-    }))
-  }
-
-  // Preserve any cached summaries before clearing — keyed by repo+start time
-  // so they can be restored to matching sessions after rebuild
-  const savedSummaries = new Map<string, string>()
-  for (const s of existing) {
-    if (s.summary) savedSummaries.set(`${s.repo_name}|${s.started_at}`, s.summary)
-  }
-
-  // Rebuild sessions
-  clearSessionsForDate(date)
-  return buildSessions(date, events, savedSummaries)
+export interface GroupingOptions {
+  /** Wait at most this long for another process's write lock (default: the connection's 5 s). */
+  lockWaitMs?: number
 }
 
-function buildSessions(date: string, events: EventRow[], savedSummaries: Map<string, string> = new Map()): Session[] {
+/** The day's sessions hold exactly its events — two counts on indexed columns, no event rows loaded. */
+function isDayGrouped(date: string): boolean {
+  const { start, end } = localDayBounds(date)
+  return countEventsBetween(start, end) === sumSessionEventCounts(date)
+}
+
+/** Clears the day's sessions and groups its events again, keeping summaries stored on matching sessions. */
+function regroupDay(date: string): void {
+  // Keyed by repo + start time, so a rebuilt session with the same boundaries gets its summary back
+  const savedSummaries = new Map<string, string>()
+  for (const sessionRow of getSessionsForDate(date)) {
+    if (sessionRow.summary) savedSummaries.set(`${sessionRow.repo_name}|${sessionRow.started_at}`, sessionRow.summary)
+  }
+  clearSessionsForDate(date)
+  buildSessions(date, getEventsForDate(date), savedSummaries)
+}
+
+/**
+ * Groups the day's events into sessions, unless that's already up to date. The rebuild holds the database's write
+ * lock and rechecks first, so processes grouping the same day at once (two editor windows, a save during
+ * `summary`) can't interleave and duplicate its sessions. Throws a locked error (`isDatabaseLocked`) if another
+ * process keeps the lock past `lockWaitMs`.
+ */
+export function ensureDayGrouped(date: string, options: GroupingOptions = {}): void {
+  if (isDayGrouped(date)) return
+  runInImmediateTransaction(
+    () => {
+      // Another process may have regrouped the day while this one waited for the lock
+      if (isDayGrouped(date)) return
+      regroupDay(date)
+    },
+    { busyTimeoutMs: options.lockWaitMs }
+  )
+}
+
+function toSession(sessionRow: SessionRow): Session {
+  return {
+    id: sessionRow.id,
+    date: sessionRow.date,
+    startedAt: sessionRow.started_at,
+    endedAt: sessionRow.ended_at,
+    repoName: sessionRow.repo_name,
+    durationMinutes: minutesBetween(sessionRow.started_at, sessionRow.ended_at),
+    eventCount: sessionRow.event_count,
+    summary: sessionRow.summary,
+    events: getEventsBySessionId(sessionRow.id),
+  }
+}
+
+export function getOrBuildSessions(date: string): Session[] {
+  ensureDayGrouped(date)
+  return getSessionsForDate(date).map(toSession)
+}
+
+function buildSessions(date: string, events: EventRow[], savedSummaries: Map<string, string>): void {
   const config = readConfig()
   const idleMs = config.session.idleTimeout * 60 * 1000
 
-  const sessions: Session[] = []
   const timeGroups = splitByIdleGap(events, idleMs)
 
   for (const group of timeGroups) {
@@ -91,20 +118,6 @@ function buildSessions(date: string, events: EventRow[], savedSummaries: Map<str
       for (const event of repoGroup) {
         insertSessionEvent(sessionId, event.id)
       }
-
-      sessions.push({
-        id: sessionId,
-        date,
-        startedAt: first.captured_at,
-        endedAt: last.captured_at,
-        repoName,
-        durationMinutes: minutesBetween(first.captured_at, last.captured_at),
-        eventCount: repoGroup.length,
-        summary,
-        events: repoGroup,
-      })
     }
   }
-
-  return sessions
 }

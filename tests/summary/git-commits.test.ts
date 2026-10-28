@@ -3,7 +3,13 @@ import { describe, it, expect, vi } from 'vitest'
 vi.mock('child_process', () => ({ execFileSync: vi.fn() }))
 
 import { execFileSync } from 'child_process'
-import { getRepoRoot, getUserEmail, getCommitsInWindow, getOthersSubjects } from '../../src/summary/git-commits'
+import {
+  getRepoRoot,
+  getUserEmail,
+  getCommitsInWindow,
+  getOthersSubjects,
+  getFileCommits,
+} from '../../src/summary/git-commits'
 
 const mockExecFileSync = vi.mocked(execFileSync)
 
@@ -135,5 +141,43 @@ describe('getOthersSubjects', () => {
     gitFails()
 
     expect(getOthersSubjects('/Users/dev/api', 'dev@example.com')).toEqual([])
+  })
+})
+
+describe('getFileCommits — timeouts handed to git', () => {
+  it('passes each call exactly the time it checked, never 0 (Node reads a timeout of 0 as no timeout)', () => {
+    mockExecFileSync.mockImplementation(((_file: string, args: string[]) =>
+      Buffer.from(args[0] === 'rev-parse' ? '/Users/dev/api\n' : '')) as typeof execFileSync)
+    // Deadline at 2000; each git call costs the clock ticks below, ending 1 ms short of it
+    const clock = [0, 0, 1000, 1999]
+    const now = () => clock.shift() ?? 5000
+
+    getFileCommits({
+      filePath: '/Users/dev/api/README.md',
+      since: WINDOW.since,
+      until: WINDOW.until,
+      budgetMs: 2000,
+      now,
+    })
+
+    const timeouts = mockExecFileSync.mock.calls.map(([, , options]) => (options as { timeout: number }).timeout)
+    expect(timeouts).toEqual([2000, 1000, 1])
+  })
+
+  it('stops calling git once the budget is spent, rather than passing a timeout of 0', () => {
+    gitOutput('/Users/dev/api\n')
+    const clock = [0, 0, 2000]
+    const now = () => clock.shift() ?? 5000
+
+    const result = getFileCommits({
+      filePath: '/Users/dev/api/README.md',
+      since: WINDOW.since,
+      until: WINDOW.until,
+      budgetMs: 2000,
+      now,
+    })
+
+    expect(result).toEqual({ repoRoot: '/Users/dev/api', commits: [] })
+    expect(mockExecFileSync).toHaveBeenCalledTimes(1)
   })
 })

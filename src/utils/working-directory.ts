@@ -13,6 +13,11 @@ function realPath(target: string): string | null {
   }
 }
 
+/** The path with symlinks resolved, or as given if it doesn't exist (any more). */
+export function resolvedPath(target: string): string {
+  return realPath(target) ?? target
+}
+
 /** The folder you're in, as you reached it: `$PWD` when it's the same folder as `process.cwd()`, else that. */
 export function currentDirectory(where = { pwd: process.env.PWD, cwd: process.cwd() }): string {
   if (where.pwd && realPath(where.pwd) === realPath(where.cwd)) return where.pwd

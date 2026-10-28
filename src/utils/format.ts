@@ -32,6 +32,17 @@ export function localDateOf(isoString: string): string {
   return localDateStr(new Date(isoString))
 }
 
+/**
+ * A local day's bounds as UTC ISO strings, [start, end) — the same day `date(captured_at, 'localtime')` picks,
+ * but comparable against `captured_at` directly, so a query can use its index. Handles DST-length days.
+ */
+export function localDayBounds(date: string): { start: string; end: string } {
+  const start = new Date(`${date}T00:00:00`)
+  const end = new Date(start)
+  end.setDate(end.getDate() + 1)
+  return { start: start.toISOString(), end: end.toISOString() }
+}
+
 // Returns Monday of the ISO week containing dateStr (YYYY-MM-DD)
 export function startOfWeek(dateStr: string): string {
   const d = new Date(dateStr + 'T00:00:00')
