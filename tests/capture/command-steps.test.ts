@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   commandSteps,
+  heredocBodies,
   isGlueStep,
   simpleCommandOf,
   splitSteps,
@@ -155,5 +156,22 @@ describe('commandSteps — review fixes', () => {
 describe('simpleCommandOf — quoted redirection characters', () => {
   it('keeps > and < inside quotes and removes real redirections', () => {
     expect(simpleCommandOf('git commit -m "feat: a > b and <Foo>" 2>&1')).toBe('git commit -m "feat: a > b and <Foo>"')
+  })
+})
+
+describe('heredocBodies', () => {
+  it('returns each heredoc in order, with its terminator, body and the line that opened it', () => {
+    expect(heredocBodies("cat <<'A' > x\none\nA\ngit commit -F - <<B\ntwo\nthree\nB")).toEqual([
+      { terminator: 'A', body: 'one', openerLine: "cat <<'A' > x" },
+      { terminator: 'B', body: 'two\nthree', openerLine: 'git commit -F - <<B' },
+    ])
+  })
+
+  it('ignores openers inside quotes, escaped, in a comment, or a <<< here-string', () => {
+    expect(heredocBodies('echo "a<<b"\necho \\<<C\n# see <<D\ncat <<<"text"')).toEqual([])
+  })
+
+  it('leaves out a heredoc that never ends', () => {
+    expect(heredocBodies('cat <<EOF\nno terminator')).toEqual([])
   })
 })

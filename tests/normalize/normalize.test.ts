@@ -177,6 +177,47 @@ describe('normalizeCommand', () => {
     })
   })
 
+  // WOR-127: package names the summaries rely on
+  describe('dependency install — package names', () => {
+    it.each([
+      ['pnpm install lodash', { tool: 'pnpm', packages: ['lodash'] }],
+      ['pnpm i -D vitest', { tool: 'pnpm', packages: ['vitest'] }],
+      ['pnpm --filter web add zod', { tool: 'pnpm', packages: ['zod'], workspace: 'web' }],
+      ['pnpm -F web add -D zod', { tool: 'pnpm', packages: ['zod'], workspace: 'web' }],
+      ['pnpm add --filter web zod', { tool: 'pnpm', packages: ['zod'], workspace: 'web' }],
+      ['pnpm -r add typescript', { tool: 'pnpm', packages: ['typescript'] }],
+      ['yarn workspace web add zod', { tool: 'yarn', packages: ['zod'], workspace: 'web' }],
+      ['yarn install', { tool: 'yarn', packages: [] }],
+      ['bun install hono', { tool: 'bun', packages: ['hono'] }],
+      ['npm i --registry https://registry.example.com x', { tool: 'npm', packages: ['x'] }],
+      ['npm add install-peers', { tool: 'npm', packages: ['install-peers'] }],
+    ])('%s', (command, metadata) => {
+      expect(normalize(command)).toMatchObject({ category: 'dependencies', metadata })
+      expect(normalize(command).metadata).toEqual(metadata)
+    })
+
+    it('reads a workspace removal', () => {
+      expect(normalize('yarn workspace web remove zod').metadata).toEqual({
+        tool: 'yarn',
+        packages: ['zod'],
+        action: 'remove',
+        workspace: 'web',
+      })
+    })
+  })
+
+  // WOR-127: git's own options used to turn a commit into `versioning`, losing it and its message
+  describe('git global options', () => {
+    it.each([
+      ['git -C "/a b" commit -m "x"', 'x'],
+      ['git -c user.name=x commit -m "y"', 'y'],
+      ['git --work-tree=/w commit -m "z"', 'z'],
+      ['git --no-pager -C ../web commit -am "both"', 'both'],
+    ])('%s is a commit with its message', (command, message) => {
+      expect(normalize(command)).toMatchObject({ category: 'shipping', metadata: { message } })
+    })
+  })
+
   describe('dependency remove', () => {
     it('classifies npm uninstall', () => {
       expect(category('npm uninstall lodash')).toBe('dependencies')

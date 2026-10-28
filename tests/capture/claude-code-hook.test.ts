@@ -70,10 +70,30 @@ const SETTINGS_WITH_BOTH_PINNED_HOOKS = JSON.stringify({
   },
 })
 
+// What WOR-120 to WOR-126 installed: guarded, but no failure hook — so failing commands record no exit code
+const SETTINGS_WITH_TWO_GUARDED_HOOKS = JSON.stringify({
+  hooks: {
+    PostToolUse: [
+      { matcher: 'Bash', hooks: [{ type: 'command', command: guarded('_hook --source claude-code'), async: true }] },
+    ],
+    UserPromptSubmit: [
+      { hooks: [{ type: 'command', command: guarded('_hook --source claude-code --event UserPromptSubmit') }] },
+    ],
+  },
+})
+
 const SETTINGS_WITH_BOTH_CURRENT_HOOKS = JSON.stringify({
   hooks: {
     PostToolUse: [
       { matcher: 'Bash', hooks: [{ type: 'command', command: guarded('_hook --source claude-code'), async: true }] },
+    ],
+    PostToolUseFailure: [
+      {
+        matcher: 'Bash',
+        hooks: [
+          { type: 'command', command: guarded('_hook --source claude-code --event PostToolUseFailure'), async: true },
+        ],
+      },
     ],
     UserPromptSubmit: [
       { hooks: [{ type: 'command', command: guarded('_hook --source claude-code --event UserPromptSubmit') }] },
@@ -394,5 +414,50 @@ describe('claudeCodeIntegration.uninstall', () => {
   it('has nothing to do when there is no settings.json', () => {
     mockFs.existsSync.mockReturnValue(false)
     expect(claudeCodeIntegration.uninstall?.()).toBe('not-installed')
+  })
+})
+
+describe('claudeCodeIntegration — the failure hook (WOR-127)', () => {
+  const writtenSettings = () =>
+    JSON.parse(mockFs.writeFileSync.mock.calls.at(-1)?.[1] as string) as { hooks: Record<string, unknown[]> }
+
+  it('installs PostToolUseFailure for Bash, async, so failed commands record their exit code', () => {
+    mockFs.existsSync.mockReturnValue(false)
+
+    claudeCodeIntegration.install()
+
+    expect(writtenSettings().hooks.PostToolUseFailure).toEqual([
+      {
+        matcher: 'Bash',
+        hooks: [
+          { type: 'command', command: guarded('_hook --source claude-code --event PostToolUseFailure'), async: true },
+        ],
+      },
+    ])
+  })
+
+  it('never duplicates it when installed again', () => {
+    mockFs.existsSync.mockReturnValue(true)
+    mockFs.readFileSync.mockReturnValue(SETTINGS_WITH_BOTH_CURRENT_HOOKS)
+
+    claudeCodeIntegration.install()
+
+    expect(writtenSettings().hooks.PostToolUseFailure).toHaveLength(1)
+  })
+
+  it('counts an install without it as outdated, so init offers the update', () => {
+    mockFs.existsSync.mockReturnValue(true)
+    mockFs.readFileSync.mockReturnValue(SETTINGS_WITH_TWO_GUARDED_HOOKS)
+
+    expect(claudeCodeIntegration.isHookInstalled()).toBe(false)
+    expect(claudeCodeIntegration.isHookOutdated?.()).toBe(true)
+  })
+
+  it('removes it on uninstall along with the others', () => {
+    mockFs.existsSync.mockReturnValue(true)
+    mockFs.readFileSync.mockReturnValue(SETTINGS_WITH_BOTH_CURRENT_HOOKS)
+
+    expect(claudeCodeIntegration.uninstall?.()).toBe('removed')
+    expect(writtenSettings()).toEqual({})
   })
 })

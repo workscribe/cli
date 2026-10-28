@@ -8,6 +8,12 @@ vi.mock('../../src/config/registry', () => ({
 }))
 
 import { normalizeCommand } from '../../src/normalize/patterns'
+
+/** The event as it's stored: `matchedStep` is only for capture (see the matchedStep tests below) */
+function classified(command: string) {
+  const { category, metadata } = normalizeCommand(command)
+  return { category, metadata }
+}
 import { STEP_CATEGORY_PRIORITY } from '../../src/normalize/compound'
 
 const category = (command: string) => normalizeCommand(command).category
@@ -36,25 +42,25 @@ describe('normalizeCommand — compound commands', () => {
   })
 
   it("takes the primary step's metadata", () => {
-    expect(normalizeCommand('cd app && pnpm nx build shell --skip-nx-cache 2>&1 | grep built')).toEqual({
+    expect(classified('cd app && pnpm nx build shell --skip-nx-cache 2>&1 | grep built')).toEqual({
       category: 'building',
       metadata: { tool: 'nx', target: 'build' },
     })
   })
 
   it('lets the earlier step win a tie', () => {
-    expect(normalizeCommand('npm test && pnpm nx test api').metadata).toEqual({ tool: 'npm' })
+    expect(classified('npm test && pnpm nx test api').metadata).toEqual({ tool: 'npm' })
   })
 
   it('keeps redirection-like text inside a quoted commit message', () => {
-    expect(normalizeCommand('git add -A && git commit -m "feat: handle a > b and <Foo>"')).toEqual({
+    expect(classified('git add -A && git commit -m "feat: handle a > b and <Foo>"')).toEqual({
       category: 'shipping',
       metadata: { message: 'feat: handle a > b and <Foo>' },
     })
   })
 
   it('leaves a single command it already recognised exactly as before', () => {
-    expect(normalizeCommand('git commit -m "fix: a && b"')).toEqual({
+    expect(classified('git commit -m "fix: a && b"')).toEqual({
       category: 'shipping',
       metadata: { message: 'fix: a && b' },
     })
@@ -71,7 +77,7 @@ describe('nx rules', () => {
     ['nx run-many --targets lint', 'linting', 'lint'],
     ['pnpm nx serve shell', 'running', 'serve'],
   ])('%s → %s', (command, expected, target) => {
-    expect(normalizeCommand(command)).toEqual({ category: expected, metadata: { tool: 'nx', target } })
+    expect(classified(command)).toEqual({ category: expected, metadata: { tool: 'nx', target } })
   })
 
   it('leaves an unknown nx target unclassified', () => {
@@ -79,7 +85,7 @@ describe('nx rules', () => {
   })
 
   it('classifies bare tsc as building', () => {
-    expect(normalizeCommand('tsc -p tsconfig.json --noEmit')).toEqual({
+    expect(classified('tsc -p tsconfig.json --noEmit')).toEqual({
       category: 'building',
       metadata: { tool: 'tsc' },
     })
@@ -90,5 +96,22 @@ describe('STEP_CATEGORY_PRIORITY', () => {
   it('puts outcomes before routine git work', () => {
     expect(STEP_CATEGORY_PRIORITY.indexOf('testing')).toBeLessThan(STEP_CATEGORY_PRIORITY.indexOf('versioning'))
     expect(STEP_CATEGORY_PRIORITY.indexOf('building')).toBeLessThan(STEP_CATEGORY_PRIORITY.indexOf('shipping'))
+  })
+})
+
+describe('normalizeCommand — matchedStep, for capture', () => {
+  it('names the step that set the category, as written', () => {
+    expect(normalizeCommand('cd app && git -C ../web commit -m "x" && git status').matchedStep).toBe(
+      'git -C ../web commit -m "x"'
+    )
+  })
+
+  it('is the one work step when the whole command was recognised, not the `cd` before it', () => {
+    expect(normalizeCommand('git commit -m "x" 2>&1 | tail -3').matchedStep).toBe('git commit -m "x" 2>&1 | tail -3')
+  })
+
+  it('keeps an agent heredoc message intact in the step', () => {
+    const command = `git add . && git commit -m "$(cat <<'EOF'\nfeat: add y\n\nbody\nEOF\n)"`
+    expect(normalizeCommand(command)).toMatchObject({ category: 'shipping', metadata: { message: 'feat: add y' } })
   })
 })

@@ -200,9 +200,11 @@ Codex and GitHub Copilot read the same folder, so they share one copy.
 - Installed skills aren't updated automatically when you upgrade the CLI — `workscribe status` flags an outdated copy, and `workscribe skill install` (or `workscribe init`) refreshes it.
 
 **Whose activity gets captured:** the skill works the same in every agent — it summarizes whatever Workscribe captured — but how much of the agent's own work is captured differs:
-- **Claude Code**: its commands are captured through the Claude Code session hook (`workscribe init` offers it).
+- **Claude Code**: its commands are captured through the Claude Code session hook (`workscribe init` offers it), with each command's exit code — so summaries can say whether the tests and builds it ran passed. A hook installed by an earlier version doesn't capture failed commands at all; `workscribe init` offers to update it.
 - **GitHub Copilot and Cursor**: their agents run commands in the VS Code or Cursor integrated terminal, so the shell hook most likely captures them.
 - **Codex**: it runs commands in its own process, so only launching `codex` is recorded.
+
+**Which repo a command counts towards:** the one it worked in. `git -C ../web commit` and `git --work-tree=…` credit the commit to `web`, not the folder the command was typed in. A `cd` counts too, because the shell (or Claude Code) reports the folder it ended up in — with one exception: Claude Code resets a `cd` that leaves its project, so `cd ../web && git commit` run by Claude Code from outside `web`'s project is still credited to the project's folder. Commit messages are read from `-m`, `-am`, `--message=`, `-F <file>` and the `-m "$(cat <<'EOF' …)"` form coding agents use; package names from npm, pnpm, yarn and bun installs, including `--filter` and `yarn workspace` forms.
 
 ---
 

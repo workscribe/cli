@@ -1,3 +1,5 @@
+import { readFileSync } from 'fs'
+import { join } from 'path'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.mock('../../src/capture', () => ({ captureCommand: vi.fn() }))
@@ -30,9 +32,12 @@ const validPayload = JSON.stringify({
 describe('parseHookPayload', () => {
   it('parses a valid Claude Code PostToolUse payload', () => {
     const result = parseHookPayload(validPayload)
+    // PostToolUse only fires for a successful call, so it means exit 0
     expect(result).toEqual({
       command: 'git commit -m "feat: add login"',
       cwd: '/home/user/projects/myapp',
+      exitCode: 0,
+      durationMs: null,
     })
   })
 
@@ -76,7 +81,12 @@ describe('parseHookPayload', () => {
       tool_output: { stdout: 'PASS', stderr: '' },
       cwd: '/home/user/app',
     })
-    expect(parseHookPayload(payload)).toEqual({ command: 'npm test', cwd: '/home/user/app' })
+    expect(parseHookPayload(payload)).toEqual({
+      command: 'npm test',
+      cwd: '/home/user/app',
+      exitCode: 0,
+      durationMs: null,
+    })
   })
 })
 
@@ -125,7 +135,7 @@ describe('_hook integration', () => {
     expect(mockCapture).toHaveBeenCalledWith({
       command: 'git commit -m "feat: add login"',
       cwd: '/home/user/myapp',
-      exitCode: null,
+      exitCode: 0,
       durationMs: null,
       source: 'claude-code',
     })
@@ -168,6 +178,88 @@ describe('_hook integration', () => {
     mockReadConfig.mockReturnValue({ capture: { aiTools: false } })
     await withStdin(VALID_HOOK_PAYLOAD, async () => {
       await makeProgram().parseAsync(['_hook', '--source', 'claude-code'], { from: 'user' })
+      await new Promise((resolve) => setImmediate(resolve))
+    })
+    expect(mockCapture).not.toHaveBeenCalled()
+  })
+})
+
+// WOR-127: payloads recorded from Claude Code 2.1.311 (paths and ids replaced) — a success fires only PostToolUse,
+// a failure only PostToolUseFailure, whose `error` starts with the exit code
+describe('parseHookPayload — recorded Claude Code payloads', () => {
+  const fixture = (name: string) =>
+    readFileSync(join(__dirname, '../fixtures/claude-code-hooks', `${name}.json`), 'utf-8')
+
+  it('a successful command (PostToolUse) is exit 0, with its duration', () => {
+    expect(parseHookPayload(fixture('post-tool-use-success'), 'PostToolUse')).toEqual({
+      command: 'true',
+      cwd: '/Users/dev/api',
+      exitCode: 0,
+      durationMs: 1381,
+    })
+  })
+
+  it.each([
+    ['post-tool-use-failure-exit-1', 1],
+    ['post-tool-use-failure-exit-3', 3],
+  ])('%s gives its real exit code', (name, exitCode) => {
+    expect(parseHookPayload(fixture(name), 'PostToolUseFailure')?.exitCode).toBe(exitCode)
+  })
+
+  it('reports cwd as where the shell ended up: a cd inside the project is kept, one leaving it is reset', () => {
+    expect(parseHookPayload(fixture('post-tool-use-cd-in-project'), 'PostToolUse')).toMatchObject({
+      command: 'cd sub && true',
+      cwd: '/Users/dev/api/sub',
+    })
+    expect(parseHookPayload(fixture('post-tool-use-cd-success'), 'PostToolUse')).toMatchObject({
+      command: 'cd /tmp && true',
+      cwd: '/Users/dev/api',
+    })
+  })
+
+  it('ignores a tool other than Bash, should the settings matcher ever be widened', () => {
+    const edit = JSON.stringify({ ...JSON.parse(fixture('post-tool-use-success')), tool_name: 'Edit' })
+    expect(parseHookPayload(edit, 'PostToolUse')).toBeNull()
+  })
+
+  it('an interrupted call has an unknown outcome', () => {
+    const interrupted = JSON.stringify({
+      ...JSON.parse(fixture('post-tool-use-failure-exit-1')),
+      error: 'Interrupted by user',
+      is_interrupt: true,
+    })
+    expect(parseHookPayload(interrupted, 'PostToolUseFailure')?.exitCode).toBeNull()
+  })
+
+  it('a failure without an exit code line has an unknown outcome — and only that first line is read', () => {
+    const toolError = JSON.stringify({
+      ...JSON.parse(fixture('post-tool-use-failure-exit-1')),
+      error: 'Command timed out\nsecret output',
+    })
+    expect(parseHookPayload(toolError, 'PostToolUseFailure')).toMatchObject({ exitCode: null })
+  })
+})
+
+describe('_hook — events', () => {
+  it('captures a PostToolUseFailure with its exit code', async () => {
+    const failure = readFileSync(
+      join(__dirname, '../fixtures/claude-code-hooks/post-tool-use-failure-exit-3.json'),
+      'utf-8'
+    )
+    await withStdin(failure, async () => {
+      await makeProgram().parseAsync(['_hook', '--source', 'claude-code', '--event', 'PostToolUseFailure'], {
+        from: 'user',
+      })
+      await new Promise((resolve) => setImmediate(resolve))
+    })
+    expect(mockCapture).toHaveBeenCalledWith(
+      expect.objectContaining({ command: 'exit 3', exitCode: 3, durationMs: 22 })
+    )
+  })
+
+  it('ignores an event it does not know, rather than treating it as a command', async () => {
+    await withStdin(VALID_HOOK_PAYLOAD, async () => {
+      await makeProgram().parseAsync(['_hook', '--source', 'claude-code', '--event', 'SomethingNew'], { from: 'user' })
       await new Promise((resolve) => setImmediate(resolve))
     })
     expect(mockCapture).not.toHaveBeenCalled()

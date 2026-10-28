@@ -10,6 +10,23 @@ import { shouldFilter, isDuplicate } from './filter'
 import { IDE_DEDUP_WINDOW_MS, TASK_RUN_DEDUP_WINDOW_MS } from './ide'
 import { PAUSE_FLAG_PATH } from '../utils/paths'
 import { loadAIToolRegistry } from '../config/registry'
+import { effectiveDirectory } from '../normalize/git-directory'
+import { readCommitMessageFile } from './commit-message-file'
+
+/**
+ * `git commit -F <file>`: the message, read now while the file may still exist and redacted like the command — and
+ * never the path, which isn't stored.
+ */
+function withMessageFromFile(
+  metadata: Record<string, unknown>,
+  workDirectory: string,
+  extraRedactions: string[]
+): Record<string, unknown> {
+  const { messageFile, ...rest } = metadata
+  if (typeof messageFile !== 'string') return metadata
+  const message = readCommitMessageFile(messageFile, workDirectory)
+  return { ...rest, message: message ? redact(message, extraRedactions) : null }
+}
 
 export function captureCommand(opts: {
   command?: string
@@ -83,13 +100,16 @@ export function captureCommand(opts: {
   // 3. Redact sensitive patterns
   const safeCommand = redact(command, config.redact.extra)
 
-  // 4. Extract git context — named exactly as the IDE path, notes and `context` name it
-  const { repoName, branch } = getRepoContext(cwd, config)
-
-  // 5. Normalize to typed event
-  const { category, metadata } = normalizeCommand(safeCommand)
+  // 4. Normalize to typed event — first, because the repo depends on which step did the work
+  const { category, metadata: normalizedMetadata, matchedStep } = normalizeCommand(safeCommand)
 
   if (category === 'ai_session' && config.capture.aiTools === false) return
+
+  // 5. Extract git context from where the work happened — `git -C ../web commit` belongs to web, not here — named
+  // exactly as the IDE path, notes and `context` name it
+  const workDirectory = effectiveDirectory({ matchedStep: matchedStep ?? safeCommand, cwd })
+  const { repoName, branch } = getRepoContext(workDirectory, config)
+  const metadata = withMessageFromFile(normalizedMetadata, workDirectory, config.redact.extra)
 
   // Hint passthrough: preserve context for unrecognised commands so the AI can describe them
   if (category === 'other') {
@@ -102,7 +122,7 @@ export function captureCommand(opts: {
   if (category === 'ai_session') {
     // 6a. Commits made during the session
     if (opts.gitBefore) {
-      const commits = getCommitsSince(opts.gitBefore, cwd)
+      const commits = getCommitsSince(opts.gitBefore, workDirectory)
       if (commits.length > 0) metadata.commits = commits
     }
 

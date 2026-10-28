@@ -120,3 +120,50 @@ export function maskQuotedText(text: string): string {
 export function startsWithWord(step: string, word: string): boolean {
   return step === word || step.startsWith(`${word} `) || step.startsWith(`${word}\t`)
 }
+
+/** A shell word with its quotes and escapes removed, and where it starts in the text. */
+export interface ShellWord {
+  word: string
+  start: number
+}
+
+/**
+ * The text's words as the shell would pass them to a command: split on whitespace outside quotes, with quote marks
+ * and escaping backslashes removed (`"a b"` → `a b`, `\"` → `"`). `$(…)` and other expansions are kept as written.
+ */
+export function shellWords(text: string): ShellWord[] {
+  const words: ShellWord[] = []
+  let quote: QuoteState = null
+  let current: ShellWord | null = null
+  const append = (character: string, index: number) => {
+    current ??= { word: '', start: index }
+    current.word += character
+  }
+  for (let index = 0; index < text.length; index++) {
+    const character = text[index]
+    if (character === '\\' && quote !== "'") {
+      current ??= { word: '', start: index }
+      index++
+      if (index < text.length) current.word += text[index]
+      continue
+    }
+    if (quote !== null) {
+      if (character === quote) quote = null
+      else append(character, index)
+      continue
+    }
+    if (character === '"' || character === "'") {
+      current ??= { word: '', start: index }
+      quote = character
+      continue
+    }
+    if (/\s/.test(character)) {
+      if (current) words.push(current)
+      current = null
+      continue
+    }
+    append(character, index)
+  }
+  if (current) words.push(current)
+  return words
+}

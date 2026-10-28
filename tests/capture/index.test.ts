@@ -26,6 +26,8 @@ vi.mock('../../src/capture/git-snapshot', () => ({ getCommitsSince: vi.fn() }))
 
 vi.mock('../../src/capture/aider', () => ({ readLastAiderPrompt: vi.fn() }))
 
+vi.mock('../../src/capture/commit-message-file', () => ({ readCommitMessageFile: vi.fn() }))
+
 vi.mock('../../src/config/registry', () => ({
   loadAIToolRegistry: vi.fn().mockReturnValue([
     { tool: 'claude', pattern: '^claude\\b', hook: 'claude-code', contextSource: 'hook' },
@@ -43,6 +45,8 @@ import { normalizeCommand } from '../../src/normalize/patterns'
 import { shouldFilter, isDuplicate } from '../../src/capture/filter'
 import { redact } from '../../src/capture/redact'
 import { getRepoContext } from '../../src/capture/git'
+import { readCommitMessageFile } from '../../src/capture/commit-message-file'
+import { getCommitsSince } from '../../src/capture/git-snapshot'
 import { readLastAiderPrompt } from '../../src/capture/aider'
 import { captureCommand } from '../../src/capture'
 
@@ -245,5 +249,48 @@ describe('captureCommand — repo naming', () => {
 
     expect(mockGetRepoContext).toHaveBeenCalledWith('/repo', QUALIFIED_CONFIG)
     expect(mockInsertEvent).toHaveBeenCalledWith(expect.objectContaining({ repo_name: 'acme/api' }))
+  })
+})
+
+// WOR-127: a commit belongs to the repo it was made in, which isn't always where the command was typed
+describe('captureCommand — where the work happened', () => {
+  function capturedWith(command: string, matchedStep: string, source?: string) {
+    mockNormalize.mockReturnValue({ category: 'shipping', metadata: { message: 'x' }, matchedStep })
+    captureCommand({ command, cwd: '/r/api', exitCode: 0, durationMs: 10, source })
+    return vi.mocked(getRepoContext).mock.calls.at(-1)?.[0]
+  }
+
+  it('credits a `git -C` commit to that directory, and keeps the cwd the command ran in', () => {
+    expect(capturedWith('git -C ../web commit -m x', 'git -C ../web commit -m x')).toBe('/r/web')
+    expect(mockInsertEvent).toHaveBeenCalledWith(expect.objectContaining({ cwd: '/r/api' }))
+  })
+
+  it("doesn't follow a leading `cd` for any source — cwd is already where the shell ended up", () => {
+    expect(capturedWith('cd /r/web && git commit -m x', 'git commit -m x', 'claude-code')).toBe('/r/api')
+    expect(capturedWith('cd /r/web && git commit -m x', 'git commit -m x')).toBe('/r/api')
+  })
+
+  it('reads a `-F <file>` message from the work directory, redacted, and never stores the path', () => {
+    mockNormalize.mockReturnValue({
+      category: 'shipping',
+      metadata: { message: null, messageFile: 'msg.txt' },
+      matchedStep: 'git -C ../web commit -F msg.txt',
+    })
+    vi.mocked(readCommitMessageFile).mockReturnValue('feat: from a file')
+
+    captureCommand({ command: 'git -C ../web commit -F msg.txt', cwd: '/r/api', exitCode: 0, durationMs: 10 })
+
+    expect(readCommitMessageFile).toHaveBeenCalledWith('msg.txt', '/r/web')
+    const stored = JSON.parse(vi.mocked(mockInsertEvent).mock.calls[0][0].metadata as string)
+    expect(stored).toEqual({ message: 'feat: from a file' })
+  })
+
+  it("looks for an AI session's commits in the work directory", () => {
+    mockNormalize.mockReturnValue({ category: 'ai_session', metadata: { tool: 'claude' }, matchedStep: 'claude' })
+    vi.mocked(getCommitsSince).mockReturnValue([])
+
+    captureCommand({ command: 'claude', cwd: '/r/api', exitCode: 0, durationMs: 10, gitBefore: 'abc123' })
+
+    expect(getCommitsSince).toHaveBeenCalledWith('abc123', '/r/api')
   })
 })

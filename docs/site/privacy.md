@@ -18,6 +18,10 @@ Everything you capture. All captured data is stored in `~/.workscribe/` on your 
 
 Both the database and config file are written with `0600` permissions (owner read/write only).
 
+**What's recorded from a command, and what isn't:**
+- **Claude Code commands:** Workscribe records the command, its folder, how long it took, and its exit code. For a failed command, Claude Code passes the command's output along with the exit code; Workscribe reads only the `Exit code N` line and stores nothing else from it.
+- **`git commit -F <file>`:** Workscribe reads the message file's first line (the subject) when the command is captured, redacted like the command itself. Only regular files are read, at most 4 KB, and the file's path isn't stored.
+
 ---
 
 ## Anonymous install telemetry
