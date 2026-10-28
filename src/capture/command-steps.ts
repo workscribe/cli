@@ -71,6 +71,46 @@ export function stripHeredocBodies(command: string): string {
   return kept.join('\n')
 }
 
+/** A heredoc in a command: its terminator, its body, and the line that opened it. */
+export interface HeredocBody {
+  terminator: string
+  body: string
+  openerLine: string
+}
+
+/**
+ * Every heredoc in a command, in order — for text a command reads from its input (`git commit -F - <<EOF`'s
+ * message). The same openers `stripHeredocBodies` recognises.
+ */
+export function heredocBodies(command: string): HeredocBody[] {
+  const heredocs: HeredocBody[] = []
+  const pending: { terminator: string; lines: string[]; openerLine: string }[] = []
+  for (const line of command.split('\n')) {
+    if (pending.length > 0) {
+      const [current] = pending
+      if (line.trim() === current.terminator) {
+        heredocs.push({
+          terminator: current.terminator,
+          body: current.lines.join('\n'),
+          openerLine: current.openerLine,
+        })
+        pending.shift()
+      } else {
+        current.lines.push(line)
+      }
+      continue
+    }
+    const comment = commentStart(line)
+    for (const match of line.matchAll(HEREDOC_OPENER)) {
+      const isEscaped = line[match.index - 1] === '\\'
+      const isInComment = comment !== -1 && match.index > comment
+      if (isEscaped || isInComment || !isOutsideQuotes(line, match.index)) continue
+      pending.push({ terminator: match[2], lines: [], openerLine: line })
+    }
+  }
+  return heredocs
+}
+
 /** The steps a shell runs: split on newlines, `&&`, `||`, `;` and a background `&`, outside quotes. */
 export function splitSteps(command: string): string[] {
   return splitOutsideQuotes(command, STEP_SEPARATORS)

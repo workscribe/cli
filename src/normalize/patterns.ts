@@ -2,39 +2,46 @@ import { loadAIToolRegistry } from '../config/registry'
 import { getActiveProfileRules } from '../profiles/loader'
 import { debugLog } from '../utils/logger'
 import { classifyCompound, UNCLASSIFIED } from './compound'
+import { commitMessageOf } from './commit-message'
+import { dependencyMetadata, extractPackages, INSTALL_WORDS, REMOVE_WORDS } from './dependency-metadata'
+import { withoutGitGlobalOptions } from './git-invocation'
 
 export interface NormalizedEvent {
   category: string
   metadata: Record<string, unknown>
+  /** The step that set the category, as written (or the whole command) — for capture, never stored */
+  matchedStep?: string
+}
+
+/** What a rule can read besides the one-line command it matched: the step as written, and the whole command. */
+interface RuleContext {
+  /** The step with its line breaks and quoting — `-m "$(cat <<'EOF' …)"` survives here */
+  raw: string
+  /** The whole captured command, where heredoc bodies (`-F - <<EOF`) still are */
+  original: string
 }
 
 interface Rule {
-  match(cmd: string): NormalizedEvent | null
+  match(cmd: string, context: RuleContext): NormalizedEvent | null
 }
 
 function makeRule(
   pattern: RegExp,
   category: string,
-  extract: (match: RegExpMatchArray, cmd: string) => Record<string, unknown> = () => ({})
+  extract: (match: RegExpMatchArray, cmd: string, context: RuleContext) => Record<string, unknown> = () => ({})
 ): Rule {
   return {
-    match(cmd) {
+    match(cmd, context) {
       const m = cmd.match(pattern)
       if (!m) return null
-      return { category, metadata: extract(m, cmd) }
+      return { category, metadata: extract(m, cmd, context) }
     },
   }
 }
 
-// Extract package names from install commands like: npm install foo bar
-function extractPackages(cmd: string, afterKeyword: string): string[] {
-  const idx = cmd.indexOf(afterKeyword)
-  if (idx === -1) return []
-  return cmd
-    .slice(idx + afterKeyword.length)
-    .trim()
-    .split(/\s+/)
-    .filter((part) => part && !part.startsWith('-'))
+/** A package-manager rule: `tool`'s packages after one of `commandWords`, with `action: 'remove'` for removals. */
+function dependencyRule(pattern: RegExp, tool: string, commandWords: string[], action?: 'remove'): Rule {
+  return makeRule(pattern, 'dependencies', (_match, command) => dependencyMetadata(tool, command, commandWords, action))
 }
 
 // Nx targets → categories: `nx build app`, `nx run app:test`, `nx run-many -t lint`, `nx affected --target=e2e`
@@ -60,12 +67,11 @@ const nxRule: Rule = {
 
 const BASE_RULES: Rule[] = [
   // ─── Git operations ───────────────────────────────────────────────────────
-  makeRule(/^git\s+commit\b/, 'shipping', (_m, cmd) => {
-    // -m "…" / -m '…' keep the whole message (an apostrophe inside double quotes is part of it);
-    // an unquoted -m takes one word, so `-m wip --no-verify` is "wip", not "wip --no-verify"
-    const msgMatch = cmd.match(/-m\s+(?:"([^"]*)"|'([^']*)'|(\S+))/)
-    const message = msgMatch ? (msgMatch[1] ?? msgMatch[2] ?? msgMatch[3]).trim() : null
-    return { message: message || null }
+  makeRule(/^git\s+commit\b/, 'shipping', (_m, _cmd, { raw, original }) => {
+    // Read from the step as written, so quoting and multi-line heredoc messages survive (see git-invocation.ts)
+    const commitMessage = commitMessageOf(raw, original)
+    const message = commitMessage?.subject ?? null
+    return commitMessage?.messageFile ? { message, messageFile: commitMessage.messageFile } : { message }
   }),
 
   makeRule(/^git\s+push\b/, 'shipping', (_m, cmd) => {
@@ -116,62 +122,60 @@ const BASE_RULES: Rule[] = [
   makeRule(/^wrangler\s+deploy\b/, 'releasing', () => ({ tool: 'wrangler' })),
 
   // ─── Dependencies ─────────────────────────────────────────────────────────
-  makeRule(/^npm\s+(install|i|add)\b/, 'dependencies', (_m, cmd) => ({
-    tool: 'npm',
-    packages: extractPackages(cmd, cmd.includes('install') ? 'install' : cmd.includes(' i ') ? ' i ' : 'add'),
+  dependencyRule(/^npm\s+(install|i|add)\b/, 'npm', INSTALL_WORDS),
+
+  // `yarn workspace web add zod` — the workspace is the word after `workspace`
+  makeRule(/^yarn\s+workspace\s+(\S+)\s+(add|remove)\b/, 'dependencies', (match, command) => ({
+    ...dependencyMetadata('yarn', command, [match[2]], match[2] === 'remove' ? 'remove' : undefined),
+    workspace: match[1],
   })),
 
-  makeRule(/^(yarn|pnpm)\s+(install|add)\b/, 'dependencies', (m, cmd) => ({
-    tool: m[1],
-    packages: extractPackages(cmd, 'add'),
-  })),
+  // `pnpm --filter web add zod`, `pnpm -F web add zod`, `pnpm -r add zod` — options before the subcommand
+  makeRule(
+    /^pnpm\s+(?:(?:--filter|-F)\s+\S+|--filter=\S+|-r|--recursive)\s+(add|install|i|remove|rm|uninstall|un)\b/,
+    'dependencies',
+    (match, command) =>
+      REMOVE_WORDS.includes(match[1])
+        ? dependencyMetadata('pnpm', command, REMOVE_WORDS, 'remove')
+        : dependencyMetadata('pnpm', command, INSTALL_WORDS)
+  ),
 
-  makeRule(/^bun\s+(install|add)\b/, 'dependencies', (_m, cmd) => ({
-    tool: 'bun',
-    packages: extractPackages(cmd, 'add'),
-  })),
+  // `yarn install` takes no packages; `pnpm install <pkg>` / `pnpm i <pkg>` adds them, like `add`
+  dependencyRule(/^yarn\s+(install|add)\b/, 'yarn', ['add']),
+  dependencyRule(/^pnpm\s+(install|i|add)\b/, 'pnpm', INSTALL_WORDS),
+  dependencyRule(/^bun\s+(install|i|add)\b/, 'bun', INSTALL_WORDS),
 
-  makeRule(/^pip\s+(install)\b/, 'dependencies', (_m, cmd) => ({
+  makeRule(/^pip\s+(install)\b/, 'dependencies', (_match, command) => ({
     tool: 'pip',
-    packages: extractPackages(cmd, 'install'),
+    packages: extractPackages(command, ['install']),
   })),
 
-  makeRule(/^cargo\s+add\b/, 'dependencies', (_m, cmd) => ({
+  makeRule(/^cargo\s+add\b/, 'dependencies', (_match, command) => ({
     tool: 'cargo',
-    packages: extractPackages(cmd, 'add'),
+    packages: extractPackages(command, ['add']),
   })),
 
-  makeRule(/^(brew)\s+install\b/, 'dependencies', (_m, cmd) => ({
+  makeRule(/^(brew)\s+install\b/, 'dependencies', (_match, command) => ({
     tool: 'brew',
-    packages: extractPackages(cmd, 'install'),
+    packages: extractPackages(command, ['install']),
   })),
 
-  makeRule(/^go\s+get\b/, 'dependencies', (_m, cmd) => ({
+  makeRule(/^go\s+get\b/, 'dependencies', (_match, command) => ({
     tool: 'go',
-    packages: extractPackages(cmd, 'get'),
+    packages: extractPackages(command, ['get']),
   })),
 
-  makeRule(/^npm\s+(uninstall|remove|rm)\b/, 'dependencies', (_m, cmd) => ({
-    tool: 'npm',
-    packages: extractPackages(cmd, cmd.split(/\s+/)[1]),
-    action: 'remove',
-  })),
+  dependencyRule(/^npm\s+(uninstall|remove|rm|un)\b/, 'npm', REMOVE_WORDS, 'remove'),
 
-  makeRule(/^(yarn|pnpm)\s+remove\b/, 'dependencies', (m, cmd) => ({
-    tool: m[1],
-    packages: extractPackages(cmd, 'remove'),
-    action: 'remove',
-  })),
+  makeRule(/^(yarn|pnpm)\s+(remove|rm|uninstall|un)\b/, 'dependencies', (match, command) =>
+    dependencyMetadata(match[1], command, REMOVE_WORDS, 'remove')
+  ),
 
-  makeRule(/^bun\s+remove\b/, 'dependencies', (_m, cmd) => ({
-    tool: 'bun',
-    packages: extractPackages(cmd, 'remove'),
-    action: 'remove',
-  })),
+  dependencyRule(/^bun\s+(remove|rm)\b/, 'bun', REMOVE_WORDS, 'remove'),
 
-  makeRule(/^pip\s+uninstall\b/, 'dependencies', (_m, cmd) => ({
+  makeRule(/^pip\s+uninstall\b/, 'dependencies', (_match, command) => ({
     tool: 'pip',
-    packages: extractPackages(cmd, 'uninstall'),
+    packages: extractPackages(command, ['uninstall']),
     action: 'remove',
   })),
 
@@ -336,20 +340,20 @@ function getRules(): Rule[] {
   return activeRules
 }
 
-function matchRules(command: string): NormalizedEvent {
-  // Strip `git -C <path>` prefix so rules match regardless of working directory flag
-  const flattened = command
-    .trim()
-    .replace(/\s+/g, ' ')
-    .replace(/^(git)\s+-C\s+\S+\s+/, '$1 ')
+function matchRules(command: string, context: RuleContext): NormalizedEvent {
+  // git's own options (`-C <dir>`, `-c k=v`, `--work-tree=…`) are dropped, so the rules see `git <subcommand> …`
+  const flattened = withoutGitGlobalOptions(command.trim()).replace(/\s+/g, ' ')
   for (const rule of getRules()) {
-    const result = rule.match(flattened)
+    const result = rule.match(flattened, context)
     if (result) return result
   }
   return UNCLASSIFIED
 }
 
-/** Classifies a captured command — compound ones by their most telling step (see `./compound`). */
+/**
+ * Classifies a captured command — compound ones by their most telling step (see `./compound`). `matchedStep` says
+ * which step that was, as written, so capture can tell which repo a `git -C …` step worked in.
+ */
 export function normalizeCommand(command: string): NormalizedEvent {
-  return classifyCompound(command, matchRules)
+  return classifyCompound(command, (simple, raw) => matchRules(simple, { raw, original: command }))
 }

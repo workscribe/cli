@@ -36,11 +36,13 @@ function commandsForEvent(hooks: Record<string, unknown>, eventName: string): st
 
 function findWorkscribeHookCommands(settings: Record<string, unknown>): {
   postToolUse: string[]
+  postToolUseFailure: string[]
   userPromptSubmit: string[]
 } {
   const hooks = (settings.hooks ?? {}) as Record<string, unknown>
   return {
     postToolUse: commandsForEvent(hooks, 'PostToolUse'),
+    postToolUseFailure: commandsForEvent(hooks, 'PostToolUseFailure'),
     userPromptSubmit: commandsForEvent(hooks, 'UserPromptSubmit'),
   }
 }
@@ -85,8 +87,8 @@ function isExecutable(filePath: string): boolean {
 }
 
 function allWorkscribeCommands(): string[] {
-  const { postToolUse, userPromptSubmit } = findWorkscribeHookCommands(readSettings())
-  return [...postToolUse, ...userPromptSubmit]
+  const { postToolUse, postToolUseFailure, userPromptSubmit } = findWorkscribeHookCommands(readSettings())
+  return [...postToolUse, ...postToolUseFailure, ...userPromptSubmit]
 }
 
 /**
@@ -156,12 +158,15 @@ function hooksWithoutWorkscribe(hooks: Record<string, unknown>): Record<string, 
  * The guard keeps a hook whose Node a version manager removed quiet — and so quietly broken — unless `init` sees it.
  */
 function isHookCurrent(): boolean {
-  const { postToolUse, userPromptSubmit } = findWorkscribeHookCommands(readSettings())
-  if (postToolUse.length === 0 || userPromptSubmit.length === 0) return false
-  return [...postToolUse, ...userPromptSubmit].every((command) => {
-    const nodePath = pinnedNodePath(command)
-    return isPinnedCommand(command) && isGuardedCommand(command) && nodePath !== null && isExecutable(nodePath)
-  })
+  const commandsByEvent = findWorkscribeHookCommands(readSettings())
+  // An install from before the failure hook (WOR-127) is outdated: its commands never record a failing exit code
+  if (Object.values(commandsByEvent).some((commands) => commands.length === 0)) return false
+  return Object.values(commandsByEvent)
+    .flat()
+    .every((command) => {
+      const nodePath = pinnedNodePath(command)
+      return isPinnedCommand(command) && isGuardedCommand(command) && nodePath !== null && isExecutable(nodePath)
+    })
 }
 
 export const claudeCodeIntegration: AIHookIntegration = {
@@ -181,6 +186,7 @@ export const claudeCodeIntegration: AIHookIntegration = {
     const settings = readSettings()
     const existingHooks = (settings.hooks ?? {}) as Record<string, unknown>
     const existingPostToolUse = withoutWorkscribeEntries((existingHooks.PostToolUse ?? []) as unknown[])
+    const existingPostToolUseFailure = withoutWorkscribeEntries((existingHooks.PostToolUseFailure ?? []) as unknown[])
     const existingUserPromptSubmit = withoutWorkscribeEntries((existingHooks.UserPromptSubmit ?? []) as unknown[])
 
     const binaryPath = resolveWorkscribeBinary()
@@ -193,6 +199,14 @@ export const claudeCodeIntegration: AIHookIntegration = {
         {
           matcher: 'Bash',
           hooks: [{ type: 'command', command: command(HOOK_MARKER), async: true }],
+        },
+      ],
+      // Failed Bash calls only fire this one, with the exit code in `error` — PostToolUse alone never sees a failure
+      PostToolUseFailure: [
+        ...existingPostToolUseFailure,
+        {
+          matcher: 'Bash',
+          hooks: [{ type: 'command', command: command(`${HOOK_MARKER} --event PostToolUseFailure`), async: true }],
         },
       ],
       UserPromptSubmit: [

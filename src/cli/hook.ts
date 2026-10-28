@@ -5,15 +5,49 @@ import { debugLog } from '../utils/logger'
 import { containsSecrets } from '../capture/detect-secrets'
 import { insertAlert } from '../db/alerts'
 
-/** Parses a Claude Code PostToolUse stdin payload. Returns null if required fields are missing. */
-export function parseHookPayload(raw: string): { command: string; cwd: string } | null {
+/** The Claude Code events that report a finished Bash command — the success and the failure halves. */
+export const TOOL_EVENTS = ['PostToolUse', 'PostToolUseFailure'] as const
+export type ToolEvent = (typeof TOOL_EVENTS)[number]
+
+export interface HookCommand {
+  command: string
+  cwd: string
+  /** 0 for a success, the real code for a failure, null when it's unknown (an interrupted call) */
+  exitCode: number | null
+  durationMs: number | null
+}
+
+// PostToolUseFailure's `error` starts with this for a Bash command that ran and exited
+const EXIT_CODE_LINE = /^Exit code (\d+)/
+
+/**
+ * The exit code an event implies. Claude Code fires PostToolUse only when a Bash call succeeds and
+ * PostToolUseFailure only when it fails (checked against Claude Code 2.1.311 — see
+ * tests/fixtures/claude-code-hooks/). Only the first line of `error` is read; its output never is.
+ */
+function exitCodeOf(event: ToolEvent, payload: Record<string, unknown>): number | null {
+  if (event === 'PostToolUse') return 0
+  if (payload.is_interrupt === true || typeof payload.error !== 'string') return null
+  const exitCode = payload.error.match(EXIT_CODE_LINE)?.[1]
+  return exitCode === undefined ? null : Number(exitCode)
+}
+
+/** Parses a Claude Code PostToolUse or PostToolUseFailure stdin payload. Returns null if required fields are missing. */
+export function parseHookPayload(raw: string, event: ToolEvent = 'PostToolUse'): HookCommand | null {
   if (!raw.trim()) return null
   const payload = JSON.parse(raw) as Record<string, unknown>
+  // The hook's matcher is `Bash`, but settings can be edited: exit codes only mean something for shell commands
+  if (payload.tool_name !== undefined && payload.tool_name !== 'Bash') return null
   const toolInput = payload.tool_input as Record<string, unknown> | undefined
   const command = typeof toolInput?.command === 'string' ? toolInput.command : null
   const cwd = typeof payload.cwd === 'string' ? payload.cwd : null
   if (!command || !cwd) return null
-  return { command, cwd }
+  const durationMs = typeof payload.duration_ms === 'number' ? payload.duration_ms : null
+  return { command, cwd, exitCode: exitCodeOf(event, payload), durationMs }
+}
+
+function isToolEvent(event: string): event is ToolEvent {
+  return (TOOL_EVENTS as readonly string[]).includes(event)
 }
 
 interface UserPromptPayload {
@@ -39,7 +73,7 @@ export function registerHook(program: Command): void {
     .command('_hook')
     .description('Internal: capture events from AI tool hooks (stdin JSON payload)')
     .option('--source <source>', 'hook source identifier (e.g. claude-code)')
-    .option('--event <event>', 'hook event type (PostToolUse or UserPromptSubmit)', 'PostToolUse')
+    .option('--event <event>', 'hook event type (PostToolUse, PostToolUseFailure or UserPromptSubmit)', 'PostToolUse')
     .action((opts: { source?: string; event: string }) => {
       let raw = ''
       process.stdin.setEncoding('utf-8')
@@ -69,17 +103,12 @@ export function registerHook(program: Command): void {
             return
           }
 
-          // Default: PostToolUse — capture the shell command
+          // A finished Bash command, successful or not — anything else is an event this version doesn't handle
+          if (!isToolEvent(opts.event)) return
           if (readConfig().capture.aiTools === false) return
-          const parsed = parseHookPayload(raw)
+          const parsed = parseHookPayload(raw, opts.event)
           if (!parsed) return
-          captureCommand({
-            command: parsed.command,
-            cwd: parsed.cwd,
-            exitCode: null,
-            durationMs: null,
-            source: opts.source,
-          })
+          captureCommand({ ...parsed, source: opts.source })
         } catch (err) {
           debugLog('_hook', err)
         }

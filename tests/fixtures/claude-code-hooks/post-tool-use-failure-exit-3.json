@@ -1,0 +1,20 @@
+{
+  "session_id": "<session_id>",
+  "transcript_path": "<transcript_path>",
+  "cwd": "/Users/dev/api",
+  "prompt_id": "<prompt_id>",
+  "permission_mode": "default",
+  "effort": {
+    "level": "medium"
+  },
+  "hook_event_name": "PostToolUseFailure",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "exit 3",
+    "description": "Exit with status 3"
+  },
+  "tool_use_id": "<tool_use_id>",
+  "error": "Exit code 3",
+  "is_interrupt": false,
+  "duration_ms": 22
+}

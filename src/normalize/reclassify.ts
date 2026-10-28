@@ -14,8 +14,10 @@ export function reclassifiedEvent(
   command: string,
   { classify, aiToolsEnabled }: ReclassifyOptions
 ): NormalizedEvent | null {
-  const event = classify(command)
-  if (event.category === 'other') return null
-  if (event.category === 'ai_session' && !aiToolsEnabled) return null
-  return event
+  const { category, metadata } = classify(command)
+  if (category === 'other') return null
+  if (category === 'ai_session' && !aiToolsEnabled) return null
+  // A `-F <file>` path is only for capture to read at the time; a stored event never keeps it
+  const { messageFile: _messageFile, ...storedMetadata } = metadata
+  return { category, metadata: storedMetadata }
 }

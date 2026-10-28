@@ -4,7 +4,8 @@ import { commandSteps, isGlueStep, simpleCommandOf } from '../capture/command-st
 import { DEFAULT_EXCLUDED_CATEGORIES } from '../summary/exclusions'
 import type { NormalizedEvent } from './patterns'
 
-export type MatchCommand = (command: string) => NormalizedEvent
+/** Matches a step: `command` is its simple form (one line, redirections gone), `raw` the step as written. */
+export type MatchCommand = (command: string, raw: string) => NormalizedEvent
 
 export const UNCLASSIFIED: NormalizedEvent = { category: 'other', metadata: {} }
 
@@ -36,10 +37,13 @@ function rankOf(category: string): number {
   return OTHER_CATEGORY_RANK
 }
 
-/** The most telling step's event; ties go to the earlier step. */
+/** The most telling step's event, and that step; ties go to the earlier step. */
 function primaryStepEvent(steps: string[], matchCommand: MatchCommand): NormalizedEvent {
-  const events = steps.map((step) => matchCommand(simpleCommandOf(step)))
-  return events.reduce((best, event) => (rankOf(event.category) < rankOf(best.category) ? event : best), UNCLASSIFIED)
+  const events = steps.map((step) => ({ ...matchCommand(simpleCommandOf(step), step), matchedStep: step }))
+  return events.reduce<NormalizedEvent>(
+    (best, event) => (rankOf(event.category) < rankOf(best.category) ? event : best),
+    UNCLASSIFIED
+  )
 }
 
 /**
@@ -48,8 +52,12 @@ function primaryStepEvent(steps: string[], matchCommand: MatchCommand): Normaliz
  * most telling step names the event — falling back to the whole command when no step is recognised either.
  */
 export function classifyCompound(command: string, matchCommand: MatchCommand): NormalizedEvent {
-  const wholeCommandEvent = matchCommand(command)
   const workSteps = commandSteps(command).filter((step) => !isGlueStep(step))
+  // Matched as a whole (so heredoc text inside it is still there), but it's the one work step that ran
+  const wholeCommandEvent = {
+    ...matchCommand(command, command),
+    matchedStep: workSteps.length === 1 ? workSteps[0] : command,
+  }
   const isRecognisedSingleCommand = workSteps.length <= 1 && wholeCommandEvent.category !== UNCLASSIFIED.category
   if (isRecognisedSingleCommand || workSteps.length === 0) return wholeCommandEvent
 

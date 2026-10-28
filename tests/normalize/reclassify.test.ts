@@ -24,4 +24,13 @@ describe('reclassifiedEvent', () => {
     expect(reclassifiedEvent('claude', { classify, aiToolsEnabled: false })).toBeNull()
     expect(reclassifiedEvent('claude', { classify, aiToolsEnabled: true })?.category).toBe('ai_session')
   })
+
+  it('never stores a commit message file path, which only capture can read at the time', () => {
+    const classify = () => ({ category: 'shipping', metadata: { message: null, messageFile: '/tmp/msg.txt' } })
+
+    expect(reclassifiedEvent('git commit -F /tmp/msg.txt', { classify, aiToolsEnabled: true })).toEqual({
+      category: 'shipping',
+      metadata: { message: null },
+    })
+  })
 })
