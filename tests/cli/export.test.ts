@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, onTestFinished } from 'vitest'
 
 vi.mock('../../src/sessions/detector', () => ({
   getOrBuildSessions: vi.fn(),
@@ -10,6 +10,21 @@ vi.mock('../../src/summary/writer', () => ({
 
 vi.mock('../../src/config', () => ({
   readConfig: vi.fn(),
+}))
+
+// export reads saved summaries like summary does; the db module would load node:sqlite
+vi.mock('../../src/db', () => ({
+  getSessionSummaries: vi.fn(() => []),
+}))
+
+vi.mock('../../src/summary/exclusions', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../src/summary/exclusions')>()),
+  countExcludedEvents: vi.fn(() => new Map()),
+}))
+
+vi.mock('../../src/summary/day-commits', () => ({
+  DAY_GIT_BUDGET_MS: 3000,
+  lookupDayCommits: vi.fn((sessions: unknown[]) => sessions.map(() => null)),
 }))
 
 vi.mock('fs', () => ({
@@ -27,6 +42,8 @@ import { Command } from 'commander'
 import { getOrBuildSessions } from '../../src/sessions/detector'
 import { createSummaryWriter } from '../../src/summary/writer'
 import { readConfig } from '../../src/config'
+import { getSessionSummaries } from '../../src/db'
+import { countExcludedEvents } from '../../src/summary/exclusions'
 import { log } from '../../src/utils/logger'
 import { registerExport } from '../../src/cli/export'
 import { TemplateProvider } from '../../src/ai/engines/template/provider'
@@ -75,6 +92,7 @@ function makeProgram() {
 
 beforeEach(() => {
   mockReadConfig.mockReturnValue(BASE_CONFIG)
+  vi.mocked(getSessionSummaries).mockReturnValue([])
   mockFs.existsSync.mockReturnValue(true)
   mockFs.mkdirSync.mockReturnValue(undefined)
   mockFs.writeFileSync.mockReturnValue(undefined)
@@ -160,6 +178,80 @@ describe('workscribe export', () => {
     it('logs an error and exits on an invalid date', async () => {
       await expect(makeProgram().parseAsync(['export', '--date', 'not-a-date'], { from: 'user' })).rejects.toThrow()
       expect(mockLog.error).toHaveBeenCalledWith(expect.stringContaining('Invalid date'))
+    })
+  })
+
+  describe('the same day as workscribe summary', () => {
+    const skillSummary = {
+      session_key: 'myapp|2026-05-28T09:00:00Z',
+      engine: 'skill',
+      text: '## myapp (main) — 1h 30m\n- Shipped the login fix',
+      created_at: '2026-05-28T11:00:00Z',
+    }
+
+    it('writes the summary the agent skill saved, and says so on the console, not in the file', async () => {
+      vi.mocked(getSessionSummaries).mockReturnValue([skillSummary])
+      const mockProvider = { summarize: vi.fn() }
+      mockGetOrBuildSessions.mockReturnValue(SAMPLE_SESSIONS)
+      mockCreateSummaryWriter.mockReturnValue(mockProvider)
+
+      await makeProgram().parseAsync(['export', '--date', '2026-05-28'], { from: 'user' })
+
+      expect(mockProvider.summarize).not.toHaveBeenCalled()
+      const [, content] = mockFs.writeFileSync.mock.calls[0] as [string, string]
+      expect(content).toBe('# Work Summary — 2026-05-28\n\n## myapp (main) — 1h 30m\n- Shipped the login fix\n')
+      expect(mockLog.plain).toHaveBeenCalledWith(expect.stringContaining('written by the Workscribe agent skill'))
+    })
+
+    it('renders the template instead with --fresh', async () => {
+      vi.mocked(getSessionSummaries).mockReturnValue([skillSummary])
+      mockGetOrBuildSessions.mockReturnValue(SAMPLE_SESSIONS)
+      mockCreateSummaryWriter.mockReturnValue(new TemplateProvider())
+
+      await makeProgram().parseAsync(['export', '--date', '2026-05-28', '--fresh'], { from: 'user' })
+
+      const [, content] = mockFs.writeFileSync.mock.calls[0] as [string, string]
+      expect(content).not.toContain('Shipped the login fix')
+      expect(content).toContain('## myapp (main) — 1h 30m')
+    })
+
+    it('prints the left-out events on the console, not into the file', async () => {
+      vi.mocked(countExcludedEvents).mockReturnValue(new Map([['exploring', 3]]))
+      mockGetOrBuildSessions.mockReturnValue(SAMPLE_SESSIONS)
+      mockCreateSummaryWriter.mockReturnValue(new TemplateProvider())
+
+      await makeProgram().parseAsync(['export', '--date', '2026-05-28'], { from: 'user' })
+
+      expect(mockLog.plain).toHaveBeenCalledWith(expect.stringContaining('3 events not included in summary'))
+      const [, content] = mockFs.writeFileSync.mock.calls[0] as [string, string]
+      expect(content).not.toContain('not included')
+    })
+
+    it('always writes markdown, even with summary.format set to json', async () => {
+      mockReadConfig.mockReturnValue({ ...BASE_CONFIG, summary: { format: 'json' } })
+      mockGetOrBuildSessions.mockReturnValue(SAMPLE_SESSIONS)
+      mockCreateSummaryWriter.mockReturnValue(new TemplateProvider())
+
+      await makeProgram().parseAsync(['export', '--date', '2026-05-28'], { from: 'user' })
+
+      const [, content] = mockFs.writeFileSync.mock.calls[0] as [string, string]
+      expect(content).toMatch(/^# Work Summary — 2026-05-28\n\n## myapp/)
+    })
+
+    it('says so and stops when the summary fails', async () => {
+      mockGetOrBuildSessions.mockReturnValue(SAMPLE_SESSIONS)
+      mockCreateSummaryWriter.mockReturnValue({ summarize: vi.fn().mockRejectedValue(new Error('disk full')) })
+      // A real exit stops the command here
+      const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => {
+        throw new Error('process.exit')
+      })
+      onTestFinished(() => exitSpy.mockRestore())
+
+      await expect(makeProgram().parseAsync(['export', '--date', '2026-05-28'], { from: 'user' })).rejects.toThrow()
+
+      expect(mockLog.error).toHaveBeenCalledWith('Export failed: disk full')
+      expect(exitSpy).toHaveBeenCalledWith(1)
+      expect(mockFs.writeFileSync).not.toHaveBeenCalled()
     })
   })
 

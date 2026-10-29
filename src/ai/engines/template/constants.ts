@@ -1,8 +1,7 @@
 import type { OutcomeWording } from './types'
 
+// The week digest's caps — a day's story tells everything (story.ts)
 export const MAX_SESSION_BULLETS = 7
-// A story shows every branch's first bullet; past this many branches, the rest are named in one line
-export const MAX_STORY_BRANCHES = 6
 export const MAX_COMMIT_BULLETS = 3
 export const MAX_DAY_BULLETS = 5
 export const MAX_LISTED_PACKAGES = 6

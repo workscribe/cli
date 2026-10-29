@@ -62,6 +62,23 @@ describe('eventRowToPayload', () => {
     })
   })
 
+  it('reads the branch moves in a git command, so the story can tell them', () => {
+    const row = makeEvent({ category: 'versioning', command: 'git switch -c feat/x', metadata: '{"branch":"feat/x"}' })
+
+    expect(eventRowToPayload(row).gitMoves).toEqual([{ kind: 'create-branch', branch: 'feat/x' }])
+  })
+
+  it('keeps the new branch from a compound command that failed later, since the session is on it', () => {
+    const row = makeEvent({ command: 'git switch -c feat/x && npm test', exit_code: 1, branch: 'feat/x' })
+
+    expect(eventRowToPayload(row).gitMoves).toEqual([{ kind: 'create-branch', branch: 'feat/x' }])
+  })
+
+  it('reads no moves from a git command that failed, or from one that is not git', () => {
+    expect(eventRowToPayload(makeEvent({ command: 'git reset --hard', exit_code: 128 }))).not.toHaveProperty('gitMoves')
+    expect(eventRowToPayload(makeEvent({ command: 'npm test' }))).not.toHaveProperty('gitMoves')
+  })
+
   it('carries no source for an event that has none', () => {
     expect(eventRowToPayload(makeEvent({ source: null }))).not.toHaveProperty('source')
   })

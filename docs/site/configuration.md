@@ -81,7 +81,7 @@ workscribe config set redact.extra '["MY_INTERNAL_TOKEN"]'
 | `summary.format` | `"markdown"` \| `"json"` | `"markdown"` | Output format for daily summaries |
 | `summary.includeCategories` | string[] | `[]` | Event categories to re-include in summaries (overrides built-in exclusions). Excluded by default: `exploring`, `linting`. Example: `["linting"]` to include lint pass/fail results. |
 
-Summaries come from Workscribe's offline template engine. Each session is told branch by branch from your captured activity (notes, commits, test and build results, dependencies, releases and pushes), in up to 7 work bullets, and weekly digests have up to 5 bullets per day. There's no engine to choose: for AI-written summaries, use the agent skill. See [Summaries](/summaries).
+Summaries come from Workscribe's offline template engine. Each session is told branch by branch from your captured activity (notes, commits, test and build results, dependencies, releases, pushes and branch moves), with nothing cut, and weekly digests have up to 5 bullets per day. There's no engine to choose: for AI-written summaries, use the agent skill. See [Summaries](/summaries).
 
 > **Removed in 2.0:** the `ai.*` keys (`ai.provider`, `ai.apiKey`, `ai.model`, `ai.baseUrl`) and `summary.engine`. `workscribe config set` refuses them, and `workscribe init` offers to delete them from an old config. See [Migrating to 2.0](/migrating-to-2).
 

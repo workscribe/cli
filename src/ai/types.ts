@@ -1,4 +1,5 @@
 import type { StoryCommit } from '../summary/story-commits'
+import type { GitMove } from '../normalize/git-move'
 
 export interface EventPayload {
   category: string
@@ -11,6 +12,8 @@ export interface EventPayload {
   /** The branch the event happened on (read just after the command ran), or null outside a repo */
   branch: string | null
   capturedAt: string
+  /** Branch-moving git work the command did (a branch created, a stash, a rebase, a discard) — only when it succeeded */
+  gitMoves?: GitMove[]
 }
 
 export interface SessionPayload {

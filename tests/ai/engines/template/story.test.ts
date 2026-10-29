@@ -46,13 +46,15 @@ describe('storyLines — one branch', () => {
     expect(renderSessionStory(session([event('testing')]))).toBe('## api-service (feature/auth) — 2h\n- Tests passing')
   })
 
-  it('folds commits beyond the third into the third bullet', () => {
+  it('tells every commit, folding none away', () => {
     const commits = ['one', 'two', 'three', 'four', 'five'].map((subject) => commit(subject))
 
     expect(storyLines(session([], { commits }))).toEqual([
       '- Committed: one',
       '- Committed: two',
-      '- Committed: three, plus 2 more changes',
+      '- Committed: three',
+      '- Committed: four',
+      '- Committed: five',
     ])
   })
 
@@ -90,32 +92,15 @@ describe('storyLines — several branches', () => {
     expect(lines).toEqual(['On main:', '- Committed: from the agent'])
   })
 
-  it("caps the work at 7 bullets, keeping each branch's first", () => {
-    const mainWork = [
-      event('testing'),
-      event('building'),
-      event('dependencies', { packages: ['zod'] }),
-      event('releasing', { tool: 'npm' }),
-      event('shipping', { remote: 'origin', branch: 'main' }),
-    ].map((base) => onBranch('main', base))
-    const commits = [commit('a', 'main'), commit('b', 'main'), commit('c', 'main'), commit('late', 'feat/auth')]
-    const events = [...mainWork, onBranch('feat/auth', event('testing'))]
-
-    const lines = storyLines(session(events, { branches, commits }))
-
-    // main has 8 bullets and feat/auth 2: main keeps 6, and feat/auth still gets its first
-    expect(lines.filter((line) => line.startsWith('- '))).toHaveLength(7)
-    expect(lines.slice(lines.indexOf('On feat/auth:'))).toEqual(['On feat/auth:', '- Committed: late'])
-  })
-
-  it('names the branches past the first six in one line', () => {
+  it('tells everything on every branch, with no cap: the story is a full record', () => {
     const many = ['b1', 'b2', 'b3', 'b4', 'b5', 'b6', 'b7', 'b8', 'b9']
-    const events = many.map((branch) => onBranch(branch, event('testing')))
+    const events = many.flatMap((branch) => [onBranch(branch, event('testing')), onBranch(branch, event('building'))])
+    const commits = many.map((branch) => commit(`work on ${branch}`, branch))
 
-    const lines = storyLines(session(events, { branches: many }))
+    const lines = storyLines(session(events, { branches: many, commits }))
 
-    expect(lines.filter((line) => line.startsWith('On '))).toHaveLength(6)
-    expect(lines.at(-1)).toBe('Also on 3 more branches: b7, b8, b9')
+    expect(lines.filter((line) => line.startsWith('On '))).toHaveLength(9)
+    expect(lines.filter((line) => line.startsWith('- '))).toHaveLength(27)
   })
 })
 

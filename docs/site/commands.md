@@ -328,14 +328,16 @@ Generate a summary and save it as a markdown file.
 workscribe export
 workscribe export --date 2026-05-20
 workscribe export --output ~/Desktop/standup.md
+workscribe export --fresh
 ```
 
 | Option | Description |
 |---|---|
 | `--date <YYYY-MM-DD>` | Export a specific date |
 | `--output <path>` | Custom output path (default: `~/.workscribe/exports/workscribe-<date>.md`) |
+| `--fresh` | Ignore saved summaries and write the template's summary for every session |
 
-Each session is written under its own `## ` heading, in the same format as `workscribe summary`.
+The file holds the same day `workscribe summary` shows: a summary the agent skill saved for a session is used, and the template tells the rest, each session under its own `## ` heading. It's always markdown, whatever `summary.format` is set to. Notes about the summary (which sessions came from saved summaries, events left out) are printed to the terminal, not written to the file.
 
 ---
 
