@@ -2,19 +2,17 @@ import { Command } from 'commander'
 import chalk from 'chalk'
 import { getOrBuildSessions } from '../sessions/detector'
 import { readConfig } from '../config'
-import { getSessionSummaries } from '../db'
 import { log } from '../utils/logger'
 import { todayDate, parseDate } from '../utils/format'
-import type { AIProvider, DaySummaryPayload, SessionPayload } from '../ai/types'
-import { buildExcludedSet, countExcludedEvents } from '../summary/exclusions'
-import { sessionToPayload, locationContextFrom } from '../summary/payload'
+import type { SessionPayload } from '../ai/types'
+import { buildExcludedSet } from '../summary/exclusions'
 import { formatSessionLabel } from '../summary/heading'
-import { sessionKey, pickSavedSummary, type SavedSummary } from '../summary/store'
 import { createSummaryWriter } from '../summary/writer'
 import { printLegacyAiNotice } from './notices'
 import { postSummary } from '../summary/webhook'
 import { runWeeklySummary } from '../summary/weekly'
-import { DAY_GIT_BUDGET_MS, lookupDayCommits } from '../summary/day-commits'
+import { renderDay, type RenderedDay } from '../summary/day'
+import { printExcludedFooter, printSavedNote } from './day-notes'
 
 interface SessionSummaryJson {
   project: string | null
@@ -58,43 +56,6 @@ function printCapturedEvents(sessionPayloads: SessionPayload[], excluded: Set<st
     }
   }
   log.plain('')
-}
-
-function printExcludedFooter(sessionPayloads: SessionPayload[], excluded: Set<string>): void {
-  const excludedCounts = countExcludedEvents(sessionPayloads, excluded)
-  if (excludedCounts.size === 0) return
-  const total = [...excludedCounts.values()].reduce((sum, count) => sum + count, 0)
-  const breakdown = [...excludedCounts.entries()].map(([category, count]) => `${category} ×${count}`).join(', ')
-  log.plain(chalk.dim(`  ℹ ${total} event${total === 1 ? '' : 's'} not included in summary (${breakdown})`))
-  log.plain(chalk.dim('    Use --verbose to inspect · workscribe config set summary.includeCategories to opt in'))
-  log.plain('')
-}
-
-async function generateSessionSummary(input: {
-  provider: AIProvider
-  sessionPayload: SessionPayload
-  date: string
-}): Promise<string> {
-  const daySummaryPayload: DaySummaryPayload = { date: input.date, sessions: [input.sessionPayload] }
-  try {
-    // The writer returns the session's finished story, heading included
-    return (await input.provider.summarize(daySummaryPayload)).trim()
-  } catch (error) {
-    log.error(`Summary failed: ${(error as Error).message}`)
-    process.exit(1)
-  }
-}
-
-/** Says which sessions came from saved summaries, so it's clear why --fresh would change the output. */
-function printSavedNote(saved: (SavedSummary | null)[]): void {
-  const fromSkill = saved.filter((entry) => entry?.fromSkill).length
-  const fromLegacyProvider = saved.filter((entry) => entry && !entry.fromSkill).length
-  const parts = [
-    fromSkill > 0 ? `${fromSkill} written by the Workscribe agent skill` : null,
-    fromLegacyProvider > 0 ? `${fromLegacyProvider} written by an AI provider in Workscribe 1.x` : null,
-  ].filter((part): part is string => part !== null)
-  if (parts.length === 0) return
-  log.plain(chalk.dim(`  (${parts.join(', ')} — use --fresh for the template summary)`))
 }
 
 export function registerSummary(program: Command): void {
@@ -141,37 +102,21 @@ export function registerSummary(program: Command): void {
         return
       }
 
-      const keys = sessions.map((session) => sessionKey(session.repoName, session.startedAt))
       const jsonMode = config.summary?.format === 'json'
-
-      // A summary the agent skill (or a 1.x AI provider) saved — `--fresh` ignores both and renders the template
-      const saved = keys.map((key) => (options.fresh ? null : pickSavedSummary(getSessionSummaries(key))))
-      const needsGeneration = saved.some((entry) => entry === null)
-      // git is only asked about the sessions the template tells, within one budget for the run
-      const toRender = sessions.filter((_session, index) => saved[index] === null)
-      const commitsToRender = lookupDayCommits(toRender, { budgetMs: DAY_GIT_BUDGET_MS })
-      const gitCommitsBySession = new Map(toRender.map((session, index) => [session, commitsToRender[index]]))
-      const context = locationContextFrom(config)
-      const sessionPayloads = sessions.map((session) =>
-        sessionToPayload(session, date, { context, gitCommits: gitCommitsBySession.get(session) ?? null })
-      )
+      let day: RenderedDay
+      try {
+        day = await renderDay({ date, sessions, config, provider, fresh: options.fresh })
+      } catch (error) {
+        log.error(`Summary failed: ${(error as Error).message}`)
+        process.exit(1)
+      }
+      const { sessionPayloads, saved, summaries, fullSummary, needsGeneration } = day
       const excluded = buildExcludedSet(config.summary?.includeCategories ?? [])
       if (needsGeneration && options.verbose) {
         if (jsonMode) log.notice('--verbose is skipped when summary.format is json, to keep the JSON output clean')
         else printCapturedEvents(sessionPayloads, excluded)
       }
 
-      const summaries: string[] = []
-      for (const [index, sessionPayload] of sessionPayloads.entries()) {
-        const savedSummary = saved[index]
-        if (savedSummary) {
-          summaries.push(savedSummary.text)
-          continue
-        }
-        summaries.push(await generateSessionSummary({ provider, sessionPayload, date }))
-      }
-
-      const fullSummary = summaries.join('\n\n')
       if (jsonMode) {
         // Only the JSON on stdout, so it can be piped straight into another tool
         log.plain(toJsonOutput(date, sessionPayloads, summaries.map(stripHeading)))

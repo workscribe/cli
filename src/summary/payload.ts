@@ -3,6 +3,8 @@ import path from 'path'
 import { formatDate } from '../utils/format'
 import { parseMetadata } from './event-metadata'
 import { storyCommitsOf } from './story-commits'
+import { isFailedCommand } from './commits'
+import { gitMovesOf } from '../normalize/git-move'
 import type { DaySummaryPayload, EventPayload, SessionPayload } from '../ai/types'
 import type { EventRow } from '../db/types'
 import type { Session } from '../sessions/detector'
@@ -21,6 +23,23 @@ export function locationContextFrom(config: Pick<WorkscribeConfig, 'projects'>):
 
 const DEFAULT_LOCATION_CONTEXT: LocationContext = { projects: {}, homeDir: os.homedir() }
 
+// Only git commands can move work between branches; anything else isn't worth parsing
+const MENTIONS_GIT = /(^|[\s;&|(])git\s/
+
+/**
+ * The command's branch moves, read from the stored (redacted) command. When the command failed, there's no telling
+ * which step did — except that a new branch the session is now on was created (`git switch -c x && npm test` with
+ * failing tests), so only that move is kept.
+ */
+function gitMovesField(row: EventRow): Pick<EventPayload, 'gitMoves'> {
+  if (!MENTIONS_GIT.test(row.command)) return {}
+  const moves = gitMovesOf(row.command)
+  const gitMoves = isFailedCommand(row)
+    ? moves.filter((move) => move.kind === 'create-branch' && move.branch === row.branch)
+    : moves
+  return gitMoves.length > 0 ? { gitMoves } : {}
+}
+
 export function eventRowToPayload(row: EventRow): EventPayload {
   const metadata = parseMetadata(row.metadata)
   const payload: EventPayload = {
@@ -31,6 +50,7 @@ export function eventRowToPayload(row: EventRow): EventPayload {
     branch: row.branch,
     capturedAt: row.captured_at,
     ...(row.source ? { source: row.source } : {}),
+    ...gitMovesField(row),
   }
   if (row.category !== 'other' || typeof metadata.hint !== 'string') return payload
 

@@ -1,15 +1,9 @@
 // A day's session as a story: notes first, then what was done on each branch — commits, then outcomes, then what
-// shipped — and the agent and editor activity in one closing line. Pure: it only reads the payload.
+// shipped and how you moved between branches — and the agent and editor activity in one closing line. Nothing is
+// cut or folded: every commit and every move is told, so the story is a full record you can retrace. Pure.
 import { formatSessionHeading } from '../../../summary/heading'
+import { AGENT_SOURCES, STORY_BUILD_WORDING, STORY_TEST_WORDING } from './constants'
 import {
-  AGENT_SOURCES,
-  MAX_SESSION_BULLETS,
-  MAX_STORY_BRANCHES,
-  STORY_BUILD_WORDING,
-  STORY_TEST_WORDING,
-} from './constants'
-import {
-  describeCommits,
   describeDependencies,
   describeNotes,
   describePushes,
@@ -17,6 +11,7 @@ import {
   includedEvents,
   outcomeOf,
 } from './describe'
+import { describeBranchMoves } from './branch-moves'
 import { eventsOf, pluralize, toBulletList } from './utils'
 import type { EventPayload, SessionPayload } from '../../types'
 import type { StoryCommit } from '../../../summary/story-commits'
@@ -26,6 +21,8 @@ interface BranchGroup {
   branch: string | null
   events: EventPayload[]
   commits: StoryCommit[]
+  /** Branch moves (a branch created, a stash moved, a rebase, a discard) that happened on this branch */
+  moves: string[]
 }
 
 interface BranchBullets {
@@ -34,23 +31,24 @@ interface BranchBullets {
 }
 
 /**
- * The session's events and commits, by branch in the order first seen. An event with no branch (outside a repo,
- * a detached HEAD) stays with the branch before it; a commit on no known branch goes to the first.
+ * The session's events, commits and branch moves, by branch in the order first seen. An event with no branch
+ * (outside a repo, a detached HEAD) stays with the branch before it; a commit or move on no known branch goes to the
+ * first. Moves are read from every event, whatever the summary leaves out.
  */
 function groupByBranch(session: SessionPayload, events: EventPayload[]): BranchGroup[] {
   const order = session.branches.length > 0 ? session.branches : [null]
   const groups = new Map<string | null, BranchGroup>(
-    order.map((branch) => [branch, { branch, events: [], commits: [] }])
+    order.map((branch) => [branch, { branch, events: [], commits: [], moves: [] }])
   )
+  const groupOf = (branch: string | null): BranchGroup | undefined =>
+    groups.get(branch !== null && groups.has(branch) ? branch : order[0])
   let current = order[0]
   for (const event of events) {
     if (event.branch !== null && groups.has(event.branch)) current = event.branch
     groups.get(current)?.events.push(event)
   }
-  for (const commit of session.commits) {
-    const branch = commit.branch !== null && groups.has(commit.branch) ? commit.branch : order[0]
-    groups.get(branch)?.commits.push(commit)
-  }
+  for (const commit of session.commits) groupOf(commit.branch)?.commits.push(commit)
+  for (const move of describeBranchMoves(session.events)) groupOf(move.branch)?.moves.push(move.line)
   return [...groups.values()]
 }
 
@@ -60,41 +58,17 @@ function describeResult(events: EventPayload[], wording: OutcomeWording): string
   return outcome === null ? null : wording[outcome]
 }
 
-/** What was done on one branch, most telling first: commits, outcomes, then releases and pushes. */
+/** What was done on one branch, most telling first: commits, outcomes, releases and pushes, then branch moves. */
 function branchBullets(group: BranchGroup): string[] {
   return [
-    ...describeCommits(group.commits.map((commit) => commit.subject)),
+    ...group.commits.map((commit) => `Committed: ${commit.subject}`),
     describeResult(group.events, STORY_TEST_WORDING),
     describeResult(group.events, STORY_BUILD_WORDING),
     ...describeDependencies(group.events, { withRunCount: false }),
     describeReleases(group.events),
     describePushes(group.events),
+    ...group.moves,
   ].filter((bullet): bullet is string => bullet !== null)
-}
-
-interface CappedGroups {
-  shown: BranchBullets[]
-  hiddenBranches: string[]
-}
-
-/**
- * At most MAX_SESSION_BULLETS work bullets. Every branch keeps its first, so none disappears; the rest fill in, in
- * branch order. Past MAX_STORY_BRANCHES branches, the others are named in one closing line instead.
- */
-function capGroups(groups: BranchBullets[]): CappedGroups {
-  const hasTooManyBranches = groups.length > MAX_SESSION_BULLETS
-  const kept = hasTooManyBranches ? groups.slice(0, MAX_STORY_BRANCHES) : groups
-  const hiddenBranches = hasTooManyBranches
-    ? groups.slice(MAX_STORY_BRANCHES).flatMap((group) => (group.branch === null ? [] : [group.branch]))
-    : []
-  let spareBullets = Math.max(0, MAX_SESSION_BULLETS - kept.length - (hasTooManyBranches ? 1 : 0))
-  const shown: BranchBullets[] = []
-  for (const group of kept) {
-    const extra = group.bullets.slice(1, 1 + spareBullets)
-    spareBullets -= extra.length
-    shown.push({ branch: group.branch, bullets: [group.bullets[0], ...extra] })
-  }
-  return { shown, hiddenBranches }
 }
 
 /** "With an AI coding assistant (126 commands) · 3 file saves in the editor" — how, not what, so it comes last. */
@@ -117,15 +91,11 @@ function describeQuietSession(session: SessionPayload, events: EventPayload[]): 
   return hasOnlySaves ? 'Edited files' : 'Explored and ran commands'
 }
 
-function branchLines(capped: CappedGroups, isMultiBranch: boolean): string[] {
-  const lines = capped.shown.flatMap((group) => {
+function branchLines(groups: BranchBullets[], isMultiBranch: boolean): string[] {
+  return groups.flatMap((group) => {
     const bullets = toBulletList(group.bullets).split('\n')
     return isMultiBranch && group.branch !== null ? [`On ${group.branch}:`, ...bullets] : bullets
   })
-  const hiddenCount = capped.hiddenBranches.length
-  if (hiddenCount === 0) return lines
-  const branchWord = hiddenCount === 1 ? 'branch' : 'branches'
-  return [...lines, `Also on ${hiddenCount} more ${branchWord}: ${capped.hiddenBranches.join(', ')}`]
 }
 
 /** The story's lines under the heading: `- ` bullets, plain `On <branch>:` lines and a plain activity line. */
@@ -142,7 +112,7 @@ export function storyLines(session: SessionPayload, includeCategories: string[] 
     return [`- ${describeQuietSession(session, events)}`, ...closing]
   }
   const noteLines = notes.length > 0 ? toBulletList(notes).split('\n') : []
-  return [...noteLines, ...branchLines(capGroups(groups), session.branches.length > 1), ...closing]
+  return [...noteLines, ...branchLines(groups, session.branches.length > 1), ...closing]
 }
 
 /**

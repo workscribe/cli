@@ -29,7 +29,15 @@ Each session reads as a short story of what you did:
   3. dependencies added or removed, then releases and pushes
 - **One closing line for how you worked:** "With an AI coding assistant (126 commands) · 3 file saves in the editor". The tool is never named, and saves need the VS Code extension.
 
-A session has at most 7 work bullets, and every branch keeps at least its first.
+- **Branch moves, in plain language,** after each branch's work, so you can retrace what you did (or undo it) without remembering the commands:
+  - "Created feat/x from main" (`git switch -c`, `git checkout -b`)
+  - "Moved uncommitted changes from main to feat/x (git stash, then git stash pop)", when a stash made on one branch was restored on another. A stash restored on the same branch reads "Set changes aside and restored them", and one never restored reads "Left changes stashed (git stash)".
+  - "Rebased feat/x onto main", "Merged feat/y into feat/x"
+  - "Discarded local changes (git reset --hard)", "Discarded changes to files (git checkout -- …)" or "(git restore)", and "Deleted untracked files (git clean)". These are the moves you're most likely to need to retrace, so they're always named.
+
+  A plain switch gets no line of its own: the `On <branch>:` lines already show it. Moves are read from the commands Workscribe stored, so past days get them too. A git command that failed made no move.
+
+Nothing is cut: every commit, outcome and branch move is told, however busy the session, so the summary is a full record you can retrace.
 
 ```
 ## api (main, feat/auth) — 2h 15m
