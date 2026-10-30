@@ -6,6 +6,7 @@ import sessionSummaries from './005_session_summaries'
 import reclassifyOther from './006_reclassify_other'
 import dataJobs from './007_data_jobs'
 import dimensions from './008_dimensions'
+import workBlocks from './009_work_blocks'
 import type { Migration } from '../migration-types'
 
 export type { Migration } from '../migration-types'
@@ -20,4 +21,5 @@ export const MIGRATIONS: Migration[] = [
   reclassifyOther,
   dataJobs,
   dimensions,
+  workBlocks,
 ]
