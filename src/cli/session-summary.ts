@@ -6,6 +6,7 @@ import { redact } from '../capture/redact'
 import { log } from '../utils/logger'
 import { localDateOf } from '../utils/format'
 import { SKILL_ENGINE, parseSessionKey, sessionKey } from '../summary/store'
+import { anchorOfKeyedSession } from '../summary/anchors'
 import { INTERACTIVE_STDIN_MESSAGE, stdinReadFailedMessage, validateSkillSummary } from '../summary/write-back'
 import { isStdinInteractive, readAllStdin } from '../utils/stdin'
 import type { Session } from '../sessions/detector'
@@ -56,7 +57,10 @@ function saveSkillSummary(options: { key: string }): void {
   }
 
   const text = redact(summaryText.trim(), readConfig().redact.extra)
-  saveSessionSummary(options.key, SKILL_ENGINE, text)
+  // Anchored to the session's events too, so it survives regrouping. If they aren't linked to a project yet, the
+  // project is left empty; the summary-anchors data job fills it in only if it hasn't already finished
+  const anchor = anchorOfKeyedSession(session.events, options.key)
+  saveSessionSummary(options.key, { engine: SKILL_ENGINE, text, anchor })
   log.success(
     `Saved the summary for ${session.repoName ?? 'this session'} — workscribe summary, workscribe context and the VS Code status bar now show it.`
   )

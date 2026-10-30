@@ -7,6 +7,7 @@ import reclassifyOther from './006_reclassify_other'
 import dataJobs from './007_data_jobs'
 import dimensions from './008_dimensions'
 import workBlocks from './009_work_blocks'
+import summaries from './010_summaries'
 import type { Migration } from '../migration-types'
 
 export type { Migration } from '../migration-types'
@@ -22,4 +23,5 @@ export const MIGRATIONS: Migration[] = [
   dataJobs,
   dimensions,
   workBlocks,
+  summaries,
 ]
