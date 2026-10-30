@@ -12,6 +12,7 @@ import { PAUSE_FLAG_PATH } from '../utils/paths'
 import { loadAIToolRegistry } from '../config/registry'
 import { effectiveDirectory } from '../normalize/git-directory'
 import { readCommitMessageFile } from './commit-message-file'
+import { eventDimensions, fileEventDimensions } from './dimensions'
 
 /**
  * `git commit -F <file>`: the message, read now while the file may still exist and redacted like the command — and
@@ -69,7 +70,8 @@ export function captureCommand(opts: {
     }
 
     const command = opts.command ?? opts.file ?? opts.type
-    const { repoName, branch } = getRepoContext(cwd, config)
+    const context = getRepoContext(cwd, config)
+    const { repoName, branch } = context
 
     insertEvent({
       captured_at: new Date().toISOString(),
@@ -83,6 +85,7 @@ export function captureCommand(opts: {
       metadata: null,
       source: opts.source ?? null,
       file_path: opts.file ?? null,
+      dimensions: opts.file ? fileEventDimensions(context, opts.file, config) : eventDimensions(context),
     })
     return
   }
@@ -108,7 +111,8 @@ export function captureCommand(opts: {
   // 5. Extract git context from where the work happened — `git -C ../web commit` belongs to web, not here — named
   // exactly as the IDE path, notes and `context` name it
   const workDirectory = effectiveDirectory({ matchedStep: matchedStep ?? safeCommand, cwd })
-  const { repoName, branch } = getRepoContext(workDirectory, config)
+  const context = getRepoContext(workDirectory, config)
+  const { repoName, branch } = context
   const metadata = withMessageFromFile(normalizedMetadata, workDirectory, config.redact.extra)
 
   // Hint passthrough: preserve context for unrecognised commands so the AI can describe them
@@ -149,5 +153,6 @@ export function captureCommand(opts: {
     metadata: Object.keys(metadata).length > 0 ? JSON.stringify(metadata) : null,
     source: opts.source ?? null,
     file_path: null,
+    dimensions: eventDimensions(context),
   })
 }

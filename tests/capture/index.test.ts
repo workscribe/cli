@@ -252,6 +252,43 @@ describe('captureCommand — repo naming', () => {
   })
 })
 
+describe('captureCommand — project links', () => {
+  const API_PROJECT = { identity: 'remote:github.com/acme/api', kind: 'remote' }
+
+  beforeEach(() => {
+    mockGetRepoContext.mockReturnValue({
+      repoName: 'api',
+      branch: 'main',
+      root: '/repo',
+      remote: null,
+      project: API_PROJECT,
+    })
+  })
+
+  it("links a shell event to the work directory's project and branch", () => {
+    captureCommand({ command: 'npm test', cwd: '/repo', exitCode: 0, durationMs: 10 })
+
+    expect(mockInsertEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        repo_name: 'api',
+        dimensions: { project: { ...API_PROJECT, name: 'api', root: '/repo' }, branch: 'main', file: null },
+      })
+    )
+  })
+
+  it('links an editor save to its file, keeping the text columns as before', () => {
+    captureCommand({ cwd: '/repo', exitCode: null, durationMs: null, type: 'code_edit', file: '/repo/src/a.ts' })
+
+    expect(mockInsertEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        repo_name: 'api',
+        file_path: '/repo/src/a.ts',
+        dimensions: expect.objectContaining({ file: { relativePath: 'src/a.ts', action: 'save' } }),
+      })
+    )
+  })
+})
+
 // WOR-127: a commit belongs to the repo it was made in, which isn't always where the command was typed
 describe('captureCommand — where the work happened', () => {
   function capturedWith(command: string, matchedStep: string, source?: string) {

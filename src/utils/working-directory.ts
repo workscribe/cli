@@ -34,3 +34,22 @@ export function rootForms(cwd: string, root: string): string[] {
   const reached = path.resolve(cwd, path.relative(resolvedCwd, root))
   return [...new Set([root, reached])]
 }
+
+/** `target` relative to `root` — `''` for the root itself — or null when it's outside it. Pure: compares paths only. */
+export function relativeInside(root: string, target: string): string | null {
+  const relative = path.relative(root, target)
+  const isOutside = relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)
+  return isOutside ? null : relative
+}
+
+/**
+ * The file's path relative to the repo root, or null when it isn't inside it. The root is tried in each form the
+ * file's own folder reaches it by, so a file opened through a symlink still matches.
+ */
+export function pathInsideRoot(filePath: string, root: string): string | null {
+  for (const form of rootForms(path.dirname(filePath), root)) {
+    const relative = relativeInside(form, filePath)
+    if (relative) return relative
+  }
+  return null
+}

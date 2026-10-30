@@ -2,15 +2,17 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // Mock child_process and fs before importing the module
 vi.mock('child_process', () => ({ execSync: vi.fn() }))
-vi.mock('fs', () => ({ default: { readFileSync: vi.fn() } }))
+vi.mock('fs', () => ({ default: { readFileSync: vi.fn(), existsSync: vi.fn(), realpathSync: vi.fn() } }))
 
 import { execSync } from 'child_process'
 import fs from 'fs'
-import { getRepoContext } from '../../src/capture/git'
+import { getRepoContext, probeDirectory } from '../../src/capture/git'
 import { createTestConfig } from '../helpers/config'
 
 const mockExecSync = execSync as ReturnType<typeof vi.fn>
 const mockReadFileSync = fs.readFileSync as ReturnType<typeof vi.fn>
+const mockExistsSync = fs.existsSync as ReturnType<typeof vi.fn>
+const mockRealpathSync = fs.realpathSync as ReturnType<typeof vi.fn>
 
 function setupGitRoot(root = '/home/user/sandbox/chronicle') {
   mockExecSync.mockImplementation((cmd: string) => {
@@ -180,6 +182,7 @@ describe('getRepoContext — one name for every caller (WOR-118)', () => {
       branch: 'main',
       root: ROOT,
       remote: { owner: 'workscribe', repo: 'vscode' },
+      project: { identity: 'remote:github.com/workscribe/vscode', kind: 'remote' },
     })
   })
 
@@ -214,6 +217,101 @@ describe('getRepoContext — one name for every caller (WOR-118)', () => {
       branch: null,
       root: null,
       remote: null,
+      project: null,
     })
+  })
+})
+
+describe('getRepoContext — the project identity', () => {
+  const ROOT = '/home/user/api'
+
+  function setupRepo(options: { remote: string | null; commonDir?: string }) {
+    mockExecSync.mockImplementation((cmd: string) => {
+      if (cmd === 'git rev-parse --show-toplevel') return Buffer.from(`${ROOT}\n`)
+      if (cmd === 'git branch --show-current') return Buffer.from('main\n')
+      if (cmd === 'git rev-parse --git-common-dir' && options.commonDir) return Buffer.from(`${options.commonDir}\n`)
+      if (cmd === 'git remote get-url origin' && options.remote) return Buffer.from(`${options.remote}\n`)
+      throw new Error(`unexpected: ${cmd}`)
+    })
+  }
+
+  it('is the same for both name forms, so qualifyRepoName never changes it', () => {
+    setupRepo({ remote: 'git@github.com:acme/api.git' })
+
+    const bare = getRepoContext(ROOT, createTestConfig())
+    const qualified = getRepoContext(ROOT, createTestConfig({ git: { qualifyRepoName: true } }))
+
+    expect(bare.repoName).not.toBe(qualified.repoName)
+    expect(bare.project).toEqual(qualified.project)
+  })
+
+  it('still comes from the remote when a projects override names the repo', () => {
+    setupRepo({ remote: 'https://github.com/acme/api.git' })
+
+    const context = getRepoContext(ROOT, createTestConfig({ projects: { [ROOT]: 'my-name' } }))
+
+    expect(context).toMatchObject({
+      repoName: 'my-name',
+      remote: null,
+      project: { identity: 'remote:github.com/acme/api', kind: 'remote' },
+    })
+  })
+
+  it('is the resolved git folder when there is no remote, so every worktree shares it', () => {
+    setupRepo({ remote: null, commonDir: '../main/.git' })
+    mockRealpathSync.mockImplementation((target: string) => target)
+
+    expect(getRepoContext(ROOT, createTestConfig()).project).toEqual({
+      identity: 'local:/home/user/main/.git',
+      kind: 'local',
+    })
+  })
+})
+
+describe('probeDirectory', () => {
+  it('reports a folder that is gone without asking git', () => {
+    mockExistsSync.mockReturnValue(false)
+
+    expect(probeDirectory('/gone')).toEqual({ outcome: 'missing' })
+    expect(mockExecSync).not.toHaveBeenCalled()
+  })
+
+  it('reports a folder outside any repo', () => {
+    mockExistsSync.mockReturnValue(true)
+    mockExecSync.mockImplementation(() => {
+      throw new Error('not a git repository')
+    })
+
+    expect(probeDirectory('/tmp')).toEqual({ outcome: 'not-a-repo' })
+  })
+
+  it("reports a repo's root, git folder and remote", () => {
+    mockExistsSync.mockReturnValue(true)
+    mockRealpathSync.mockImplementation((target: string) => target)
+    mockExecSync.mockImplementation((cmd: string) => {
+      if (cmd === 'git rev-parse --show-toplevel') return Buffer.from('/repo\n')
+      if (cmd === 'git rev-parse --git-common-dir') return Buffer.from('../.git\n')
+      if (cmd === 'git remote get-url origin') return Buffer.from('git@github.com:acme/api.git\n')
+      throw new Error(`unexpected: ${cmd}`)
+    })
+
+    expect(probeDirectory('/repo/src')).toEqual({
+      outcome: 'repo',
+      root: '/repo',
+      commonDir: '/repo/.git',
+      remoteUrl: 'git@github.com:acme/api.git',
+    })
+  })
+
+  it('never returns a credential from the remote', () => {
+    mockExistsSync.mockReturnValue(true)
+    mockExecSync.mockImplementation((cmd: string) => {
+      if (cmd === 'git rev-parse --show-toplevel') return Buffer.from('/repo\n')
+      if (cmd === 'git rev-parse --git-common-dir') return Buffer.from('.git\n')
+      if (cmd === 'git remote get-url origin') return Buffer.from('https://me:ghp_secret@github.com/acme/api.git\n')
+      throw new Error(`unexpected: ${cmd}`)
+    })
+
+    expect(probeDirectory('/repo')).toMatchObject({ remoteUrl: 'https://github.com/acme/api.git' })
   })
 })

@@ -13,6 +13,9 @@ export interface EventRow {
   metadata: string | null
   source: string | null
   file_path: string | null
+  /** The project, branch the event links to (migration 008) — null until linked; not read by anything yet */
+  project_id?: number | null
+  branch_id?: number | null
 }
 
 export interface SessionRow {

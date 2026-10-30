@@ -98,6 +98,9 @@ function runJob(db: MigrationDatabase, job: DataJob, context: RunContext): JobRu
   if (storedVersion > job.version) return { ...summary, outcome: 'paused', error: NEWER_VERSION_ERROR }
   try {
     withImmediateTransaction(db, () => startJob(db, job, context.now().toISOString()))
+    // After `startJob`, so a version bump's `prepare` clears the old work before `gather` builds on it
+    if (job.gather?.(db, { isOverBudget: context.isOverBudget }) === 'incomplete')
+      return { ...summary, outcome: 'paused' }
     while (runLockedBatch(db, job, context) !== null) {
       context.onProgress(job)
       if (context.isOverBudget()) return { ...summary, outcome: 'paused' }

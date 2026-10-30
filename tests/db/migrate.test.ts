@@ -203,3 +203,38 @@ describe('applyMigrations — the data_jobs migration', () => {
     expect(() => db.exec(dataJobsMigration?.sql ?? '')).not.toThrow()
   })
 })
+
+describe('applyMigrations — the dimensions migration', () => {
+  const dimensionsMigration = MIGRATIONS.find((migration) => migration.description.startsWith('Add project, branch'))
+
+  it('only adds tables and nullable columns, keeping every stored event as it was', () => {
+    const db = new DatabaseSync(':memory:')
+    applyMigrations(
+      db,
+      MIGRATIONS.filter((migration) => migration.version < (dimensionsMigration?.version ?? 0))
+    )
+    insertEvent(db, 'git status', 'versioning', null)
+    const before = events(db)
+
+    applyMigrations(db, MIGRATIONS)
+
+    expect(events(db)).toEqual(before)
+    expect(db.prepare('SELECT project_id, branch_id FROM events').all()).toEqual([
+      { project_id: null, branch_id: null },
+    ])
+    const tableNames = (
+      db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all() as { name: string }[]
+    ).map((row) => row.name)
+    expect(tableNames).toEqual(
+      expect.arrayContaining(['project', 'project_alias', 'project_path', 'branch', 'file', 'event_file'])
+    )
+  })
+
+  it('applies once: running the migrations again changes nothing', () => {
+    const db = new DatabaseSync(':memory:')
+    applyMigrations(db, MIGRATIONS)
+
+    expect(() => applyMigrations(db, MIGRATIONS)).not.toThrow()
+    expect(versions(db)).toEqual(MIGRATIONS.map((migration) => migration.version))
+  })
+})

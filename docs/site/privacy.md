@@ -21,6 +21,7 @@ Both the database and config file are written with `0600` permissions (owner rea
 
 **What's recorded from a command, and what isn't:**
 - **Claude Code commands:** Workscribe records the command, its folder, how long it took, and its exit code. For a failed command, Claude Code passes the command's output along with the exit code; Workscribe reads only the `Exit code N` line and stores nothing else from it.
+- **Projects, branches and files:** to tell when events belong to the same project, Workscribe also stores each repo's `origin` remote (host, owner and repo, never credentials), its root folder and git folder, and the path of each saved file relative to its repo. These come from the same folders and names already recorded with each event. To link events captured before this was recorded, a one-time upgrade asks git about each folder in your history, once, and keeps the answer.
 - **`git commit -F <file>`:** Workscribe reads the message file's first line (the subject) when the command is captured, redacted like the command itself. Only regular files are read, at most 4 KB, and the file's path isn't stored.
 
 ---
