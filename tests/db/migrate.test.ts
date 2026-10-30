@@ -238,3 +238,38 @@ describe('applyMigrations — the dimensions migration', () => {
     expect(versions(db)).toEqual(MIGRATIONS.map((migration) => migration.version))
   })
 })
+
+describe('applyMigrations — the work blocks migration', () => {
+  const workBlocksMigration = MIGRATIONS.find((migration) => migration.description.startsWith('Add work blocks'))
+
+  it('is in the list', () => {
+    expect(workBlocksMigration).toBeDefined()
+  })
+
+  it('only adds tables, keeping every stored event as it was', () => {
+    const db = new DatabaseSync(':memory:')
+    applyMigrations(
+      db,
+      MIGRATIONS.filter((migration) => migration.version < (workBlocksMigration?.version ?? 0))
+    )
+    insertEvent(db, 'git status', 'versioning', null)
+    const before = events(db)
+
+    applyMigrations(db, MIGRATIONS)
+
+    expect(events(db)).toEqual(before)
+    const tableNames = (
+      db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all() as { name: string }[]
+    ).map((row) => row.name)
+    expect(tableNames).toEqual(
+      expect.arrayContaining(['work_block', 'thread', 'thread_event', 'activity_slot', 'grouping_day'])
+    )
+  })
+
+  it('is safe to run again on a database that already has its tables', () => {
+    const db = new DatabaseSync(':memory:')
+    applyMigrations(db, MIGRATIONS)
+
+    expect(() => db.exec(workBlocksMigration?.sql ?? '')).not.toThrow()
+  })
+})
