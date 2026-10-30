@@ -404,3 +404,73 @@ describe('readDataStatus', () => {
     expect(status.failedChecks).toEqual(['copy-events'])
   })
 })
+
+describe('runPendingJobs — gather', () => {
+  /** Whether the connection is inside a transaction: BEGIN fails there. */
+  function isInTransaction(db: MigrationDatabase): boolean {
+    try {
+      db.exec('BEGIN')
+      db.exec('ROLLBACK')
+      return false
+    } catch {
+      return true
+    }
+  }
+
+  it('gathers outside any transaction, after the job started, before its first batch', () => {
+    const db = migratedDatabase()
+    insertEvents(db, 3)
+    const seen: { status: string | undefined; isInTransaction: boolean; copied: number }[] = []
+    const job = copyJob({
+      gather: (database) => {
+        seen.push({
+          status: getJobRow(database, 'copy-events')?.status,
+          isInTransaction: isInTransaction(database),
+          copied: copiedIds(db).length,
+        })
+        return 'complete'
+      },
+    })
+
+    expect(run(db, [job]).jobs).toEqual([expect.objectContaining({ outcome: 'done' })])
+    expect(seen).toEqual([{ status: 'running', isInTransaction: false, copied: 0 }])
+  })
+
+  it('pauses the job, with nothing run, when gathering is incomplete — and carries on next run', () => {
+    const db = migratedDatabase()
+    insertEvents(db, 3)
+    const gather = vi.fn().mockReturnValueOnce('incomplete').mockReturnValue('complete')
+    const job = copyJob({ gather })
+
+    expect(run(db, [job]).jobs).toEqual([expect.objectContaining({ outcome: 'paused' })])
+    expect(copiedIds(db)).toEqual([])
+    expect(readDataStatus(db, [job]).pending).toEqual(['copy-events'])
+
+    expect(run(db, [job]).jobs).toEqual([expect.objectContaining({ outcome: 'done' })])
+    expect(gather).toHaveBeenCalledTimes(2)
+  })
+
+  it('records a failure when gathering throws', () => {
+    const db = migratedDatabase()
+    insertEvents(db, 1)
+    const job = copyJob({
+      gather: () => {
+        throw new Error('git is gone')
+      },
+    })
+
+    expect(run(db, [job]).jobs).toEqual([expect.objectContaining({ outcome: 'failed', error: 'git is gone' })])
+    expect(getJobRow(db, 'copy-events')).toEqual(expect.objectContaining({ status: 'failed' }))
+  })
+
+  it('never gathers for a job a newer version owns', () => {
+    const db = migratedDatabase()
+    insertEvents(db, 1)
+    startJob(db, copyJob({ version: 2 }), FIXED_TIME.toISOString())
+    const gather = vi.fn(() => 'complete' as const)
+
+    run(db, [copyJob({ gather })])
+
+    expect(gather).not.toHaveBeenCalled()
+  })
+})

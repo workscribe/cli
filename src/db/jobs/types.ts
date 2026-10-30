@@ -21,9 +21,12 @@ export interface JobVerification {
   notes: string[]
 }
 
+export type GatherOutcome = 'complete' | 'incomplete'
+
 /**
- * Data work that normalises what's already stored: batched, resumable, idempotent. Every function reads only the
- * database — never the user's config or the clock — so a rerun gives the same result.
+ * Data work that normalises what's already stored: batched, resumable, idempotent. It never reads the user's config
+ * or the clock, and anything it learns from outside the database (say, from git) is cached in the database first, so
+ * a rerun gives the same result.
  */
 export interface DataJob {
   name: string
@@ -31,6 +34,11 @@ export interface DataJob {
   version: number
   description: string
   prepare(db: MigrationDatabase): void
+  /**
+   * Slow work outside the database, done before any batch: runs outside every transaction, so it never holds the
+   * write lock, and caches what it learns. `incomplete` pauses the job until the next run, which carries on.
+   */
+  gather?(db: MigrationDatabase, context: { isOverBudget: () => boolean }): GatherOutcome
   /** Handles up to `limit` rows with an id above `afterId`, in id order. */
   runBatch(db: MigrationDatabase, afterId: number, limit: number): BatchResult
   verify(db: MigrationDatabase): JobVerification
