@@ -53,6 +53,28 @@ describe('workscribe note', () => {
     expect(mockInsertEvent).toHaveBeenCalledWith(expect.objectContaining({ repo_name: 'my-app', branch: 'main' }))
   })
 
+  it("links the note to the repo's project and branch", () => {
+    mockGetRepoContext.mockReturnValue({
+      repoName: 'my-app',
+      branch: 'main',
+      root: '/repo',
+      remote: null,
+      project: { identity: 'remote:github.com/acme/my-app', kind: 'remote' },
+    })
+
+    makeProgram().parse(['note', 'some note'], { from: 'user' })
+
+    expect(mockInsertEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        dimensions: {
+          project: { identity: 'remote:github.com/acme/my-app', kind: 'remote', name: 'my-app', root: '/repo' },
+          branch: 'main',
+          file: null,
+        },
+      })
+    )
+  })
+
   it('works when not in a git repo (null context)', () => {
     mockGetRepoContext.mockReturnValue({ repoName: null, branch: null, root: null, remote: null })
     makeProgram().parse(['note', 'some note'], { from: 'user' })

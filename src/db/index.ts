@@ -7,6 +7,7 @@ import { applyMigrations } from './migrate'
 import { findRecentSessionsForRepo, type RepoLookup } from './session-lookup'
 import { BUSY_TIMEOUT_MS, withImmediateTransaction, type TransactionOptions } from './transaction'
 import type { StoredEngine } from '../ai/engine'
+import { insertEventRecord, type NewEvent } from './event-writer'
 export type { EventRow, SessionRow, SessionSummaryRow } from './types'
 
 let _db: DatabaseSync | null = null
@@ -46,25 +47,8 @@ export function getDb(): DatabaseSync {
 
 // ─── Typed query helpers ──────────────────────────────────────────────────────
 
-export function insertEvent(params: {
-  captured_at: string
-  command: string
-  cwd: string
-  exit_code: number | null
-  duration_ms: number | null
-  repo_name: string | null
-  branch: string | null
-  category: string
-  metadata: string | null
-  source: string | null
-  file_path: string | null
-}): void {
-  const db = getDb()
-  const stmt = db.prepare(`
-    INSERT INTO events (captured_at, command, cwd, exit_code, duration_ms, repo_name, branch, category, metadata, source, file_path)
-    VALUES ($captured_at, $command, $cwd, $exit_code, $duration_ms, $repo_name, $branch, $category, $metadata, $source, $file_path)
-  `)
-  stmt.run(params)
+export function insertEvent(event: NewEvent): void {
+  insertEventRecord(getDb(), event)
 }
 
 export function getRecentSessionsForRepo(lookup: RepoLookup, limit: number): SessionRow[] {
