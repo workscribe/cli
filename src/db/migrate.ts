@@ -1,4 +1,5 @@
 import type { Migration, MigrationDatabase } from './migration-types'
+import { errorMessage } from '../utils/error-message'
 
 /** An install from before the migration system already has the events table — record version 1 as applied. */
 function seedVersionOneForOldInstalls(db: MigrationDatabase): void {
@@ -13,10 +14,6 @@ function seedVersionOneForOldInstalls(db: MigrationDatabase): void {
 
 function isApplied(db: MigrationDatabase, version: number): boolean {
   return db.prepare('SELECT version FROM schema_migrations WHERE version = ?').get(version) !== undefined
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
 }
 
 /**

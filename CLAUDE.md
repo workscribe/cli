@@ -77,10 +77,11 @@ Tests import from these pure modules directly. Never import from `src/db/index.t
 | `src/config/index.ts` | Read/write `~/.workscribe/config.json`; `setConfigValue` coerces strings to number/boolean |
 | `src/db/index.ts` | SQLite connection singleton, migrations, typed query functions |
 | `src/db/index.ts` (session grouping and file lookups) | `countEventsBetween` (indexed range count, with `localDayBounds` in `src/utils/format.ts` giving a local day's UTC bounds), `sumSessionEventCounts`, `getLatestFileSaveAt`, `runInImmediateTransaction` |
-| `src/db/transaction.ts` | `withImmediateTransaction` (`BEGIN IMMEDIATE`, an optional shorter lock wait, rollback) and `isDatabaseLocked`; `node:sqlite`-free so tests run it on real temp-file databases |
+| `src/db/transaction.ts` | `withImmediateTransaction` (`BEGIN IMMEDIATE`, an optional shorter lock wait, rollback), `withReadTransaction` (one snapshot, no write lock; the read's own error is the one thrown) and `isDatabaseLocked`; `node:sqlite`-free so tests run it on real temp-file databases |
 | `src/cli/context-file.ts` | The I/O behind `context --file`: groups the day of the file's latest save (waiting ~1 s at most for the lock) and gathers the file details for `--json` (`src/summary/file-details.ts` builds them, pure; `getFileCommits` in `git-commits.ts` gets the file's commits within a 2 s git budget) |
 | `src/db/session-lookup.ts` | `context`'s repo lookup: the configured name, plus the other `qualifyRepoName` form for sessions with activity inside the repo's tree (in each form of its root — see `src/utils/working-directory.ts`, which reads paths the way the shell hook's `$PWD` stores them) |
-| `src/db/migrate.ts` | Applies migrations in per-migration transactions; `node:sqlite`-free so tests run it on an in-memory DB. A migration is SQL plus an optional `run(db)` for changes that need code (`migration-types.ts`) |
+| `src/db/migrate.ts` | Applies migrations in per-migration transactions; `node:sqlite`-free so tests run it on an in-memory DB. A migration is SQL plus an optional `run(db)` for changes that need code (`migration-types.ts`). From 007 on, migrations are strictly additive — data work goes in a data job |
+| `src/db/jobs/` | Data jobs: versioned, batched, resumable normalisation of stored data. `index.ts` the append-only `JOBS` list (bump a job's version to rerun it over every row); `types.ts` the `DataJob` contract (`prepare`, `runBatch`, `verify`; reads only the database); `runner.ts` `runPendingJobs` (one immediate transaction per batch, rereading the cursor; `verify` in a read transaction, so it never holds the write lock; stops at the first unfinished job; stops, without marking anything done, when a newer CLI version starts or takes over the job; nothing runs without a backup); `backup.ts` `ensureBackup` (one `VACUUM INTO` copy per CLI version, claimed through `meta`, 0700 folder, 0600 file, newest 3 kept); `store.ts` the `data_jobs`/`data_job_issues`/`meta` SQL; `state.ts` what `status` and `upgrade` report. All `node:sqlite`-free. Jobs run only before the commands in `DATA_JOB_COMMANDS` (`src/cli/completions.ts`, within a 2 s budget, via `src/cli/data-jobs.ts`) and from `workscribe upgrade` — never from `_capture`, `_hook`, `context` or `sessions` |
 | `shell/` | Static hook scripts appended to `~/.zshrc` / `~/.bashrc` by `workscribe init` |
 
 ### Adding a new command category
@@ -95,6 +96,8 @@ All runtime data lives in `~/.workscribe/`:
 - `workscribe.db` — SQLite database (WAL mode, foreign keys on)
 - `config.json` — user config
 - `exports/` — markdown files from `workscribe export`
+- `backups/` — database copies taken before the first data job of each CLI version (`src/db/jobs/backup.ts`); newest 3 kept
+- `workscribe.db` → `data_jobs`, `data_job_issues`, `meta` — data job progress, the rows jobs couldn't resolve (never deleted), backup claims and the last CLI version that ran (migration 007)
 - `weekly-cache/` — left over from 1.x AI digests; 2.0 no longer reads or writes it
 - `workscribe.db` → `session_summaries` — saved session summaries (`skill`, plus 1.x `provider`/`ollama`/`legacy`) keyed by `repo|started_at` (migration 005)
 - `debug.log` — errors when `WORKSCRIBE_DEBUG=1`

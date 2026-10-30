@@ -3,7 +3,12 @@ import { DatabaseSync } from 'node:sqlite'
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
-import { BUSY_TIMEOUT_MS, isDatabaseLocked, withImmediateTransaction } from '../../src/db/transaction'
+import {
+  BUSY_TIMEOUT_MS,
+  isDatabaseLocked,
+  withImmediateTransaction,
+  withReadTransaction,
+} from '../../src/db/transaction'
 
 /** Two connections to one database file, as two Workscribe processes would have. */
 function twoConnections(): { first: DatabaseSync; second: DatabaseSync } {
@@ -80,5 +85,40 @@ describe('isDatabaseLocked', () => {
   it('is false for other errors', () => {
     expect(isDatabaseLocked(new Error('no such table'))).toBe(false)
     expect(isDatabaseLocked(null)).toBe(false)
+  })
+})
+
+describe('withReadTransaction', () => {
+  it('returns what it read and ends the transaction', () => {
+    const { first } = twoConnections()
+    first.prepare('INSERT INTO notes VALUES (?)').run('kept')
+
+    const count = withReadTransaction(first, () => first.prepare('SELECT COUNT(*) AS count FROM notes').get())
+
+    expect(count).toEqual({ count: 1 })
+    expect(first.isTransaction).toBe(false)
+  })
+
+  it("rethrows the read's own error and ends the transaction", () => {
+    const { first } = twoConnections()
+
+    expect(() =>
+      withReadTransaction(first, () => {
+        throw new Error('bad read')
+      })
+    ).toThrow('bad read')
+    expect(first.isTransaction).toBe(false)
+  })
+
+  it('never takes the write lock, so another process can write while it reads', () => {
+    const { first, second } = twoConnections()
+    second.exec('PRAGMA busy_timeout = 50')
+
+    withReadTransaction(first, () => {
+      first.prepare('SELECT COUNT(*) FROM notes').get()
+      second.prepare('INSERT INTO notes VALUES (?)').run('written meanwhile')
+    })
+
+    expect(second.prepare('SELECT COUNT(*) AS count FROM notes').get()).toEqual({ count: 1 })
   })
 })

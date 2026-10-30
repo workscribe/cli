@@ -23,6 +23,12 @@ vi.mock('../../src/db/alerts', () => ({
   getPendingAlerts: vi.fn().mockReturnValue([]),
 }))
 
+vi.mock('../../src/cli/data-jobs', () => ({
+  getDataStatus: vi
+    .fn()
+    .mockReturnValue({ pending: [], failed: null, failedChecks: [], unresolvedRows: 0, latestBackup: null }),
+}))
+
 vi.mock('../../src/capture/hooks/claude-code', () => ({
   checkHookHealth: vi.fn().mockReturnValue({ installed: false, pinned: true, confirmedBroken: null }),
 }))
@@ -45,6 +51,7 @@ import { readConfig } from '../../src/config'
 import { log } from '../../src/utils/logger'
 import { registerStatus } from '../../src/cli/status'
 import { checkHookHealth } from '../../src/capture/hooks/claude-code'
+import { getDataStatus } from '../../src/cli/data-jobs'
 
 const mockFs = fs as unknown as Record<string, ReturnType<typeof vi.fn>>
 const mockGetEventCount = getEventCount as ReturnType<typeof vi.fn>
@@ -285,5 +292,52 @@ describe('workscribe status — agent skill', () => {
     await makeProgram().parseAsync(['status'], { from: 'user' })
 
     expect(skillLines()).toEqual([])
+  })
+})
+
+describe('workscribe status — data', () => {
+  const mockGetDataStatus = getDataStatus as ReturnType<typeof vi.fn>
+  const UP_TO_DATE = { pending: [], failed: null, failedChecks: [], unresolvedRows: 0, latestBackup: null }
+
+  function printedLines(): string[] {
+    return mockLog.plain.mock.calls.map((call: unknown[]) => call[0] as string)
+  }
+
+  it('says the data is up to date when no job is pending', async () => {
+    mockGetDataStatus.mockReturnValue(UP_TO_DATE)
+    await makeProgram().parseAsync(['status'], { from: 'user' })
+    expect(printedLines()).toContainEqual(expect.stringMatching(/Data .*up to date/))
+  })
+
+  it('points at workscribe upgrade when jobs are pending', async () => {
+    mockGetDataStatus.mockReturnValue({ ...UP_TO_DATE, pending: ['projects', 'tickets'] })
+    await makeProgram().parseAsync(['status'], { from: 'user' })
+    expect(printedLines()).toContainEqual(expect.stringMatching(/2 upgrades pending.*workscribe upgrade/))
+  })
+
+  it('names a failed job', async () => {
+    mockGetDataStatus.mockReturnValue({ ...UP_TO_DATE, failed: { name: 'projects', error: 'boom' } })
+    await makeProgram().parseAsync(['status'], { from: 'user' })
+    expect(printedLines()).toContainEqual(expect.stringContaining('upgrade failed: projects'))
+  })
+
+  it('names a job whose check failed, even though nothing is pending', async () => {
+    mockGetDataStatus.mockReturnValue({ ...UP_TO_DATE, failedChecks: ['projects'] })
+    await makeProgram().parseAsync(['status'], { from: 'user' })
+    expect(printedLines()).toContainEqual(expect.stringMatching(/upgrade check failed: projects.*bug-report/))
+    expect(printedLines()).not.toContainEqual(expect.stringContaining('up to date'))
+  })
+
+  it('shows unresolved rows across every job and the latest backup', async () => {
+    mockGetDataStatus.mockReturnValue({
+      ...UP_TO_DATE,
+      unresolvedRows: 2,
+      latestBackup: '/home/user/.workscribe/backups/workscribe-2.2.0-x.db',
+    })
+    await makeProgram().parseAsync(['status'], { from: 'user' })
+    expect(printedLines()).toContainEqual(expect.stringContaining('2 rows left unresolved'))
+    expect(printedLines()).toContainEqual(
+      expect.stringContaining('backup: /home/user/.workscribe/backups/workscribe-2.2.0-x.db')
+    )
   })
 })

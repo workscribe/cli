@@ -198,6 +198,38 @@ This loses captured history but config is unaffected.
 
 ---
 
+## "upgrade failed" in `workscribe status`
+
+An update brought a data upgrade that stopped partway. Your data is still usable as it was, and what the upgrade finished is kept. Run it again:
+
+```bash
+workscribe upgrade
+```
+
+It picks up where it stopped and prints what failed. If it keeps failing, run it with `WORKSCRIBE_DEBUG=1` and attach `~/.workscribe/debug.log` to a bug report (`workscribe bug-report`).
+
+"upgrade check failed" means an upgrade finished but its check found data that didn't carry over. Running it again won't change that: run `workscribe bug-report`, and see below to go back to the backup taken before it.
+
+"Another Workscribe command is backing up your data right now" clears on its own — run `workscribe upgrade` again in a moment.
+
+"Couldn't back up your data" means Workscribe couldn't copy the database to `~/.workscribe/backups/` (often a full disk), so it changed nothing. Free some space and run `workscribe upgrade` again.
+
+## Restoring a backup from before an upgrade
+
+Workscribe copies your database to `~/.workscribe/backups/workscribe-<version>-<time>.db` before the first data upgrade of each version, and keeps the newest 3. To go back to one:
+
+```bash
+workscribe pause                     # stop capturing while you swap files
+cp ~/.workscribe/workscribe.db ~/.workscribe/workscribe.db.before-restore
+cp ~/.workscribe/backups/workscribe-<version>-<time>.db ~/.workscribe/workscribe.db
+rm -f ~/.workscribe/workscribe.db-wal ~/.workscribe/workscribe.db-shm
+workscribe resume
+```
+
+Activity captured after the backup was taken isn't in it. If you're still on the same Workscribe version, the next data command runs the upgrade again on the restored copy.
+
+---
+
 ## Uninstalling
 
 Run the uninstall command first — it removes the shell hook from your rc file and the Workscribe skill from your coding agents before the binary is deleted:

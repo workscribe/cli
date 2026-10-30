@@ -475,8 +475,27 @@ workscribe status
 - Last captured event
 - How summaries are made (the offline template, plus the agent skill)
 - A notice if your config still has AI provider settings from Workscribe 1.x, with how to remove them
+- A "Data" line: whether your stored data is up to date, has upgrades pending, or an upgrade failed — with rows a data upgrade couldn't resolve and the latest backup, when there are any
 - An "Agent skill" line for each detected coding agent: installed (with version), outdated, or not installed — with the command to fix it
 - Pending security alerts count (if any)
+
+---
+
+## workscribe upgrade
+
+Bring the data you've already captured up to date after updating Workscribe.
+
+```bash
+workscribe upgrade
+```
+
+Some updates change how stored activity is organised. Workscribe does that work in small steps: a little at a time before `status`, `summary`, `week`, `export` and `events` (at most about 2 seconds each time), never while capturing and never for `context` or `sessions`, which editors and coding agents call. `workscribe upgrade` does all of it in one go and prints what it checked.
+
+- **A backup comes first.** Before the first change after an update, Workscribe copies your database to `~/.workscribe/backups/` (once per version; the newest 3 are kept). If the backup can't be made, nothing is changed.
+- **Interrupted is fine.** Each step is saved as it finishes; the next run carries on where the last one stopped.
+- **Nothing is deleted.** Rows an upgrade can't sort out are kept as they are and listed, and `workscribe status` shows how many.
+
+Exits with 1 if an upgrade failed or its check didn't pass, so it can run in a script. With nothing to do, it says your data is up to date.
 
 ---
 
@@ -530,7 +549,7 @@ workscribe uninstall --hooks-only
 - Removes the shell completions block from those files, and the fish completion file
 - Removes the Claude Code session hook from `~/.claude/settings.json`, leaving your other hooks and settings untouched (each edited file is backed up first)
 - Removes the agent skill Workscribe installed (never a `workscribe` skill you added yourself)
-- Prompts whether to delete `~/.workscribe/` (database, config, exports) — defaults to **no**
+- Prompts whether to delete `~/.workscribe/` (database, config, exports, backups) — defaults to **no**
 - Prints the command to remove the CLI itself (`npm uninstall -g @workscribe/cli`)
 
 **After running:**

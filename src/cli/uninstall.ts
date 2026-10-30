@@ -95,7 +95,7 @@ export function registerUninstall(program: Command): void {
         const { deleteData } = await prompts({
           type: 'confirm',
           name: 'deleteData',
-          message: `Delete all Workscribe data in ${WORKSCRIBE_DIR}? (database, config, exports)`,
+          message: `Delete all Workscribe data in ${WORKSCRIBE_DIR}? (database, config, exports, backups)`,
           initial: false,
         })
 

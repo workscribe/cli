@@ -15,6 +15,19 @@ export function shouldRunStartupChecks(invokedCommand: string | undefined): bool
   return !HIDDEN_COMMANDS.has(invokedCommand)
 }
 
+// Data jobs (src/db/jobs/) run only before these: commands people type that read the data. Never the background
+// _capture/_hook, never `context` (the editor calls it with a 5 s timeout), never `sessions` (the agent skill calls
+// it), and never commands that remove or reset the database (`uninstall`, `clear`, `init`).
+export const DATA_JOB_COMMANDS = new Set(['status', 'summary', 'week', 'export', 'events', 'upgrade'])
+// The extension detects the CLI with `--version` on a 2 s timeout; help output should never wait on a backup either
+const INFORMATION_FLAGS = new Set(['--version', '-V', '--help', '-h'])
+
+export function shouldRunDataJobs(args: readonly string[]): boolean {
+  const [command] = args
+  if (command === undefined || !DATA_JOB_COMMANDS.has(command)) return false
+  return !args.some((arg) => INFORMATION_FLAGS.has(arg))
+}
+
 export function getPublicCommands(program: Command): CompletionCommand[] {
   return program.commands
     .filter((command) => !HIDDEN_COMMANDS.has(command.name()))
