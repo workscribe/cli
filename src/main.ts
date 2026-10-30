@@ -18,7 +18,9 @@ import { registerProfile } from './cli/profile'
 import { registerNote } from './cli/note'
 import { registerWeek } from './cli/week'
 import { registerBugReport } from './cli/bug-report'
-import { registerCompletions, shouldRunStartupChecks } from './cli/completions'
+import { registerCompletions, shouldRunDataJobs, shouldRunStartupChecks } from './cli/completions'
+import { registerUpgrade } from './cli/upgrade'
+import { runDataJobsBeforeCommand } from './cli/data-jobs'
 import { registerAlerts } from './cli/alerts'
 import { registerContext } from './cli/context'
 import { registerSkill } from './cli/skill'
@@ -38,6 +40,12 @@ if (shouldRunStartupChecks(invokedCommand)) {
     ensureTelemetryFallback()
   }
   pingTelemetry()
+}
+
+// Before a data command people typed: record the version and give pending data jobs a short budget (never in the
+// background capture, the editor's `context` calls or the agent skill's `sessions` calls — see shouldRunDataJobs)
+if (shouldRunDataJobs(process.argv.slice(2))) {
+  runDataJobsBeforeCommand(invokedCommand, __WORKSCRIBE_VERSION__)
 }
 
 const program = new Command()
@@ -65,6 +73,7 @@ registerCompletions(program)
 registerAlerts(program)
 registerContext(program)
 registerSkill(program)
+registerUpgrade(program)
 
 // parseAsync (not parse) so a throw from either a sync or an async action
 // handler — e.g. getDb() failing to create its data directory — surfaces

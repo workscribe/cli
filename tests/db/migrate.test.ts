@@ -172,3 +172,34 @@ describe('applyMigrations — another process got there first', () => {
     expect(executed).not.toContain('SELECT 1')
   })
 })
+
+describe('applyMigrations — the data_jobs migration', () => {
+  const dataJobsMigration = MIGRATIONS.find((migration) => migration.description.startsWith('Add data job state'))
+
+  function tables(db: DatabaseSync): string[] {
+    return (db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all() as { name: string }[]).map(
+      (row) => row.name
+    )
+  }
+
+  it('only adds tables, keeping every stored event', () => {
+    const db = new DatabaseSync(':memory:')
+    applyMigrations(
+      db,
+      MIGRATIONS.filter((migration) => migration.version < (dataJobsMigration?.version ?? 0))
+    )
+    insertEvent(db, 'git status', 'versioning', null)
+
+    applyMigrations(db, MIGRATIONS)
+
+    expect(tables(db)).toEqual(expect.arrayContaining(['data_jobs', 'data_job_issues', 'meta']))
+    expect(events(db)).toHaveLength(1)
+  })
+
+  it('is safe to run again on a database that already has its tables', () => {
+    const db = new DatabaseSync(':memory:')
+    applyMigrations(db, MIGRATIONS)
+
+    expect(() => db.exec(dataJobsMigration?.sql ?? '')).not.toThrow()
+  })
+})

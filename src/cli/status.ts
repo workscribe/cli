@@ -12,9 +12,36 @@ import { checkHookHealth } from '../capture/hooks/claude-code'
 import { detectAgents } from '../skills/detect'
 import { formatAgentSkillLine } from '../skills/actions'
 import { printLegacyAiNotice } from './notices'
+import { getDataStatus } from './data-jobs'
+import type { DataStatus } from '../db/jobs/state'
 
 // Labelled on the first agent's row only, like the other status sections
 const AGENT_SKILL_LABEL = 'Agent skill'
+
+function describeDataState(status: DataStatus): string {
+  if (status.failed) {
+    return `${chalk.red(`upgrade failed: ${status.failed.name}`)}  ${chalk.dim('(run: workscribe upgrade)')}`
+  }
+  if (status.failedChecks.length > 0) {
+    return `${chalk.red(`upgrade check failed: ${status.failedChecks.join(', ')}`)}  ${chalk.dim('(run: workscribe bug-report)')}`
+  }
+  if (status.pending.length > 0) {
+    const count = status.pending.length
+    return `${chalk.yellow(`${count} upgrade${count === 1 ? '' : 's'} pending`)}  ${chalk.dim('(run: workscribe upgrade)')}`
+  }
+  return chalk.green('up to date')
+}
+
+/** The "Data" line: data jobs pending, failed or failing their check, unresolved rows, and the latest backup. */
+export function formatDataLines(status: DataStatus): string[] {
+  const lines = [`  Data         ${describeDataState(status)}`]
+  const { unresolvedRows } = status
+  if (unresolvedRows > 0) {
+    lines.push(chalk.dim(`               ${unresolvedRows} row${unresolvedRows === 1 ? '' : 's'} left unresolved`))
+  }
+  if (status.latestBackup) lines.push(chalk.dim(`               backup: ${status.latestBackup}`))
+  return lines
+}
 
 export function registerStatus(program: Command): void {
   program
@@ -54,6 +81,8 @@ export function registerStatus(program: Command): void {
       log.plain(
         `  Profiles     ${activeProfiles.length > 0 ? chalk.cyan(activeProfiles.join(', ')) : chalk.dim('none')}`
       )
+
+      for (const line of formatDataLines(getDataStatus())) log.plain(line)
 
       agents.forEach((agent, index) => {
         const label = index === 0 ? AGENT_SKILL_LABEL : ''

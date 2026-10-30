@@ -15,8 +15,9 @@ Everything you capture. All captured data is stored in `~/.workscribe/` on your 
 | `~/.workscribe/config.json` | Configuration including API keys |
 | `~/.workscribe/exports/` | Markdown files from `workscribe export` |
 | `~/.workscribe/weekly-cache/` | Cached weekly summaries |
+| `~/.workscribe/backups/` | Copies of the database taken before a data upgrade — the newest 3 are kept |
 
-Both the database and config file are written with `0600` permissions (owner read/write only).
+Both the database and config file are written with `0600` permissions (owner read/write only). Backups hold the same data as the database, so they get the same protection: the folder is `0700` and each copy `0600`.
 
 **What's recorded from a command, and what isn't:**
 - **Claude Code commands:** Workscribe records the command, its folder, how long it took, and its exit code. For a failed command, Claude Code passes the command's output along with the exit code; Workscribe reads only the `Exit code N` line and stores nothing else from it.
@@ -135,4 +136,4 @@ Delete the entire data directory:
 rm -rf ~/.workscribe
 ```
 
-This removes the database, config, exports, and cache. The shell hook in your `~/.zshrc` or `~/.bashrc` will still fire but write nothing (it will error silently). To remove the hook, delete the block between `# workscribe:hook:start` and `# workscribe:hook:end` in your shell rc file.
+This removes the database, config, exports, backups, and cache. The shell hook in your `~/.zshrc` or `~/.bashrc` will still fire but write nothing (it will error silently). To remove the hook, delete the block between `# workscribe:hook:start` and `# workscribe:hook:end` in your shell rc file.

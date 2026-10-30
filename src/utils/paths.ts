@@ -30,6 +30,8 @@ export const CONFIG_PATH = path.join(xdgConfigDir, 'config.json')
 export const DEBUG_LOG_PATH = path.join(xdgStateDir, 'debug.log')
 export const UPDATE_CHECK_PATH = path.join(xdgStateDir, 'update-check.json')
 export const EXPORTS_DIR = path.join(xdgDataDir, 'exports')
+// Copies of the database taken before a data upgrade (src/db/jobs/backup.ts) — private, newest 3 kept
+export const BACKUPS_DIR = path.join(xdgDataDir, 'backups')
 export const PAUSE_FLAG_PATH = path.join(xdgStateDir, 'paused')
 export const PROFILES_DIR = path.join(xdgDataDir, 'profiles')
 // Fixed at ~/.workscribe/alerts.pending so shell hooks can check it without knowing XDG paths.

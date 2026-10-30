@@ -26,6 +26,24 @@ function rollbackQuietly(db: MigrationDatabase): void {
 }
 
 /**
+ * Runs `read` in a read transaction: one consistent snapshot across its queries, without the write lock — in WAL
+ * mode a reader never blocks a writer, however long it reads. An error from `read` is the one thrown, never one from
+ * ending the transaction.
+ */
+export function withReadTransaction<T>(db: MigrationDatabase, read: () => T): T {
+  db.exec('BEGIN')
+  let result: T
+  try {
+    result = read()
+  } catch (error) {
+    rollbackQuietly(db)
+    throw error
+  }
+  db.exec('COMMIT')
+  return result
+}
+
+/**
  * Runs `work` holding the database's write lock (`BEGIN IMMEDIATE`), so no other process can write in between —
  * `work` should recheck whatever made it start, since another process may have done the job while it waited.
  * Commits on success; rolls back and rethrows on error. Throws a locked error (see `isDatabaseLocked`) if the lock
