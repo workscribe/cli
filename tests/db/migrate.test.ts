@@ -273,3 +273,32 @@ describe('applyMigrations — the work blocks migration', () => {
     expect(() => db.exec(workBlocksMigration?.sql ?? '')).not.toThrow()
   })
 })
+
+describe('applyMigrations — the summaries migration', () => {
+  const summariesMigration = MIGRATIONS.find((migration) => migration.description.startsWith('Add summaries anchored'))
+
+  it('is in the list, and only adds a table, keeping every stored event as it was', () => {
+    expect(summariesMigration).toBeDefined()
+    const db = new DatabaseSync(':memory:')
+    applyMigrations(
+      db,
+      MIGRATIONS.filter((migration) => migration.version < (summariesMigration?.version ?? 0))
+    )
+    insertEvent(db, 'git status', 'versioning', null)
+    const before = events(db)
+
+    applyMigrations(db, MIGRATIONS)
+
+    expect(events(db)).toEqual(before)
+    expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'summary'").get()).toEqual({
+      name: 'summary',
+    })
+  })
+
+  it('is safe to run again on a database that already has its table', () => {
+    const db = new DatabaseSync(':memory:')
+    applyMigrations(db, MIGRATIONS)
+
+    expect(() => db.exec(summariesMigration?.sql ?? '')).not.toThrow()
+  })
+})

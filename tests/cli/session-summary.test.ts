@@ -61,8 +61,43 @@ describe('workscribe sessions summary set', () => {
     await setSummary()
 
     expect(getOrBuildSessions).toHaveBeenCalledWith('2026-10-25')
-    expect(saveSessionSummary).toHaveBeenCalledWith(KEY, 'skill', '## api — 1h\n- Fixed the token refresh race')
+    expect(saveSessionSummary).toHaveBeenCalledWith(KEY, {
+      engine: 'skill',
+      text: '## api — 1h\n- Fixed the token refresh race',
+      anchor: expect.objectContaining({ firstEventId: null, lastEventId: null, projectId: null }),
+    })
     expect(mockLog.success).toHaveBeenCalledWith(expect.stringContaining('Saved the summary for api'))
+  })
+
+  it("anchors the summary to the session's events, with no project while they aren't linked to one yet", async () => {
+    const event = (id: number, capturedAt: string, projectId: number | null) => ({
+      id,
+      captured_at: capturedAt,
+      command: 'npm test',
+      cwd: '/repo',
+      exit_code: 0,
+      duration_ms: 10,
+      repo_name: 'api',
+      branch: 'main',
+      category: 'testing',
+      metadata: null,
+      source: null,
+      file_path: null,
+      project_id: projectId,
+    })
+    vi.mocked(getOrBuildSessions).mockReturnValueOnce([
+      { ...SESSION, events: [event(7, STARTED_AT, 4), event(9, '2026-10-25T09:30:00.000Z', 4)] },
+    ])
+    vi.mocked(getOrBuildSessions).mockReturnValueOnce([
+      { ...SESSION, events: [event(7, STARTED_AT, null), event(9, '2026-10-25T09:30:00.000Z', null)] },
+    ])
+
+    await setSummary()
+    await setSummary()
+
+    const [[, linked], [, unlinked]] = vi.mocked(saveSessionSummary).mock.calls
+    expect(linked.anchor).toMatchObject({ projectId: 4, firstEventId: 7, lastEventId: 9 })
+    expect(unlinked.anchor).toMatchObject({ projectId: null, firstEventId: 7, lastEventId: 9, isUnlinked: true })
   })
 
   it("redacts secrets, including the user's extra patterns, before saving", async () => {
@@ -70,7 +105,7 @@ describe('workscribe sessions summary set', () => {
 
     await setSummary()
 
-    const [, , saved] = vi.mocked(saveSessionSummary).mock.calls[0]
+    const [, { text: saved }] = vi.mocked(saveSessionSummary).mock.calls[0]
     expect(saved).not.toContain('ghp_abcdefghijklmnopqrstuvwxyz0123456789')
     expect(saved).not.toContain('INTERNAL-4421')
   })

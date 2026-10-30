@@ -100,7 +100,7 @@ Your activity leaves your machine only when **you ask your coding agent to summa
 When you ask your coding agent to summarize your work with the Workscribe skill:
 
 - **What leaves your machine:** the `sessions --json` output above, plus any files the agent chooses to read in your repos for context, go to the agent's model provider (as all of your conversation with that agent does).
-- **What's stored locally:** the summary the agent writes is saved in `~/.workscribe/workscribe.db` (`session_summaries`), after the same secret redaction as captured commands. It's shown by `workscribe summary`, `workscribe context` and the VS Code status bar for that session.
+- **What's stored locally:** the summary the agent writes is saved in `~/.workscribe/workscribe.db`, after the same secret redaction as captured commands. It's kept in two tables for now: `session_summaries`, and `summary`, which ties it to the events it describes so it survives regrouping. Both hold the same text, and the old table goes once nothing reads it. It's shown by `workscribe summary`, `workscribe context` and the VS Code status bar for that session.
 - **What isn't recorded:** the skill's own `workscribe` commands are kept out of your captured activity.
 
 If you need summaries that never leave your machine, don't use the skill — `workscribe summary` runs entirely locally.

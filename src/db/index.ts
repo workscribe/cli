@@ -8,6 +8,8 @@ import { findRecentSessionsForRepo, type RepoLookup } from './session-lookup'
 import { BUSY_TIMEOUT_MS, withImmediateTransaction, type TransactionOptions } from './transaction'
 import type { StoredEngine } from '../ai/engine'
 import { insertEventRecord, type NewEvent } from './event-writer'
+import { saveSummaryToBothStores } from './summary-store'
+import type { SummaryAnchor } from '../summary/anchors'
 export type { EventRow, SessionRow, SessionSummaryRow } from './types'
 
 let _db: DatabaseSync | null = null
@@ -214,14 +216,22 @@ export function getSessionSummaries(sessionKey: string): SessionSummaryRow[] {
   return stmt.all({ session_key: sessionKey }) as unknown as SessionSummaryRow[]
 }
 
-export function saveSessionSummary(sessionKey: string, engine: StoredEngine, text: string): void {
-  const db = getDb()
-  const stmt = db.prepare(`
-    INSERT INTO session_summaries (session_key, engine, text, created_at)
-    VALUES ($session_key, $engine, $text, $created_at)
-    ON CONFLICT (session_key, engine) DO UPDATE SET text = excluded.text, created_at = excluded.created_at
-  `)
-  stmt.run({ session_key: sessionKey, engine, text, created_at: new Date().toISOString() })
+/**
+ * Saves a session's summary to `session_summaries`, as before, and to `summary`, anchored to the session's events,
+ * in one transaction. Readers still read `session_summaries`; `summary` is what survives regrouping.
+ */
+export function saveSessionSummary(
+  sessionKey: string,
+  summary: { engine: StoredEngine; text: string; anchor: SummaryAnchor }
+): void {
+  saveSummaryToBothStores(getDb(), {
+    sourceKey: sessionKey,
+    engine: summary.engine,
+    text: summary.text,
+    createdAt: new Date().toISOString(),
+    anchor: summary.anchor,
+    anchorSource: 'live',
+  })
 }
 
 export function getLastEventIds(n: number): number[] {
