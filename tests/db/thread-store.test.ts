@@ -5,6 +5,7 @@ import { MIGRATIONS } from '../../src/db/migrations'
 import {
   currentDayStamp,
   getBlocksForDate,
+  getBlockHoldingEvent,
   getEventsInRange,
   getThreadEvents,
   isSameStamp,
@@ -153,5 +154,23 @@ describe('thread-store', () => {
     db.exec('DELETE FROM events')
 
     expect(db.prepare('SELECT COUNT(*) AS count FROM thread_event').get()).toEqual({ count: 0 })
+  })
+
+  it('gives the threads and ordered events of the block holding an event, and nothing for an event in no block', () => {
+    const db = database()
+    insertProjects(db, 2)
+    insertEvent(db, '2026-10-28T10:00:00.000Z', 1)
+    insertEvent(db, '2026-10-28T10:01:00.000Z', 2)
+    build(db)
+    insertEvent(db, '2026-10-28T10:02:00.000Z', 1)
+
+    const block = getBlockHoldingEvent(db, 2)
+
+    expect(block?.threads.map((thread) => thread.projectId)).toEqual([1, 2])
+    expect(block?.events).toEqual([
+      { id: 1, threadId: block?.threads[0].id },
+      { id: 2, threadId: block?.threads[1].id },
+    ])
+    expect(getBlockHoldingEvent(db, 3)).toBeNull()
   })
 })

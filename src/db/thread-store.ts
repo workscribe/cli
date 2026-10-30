@@ -52,6 +52,10 @@ export interface StoredBlock {
   threads: StoredThread[]
 }
 
+const THREADS_OF_BLOCK_SQL = `SELECT id, block_id AS blockId, project_id AS projectId, started_at AS startedAt,
+  ended_at AS endedAt, event_count AS eventCount, active_slots AS activeSlots
+  FROM thread WHERE block_id = ? ORDER BY id`
+
 const IN_DAY = 'captured_at >= $start AND captured_at < $end'
 // A prime near 10⁹: each factor is reduced by it before multiplying, so no term or sum overflows 64-bit integers
 const SPREAD_MODULUS = 1_000_000_007
@@ -178,11 +182,7 @@ function readBlocks(db: MigrationDatabase, date: string): StoredBlock[] {
        FROM work_block WHERE date = ? ORDER BY started_at, id`
     )
     .all(date) as Omit<StoredBlock, 'threads'>[]
-  const selectThreads = db.prepare(
-    `SELECT id, block_id AS blockId, project_id AS projectId, started_at AS startedAt, ended_at AS endedAt,
-            event_count AS eventCount, active_slots AS activeSlots
-     FROM thread WHERE block_id = ? ORDER BY id`
-  )
+  const selectThreads = db.prepare(THREADS_OF_BLOCK_SQL)
   return blocks.map((block) => ({ ...block, threads: selectThreads.all(block.id) as StoredThread[] }))
 }
 
@@ -193,4 +193,38 @@ export function getThreadEvents(db: MigrationDatabase, threadId: number): EventR
        WHERE thread_event.thread_id = ? ORDER BY events.captured_at, events.id`
     )
     .all(threadId) as EventRow[]
+}
+
+/** A built block's threads, and every event of the block in grouping order with its thread. */
+export interface BlockWithEvents {
+  threads: StoredThread[]
+  events: { id: number; threadId: number }[]
+}
+
+/**
+ * The block holding an event — what `findSummaryThread` needs — read without a transaction of its own, for a caller
+ * already inside one. Null when no built block holds the event (its day isn't built yet, or it was deleted).
+ */
+export function readBlockHoldingEvent(db: MigrationDatabase, eventId: number): BlockWithEvents | null {
+  const holder = db
+    .prepare(
+      `SELECT thread.block_id AS blockId FROM thread_event JOIN thread ON thread.id = thread_event.thread_id
+       WHERE thread_event.event_id = ?`
+    )
+    .get(eventId) as { blockId: number } | undefined
+  if (holder === undefined) return null
+  const threads = db.prepare(THREADS_OF_BLOCK_SQL).all(holder.blockId) as StoredThread[]
+  const events = db
+    .prepare(
+      `SELECT events.id, thread_event.thread_id AS threadId FROM thread_event
+       JOIN thread ON thread.id = thread_event.thread_id JOIN events ON events.id = thread_event.event_id
+       WHERE thread.block_id = ? ORDER BY events.captured_at, events.id`
+    )
+    .all(holder.blockId) as BlockWithEvents['events']
+  return { threads, events }
+}
+
+/** `readBlockHoldingEvent` in one snapshot of its own, so a rebuild by another process can't split the read. */
+export function getBlockHoldingEvent(db: MigrationDatabase, eventId: number): BlockWithEvents | null {
+  return withReadTransaction(db, () => readBlockHoldingEvent(db, eventId))
 }
