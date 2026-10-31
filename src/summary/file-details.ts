@@ -29,11 +29,18 @@ export function displayPath(absoluteFilePath: string, repoRoot: string | null): 
   return path.basename(absoluteFilePath)
 }
 
+/** Whether a stored path is the file being asked about — the same path, or (when the caller can tell) the same file. */
+export type FileMatcher = (storedPath: string) => boolean
+
+function samePathAs(filePath: string): FileMatcher {
+  return (storedPath) => storedPath === filePath
+}
+
 /** The session's other saved files, most-saved first, then most recently saved. */
-function otherFilesBySaves(sessionEvents: EventRow[], filePath: string): string[] {
+function otherFilesBySaves(sessionEvents: EventRow[], isThisFile: FileMatcher): string[] {
   const saves = new Map<string, { count: number; lastSavedAt: string }>()
   for (const event of sessionEvents) {
-    if (event.category !== CODE_EDIT || !event.file_path || event.file_path === filePath) continue
+    if (event.category !== CODE_EDIT || !event.file_path || isThisFile(event.file_path)) continue
     const seen = saves.get(event.file_path)
     saves.set(event.file_path, {
       count: (seen?.count ?? 0) + 1,
@@ -52,23 +59,28 @@ export interface FileDetailsOptions {
   commits: GitCommit[]
   /** How to show a stored path — relative to the repo root, resolving symlinks (see `displayPath`) */
   displayPathOf: (storedPath: string) => string
+  /** Which stored paths are this file; by default only `filePath` itself */
+  isThisFile?: FileMatcher
 }
 
 /** The session's saves of this file, oldest first. */
-export function savesOf(sessionEvents: EventRow[], filePath: string): EventRow[] {
-  return sessionEvents.filter((event) => event.category === CODE_EDIT && event.file_path === filePath)
+export function savesOf(sessionEvents: EventRow[], isThisFile: FileMatcher): EventRow[] {
+  return sessionEvents.filter(
+    (event) => event.category === CODE_EDIT && event.file_path !== null && isThisFile(event.file_path)
+  )
 }
 
 /** The file's saves in the session, or null if it has none (it was found through a non-save event). */
 export function buildFileDetails(options: FileDetailsOptions): FileDetails | null {
   const { filePath, sessionEvents, displayPathOf } = options
-  const saves = savesOf(sessionEvents, filePath)
+  const isThisFile = options.isThisFile ?? samePathAs(filePath)
+  const saves = savesOf(sessionEvents, isThisFile)
   if (saves.length === 0) return null
 
   const savedTimes = saves.map((save) => save.captured_at).sort()
   // Saves are oldest first, so the last one with a branch is the latest
   const latestBranch = [...saves].reverse().find((save) => save.branch)?.branch ?? null
-  const otherFiles = otherFilesBySaves(sessionEvents, filePath)
+  const otherFiles = otherFilesBySaves(sessionEvents, isThisFile)
 
   return {
     path: filePath,

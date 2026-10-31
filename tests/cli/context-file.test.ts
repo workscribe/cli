@@ -1,10 +1,6 @@
-import { describe, it, expect, vi, beforeEach, onTestFinished } from 'vitest'
+import { describe, it, expect, vi, onTestFinished } from 'vitest'
 
-vi.mock('../../src/db', () => ({
-  getEventsBySessionId: vi.fn(),
-  getLatestFileSaveAt: vi.fn(),
-  getSessionBranch: vi.fn(),
-}))
+vi.mock('../../src/db', () => ({ getLatestFileSaveAt: vi.fn() }))
 vi.mock('../../src/sessions/detector', () => ({ ensureDayGrouped: vi.fn() }))
 vi.mock('../../src/summary/git-commits', () => ({ getFileCommits: vi.fn() }))
 
@@ -16,26 +12,19 @@ import { ensureDayGrouped } from '../../src/sessions/detector'
 import { getFileCommits } from '../../src/summary/git-commits'
 import { localDateOf } from '../../src/utils/format'
 import { GIT_BUDGET_MS, LOCK_WAIT_MS, getFileDetails, groupDayOfLatestSave } from '../../src/cli/context-file'
-import type { SessionRow } from '../../src/db/types'
+import type { EventRow } from '../../src/db/types'
 
 const mocked = vi.mocked(db)
-const SESSION: SessionRow = {
-  id: 7,
-  date: '2026-10-28',
-  started_at: '2026-10-28T09:00:00.000Z',
-  ended_at: '2026-10-28T10:00:00.000Z',
-  repo_name: 'api',
-  event_count: 3,
-  summary: null,
-}
+const spanOf = (events: EventRow[]) => ({
+  events,
+  branch: 'main',
+  startedAt: '2026-10-28T09:00:00.000Z',
+  endedAt: '2026-10-28T10:00:00.000Z',
+})
 
 function lockedError(): Error {
   return Object.assign(new Error('database is locked'), { code: 'ERR_SQLITE_ERROR', errcode: 5 })
 }
-
-beforeEach(() => {
-  mocked.getSessionBranch.mockReturnValue('main')
-})
 
 describe('groupDayOfLatestSave', () => {
   it("groups the local day of the file's latest save, with the short lock wait", () => {
@@ -101,17 +90,17 @@ describe('getFileDetails — a repo opened through a symlink', () => {
       source: 'vscode',
       file_path: filePath,
     })
-    mocked.getEventsBySessionId.mockReturnValue([
+    const span = spanOf([
       saveOf(linkedFile, '2026-10-28T09:10:00.000Z'),
       saveOf(linkedOther, '2026-10-28T09:20:00.000Z'),
     ])
 
-    const details = getFileDetails(linkedFile, SESSION)
+    const details = getFileDetails(linkedFile, span)
 
     expect(getFileCommits).toHaveBeenCalledWith({
       filePath: path.join(realRoot, 'README.md'),
-      since: SESSION.started_at,
-      until: SESSION.ended_at,
+      since: span.startedAt,
+      until: span.endedAt,
       budgetMs: GIT_BUDGET_MS,
     })
     expect(details).toMatchObject({
@@ -123,9 +112,39 @@ describe('getFileDetails — a repo opened through a symlink', () => {
   })
 })
 
+describe('getFileDetails — a save stored through a symlink', () => {
+  it('counts it as a save of the same file asked about by its real path', () => {
+    const base = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'workscribe-context-link-')))
+    onTestFinished(() => fs.rmSync(base, { recursive: true, force: true }))
+    const realFile = path.join(base, 'real', 'README.md')
+    fs.mkdirSync(path.dirname(realFile), { recursive: true })
+    fs.writeFileSync(realFile, '')
+    fs.symlinkSync(path.join(base, 'real'), path.join(base, 'link'))
+    vi.mocked(getFileCommits).mockReturnValue({ repoRoot: path.dirname(realFile), commits: [] })
+    const savedThroughLink = {
+      id: 1,
+      captured_at: '2026-10-28T09:10:00.000Z',
+      command: 'README.md',
+      cwd: path.join(base, 'link'),
+      exit_code: null,
+      duration_ms: null,
+      repo_name: 'api',
+      branch: 'main',
+      category: 'code_edit',
+      metadata: null,
+      source: 'vscode',
+      file_path: path.join(base, 'link', 'README.md'),
+    }
+
+    const details = getFileDetails(realFile, spanOf([savedThroughLink]))
+
+    expect(details).toMatchObject({ saveCount: 1, relativePath: 'README.md', editedAlongside: { total: 0 } })
+  })
+})
+
 describe('getFileDetails — a session found through something other than a save', () => {
   it('is null without spending any of the git budget', () => {
-    mocked.getEventsBySessionId.mockReturnValue([
+    const span = spanOf([
       {
         id: 1,
         captured_at: '2026-10-28T09:10:00.000Z',
@@ -142,7 +161,7 @@ describe('getFileDetails — a session found through something other than a save
       },
     ])
 
-    expect(getFileDetails('/repo/README.md', SESSION)).toBeNull()
+    expect(getFileDetails('/repo/README.md', span)).toBeNull()
     expect(getFileCommits).not.toHaveBeenCalled()
   })
 })

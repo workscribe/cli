@@ -1,110 +1,128 @@
 import path from 'path'
 import { Command } from 'commander'
 import chalk from 'chalk'
-import {
-  getRecentSessionsForRepo,
-  getLastSessionTouchingFile,
-  getSessionBranch,
-  getSessionSummaries,
-  getEventsBySessionId,
-} from '../db'
+import { getRecentSessionsForRepo, getLastSessionTouchingFile } from '../db'
 import { getRepoContext } from '../capture/git'
 import { formatRepoName } from '../capture/repo-name'
 import { currentDirectory, rootForms } from '../utils/working-directory'
 import { readConfig } from '../config'
 import { formatDuration, timeAgo } from '../utils/format'
 import { log } from '../utils/logger'
-import { getFileDetails, groupDayOfLatestSave } from './context-file'
+import { getFileDetails, groupDayOfLatestSave, type FileSpan } from './context-file'
+import { lookUpFileThread, lookUpProjectThread, type ThreadLookup } from './context-threads'
+import { sessionViewOf, threadViewOf, type ContextView, type WorkSpan } from './context-view'
 import type { FileDetails } from '../summary/file-details'
-import { renderSessionStory } from '../ai/engines/template/story'
-import { sessionToPayload, locationContextFrom } from '../summary/payload'
-import { sessionKey, pickBestSummary } from '../summary/store'
-import type { SessionRow } from '../db/types'
-import type { Session } from '../sessions/detector'
+import type { ThreadContext } from '../summary/thread-context'
 
-export interface SessionContextJson {
-  repoName: string | null
-  date: string
-  startedAt: string
-  endedAt: string
+/** The first version of the `context --json` document; the fields before it are kept exactly as they were. */
+export const CONTEXT_SCHEMA_VERSION = 1
+
+export interface SessionContextJson extends WorkSpan {
   timeAgo: string
-  durationMinutes: number
-  branch: string | null
-  eventCount: number
   summary: string | null
+  schemaVersion: number
+  /** Null when the answer came from the old sessions (data not upgraded yet, or no thread found) */
+  thread: ThreadContext['thread'] | null
+  block: ThreadContext['block'] | null
+  alongside: ThreadContext['alongside'] | null
 }
 
-function sessionMinutes(session: SessionRow): number {
-  return (new Date(session.ended_at).getTime() - new Date(session.started_at).getTime()) / 60000
-}
-
-function toSession(row: SessionRow): Session {
+function toContextJson(view: ContextView): SessionContextJson {
   return {
-    id: row.id,
-    date: row.date,
-    startedAt: row.started_at,
-    endedAt: row.ended_at,
-    repoName: row.repo_name,
-    durationMinutes: sessionMinutes(row),
-    eventCount: row.event_count,
-    summary: null,
-    events: getEventsBySessionId(row.id),
+    repoName: view.repoName,
+    date: view.date,
+    startedAt: view.startedAt,
+    endedAt: view.endedAt,
+    timeAgo: timeAgo(view.startedAt),
+    durationMinutes: view.durationMinutes,
+    branch: view.branch,
+    eventCount: view.eventCount,
+    summary: view.summary,
+    schemaVersion: CONTEXT_SCHEMA_VERSION,
+    thread: view.threaded?.thread ?? null,
+    block: view.threaded?.block ?? null,
+    alongside: view.threaded?.alongside ?? null,
   }
 }
 
-/**
- * A template summary rendered from the session's current events — templates are never stored, so it can't go stale.
- * It tells only the commits Workscribe captured: no git lookups, so the VS Code extension's 5 s answer holds.
- */
-function renderTemplateSummary(row: SessionRow): string {
-  const config = readConfig()
-  const payload = sessionToPayload(toSession(row), row.date, { context: locationContextFrom(config) })
-  return renderSessionStory(payload, config.summary?.includeCategories ?? [])
+/** `context --file --json`: the answer, plus what it says about this file (`file` is null without saves of it). */
+function toFileContextJson(view: ContextView, filePath: string): SessionContextJson & { file: FileDetails | null } {
+  const span: FileSpan = { events: view.events, branch: view.branch, startedAt: view.startedAt, endedAt: view.endedAt }
+  return { ...toContextJson(view), file: getFileDetails(filePath, span) }
 }
 
-/** The best stored summary (skill > AI > template), or a template one so the VS Code status bar is never empty. */
-function resolveContextSummary(row: SessionRow): string {
-  return pickBestSummary(getSessionSummaries(sessionKey(row.repo_name, row.started_at))) ?? renderTemplateSummary(row)
-}
-
-function toContextJson(session: SessionRow): SessionContextJson {
-  return {
-    repoName: session.repo_name,
-    date: session.date,
-    startedAt: session.started_at,
-    endedAt: session.ended_at,
-    timeAgo: timeAgo(session.started_at),
-    durationMinutes: sessionMinutes(session),
-    branch: getSessionBranch(session.id),
-    eventCount: session.event_count,
-    summary: resolveContextSummary(session),
-  }
-}
-
-/** `context --file --json`: the session, plus what it says about this file (`file` is null without saves of it). */
-function toFileContextJson(session: SessionRow, filePath: string): SessionContextJson & { file: FileDetails | null } {
-  return { ...toContextJson(session), file: getFileDetails(filePath, session) }
-}
-
-function printSessionContext(session: SessionRow, heading: string): void {
-  const ago = timeAgo(session.started_at)
-  const branch = getSessionBranch(session.id)
-  const durationMinutes = sessionMinutes(session)
+function printContext(view: ContextView, heading: string): void {
+  log.plain('')
+  log.plain(`  ${chalk.bold(heading)}: ${chalk.cyan(timeAgo(view.startedAt))}`)
+  log.plain('')
+  log.plain(`  Date     ${view.date}`)
+  log.plain(`  Duration ${formatDuration(view.durationMinutes)}`)
+  if (view.branch) log.plain(`  Branch   ${chalk.dim(view.branch)}`)
+  log.plain(`  Events   ${view.eventCount}`)
+  const alongside = view.threaded?.alongside.map((other) => other.repoName ?? 'elsewhere') ?? []
+  if (alongside.length > 0) log.plain(`  Alongside ${chalk.dim(alongside.join(', '))}`)
 
   log.plain('')
-  log.plain(`  ${chalk.bold(heading)}: ${chalk.cyan(ago)}`)
-  log.plain('')
-  log.plain(`  Date     ${session.date}`)
-  log.plain(`  Duration ${formatDuration(durationMinutes)}`)
-  if (branch) log.plain(`  Branch   ${chalk.dim(branch)}`)
-  log.plain(`  Events   ${session.event_count}`)
-
-  log.plain('')
-  for (const line of resolveContextSummary(session).split('\n')) {
+  for (const line of view.summary.split('\n')) {
     log.plain(`  ${line}`)
   }
 
   log.plain('')
+}
+
+function printNothing(isJson: boolean, message: string): void {
+  if (isJson) log.plain(JSON.stringify(null))
+  else log.plain(`  ${message}`)
+}
+
+/** The old path for a file: the latest session that saved it, after grouping its day unless the lock already said no. */
+function fileSessionView(filePath: string, lookup: ThreadLookup): ContextView | null {
+  // The thread path already waited for the lock and gave up: answer from the sessions as they are, never wait twice
+  const isLocked = lookup.kind === 'fallback' && lookup.isLocked
+  if (!isLocked) groupDayOfLatestSave(filePath)
+  const session = getLastSessionTouchingFile(filePath)
+  return session ? sessionViewOf(session) : null
+}
+
+function runFileContext(file: string, isJson: boolean): void {
+  const filePath = path.normalize(file)
+  const lookup = lookUpFileThread(filePath)
+  const view = lookup.kind === 'found' ? threadViewOf(lookup.answer) : fileSessionView(filePath, lookup)
+  if (!view) {
+    printNothing(isJson, `No sessions found touching ${filePath}`)
+    return
+  }
+  if (isJson) log.plain(JSON.stringify(toFileContextJson(view, filePath)))
+  else printContext(view, `Last session touching ${path.basename(filePath)}`)
+}
+
+/** The old path for a repo: its latest session, under its configured name or — inside its own tree — the other form. */
+function repoSessionView(repo: ReturnType<typeof getRepoContext>, directory: string): ContextView | null {
+  const config = readConfig()
+  // Also finds sessions stored under the other name form — captured before the setting changed, or before WOR-118
+  const otherRepoName = repo.remote ? formatRepoName(repo.remote, !config.git.qualifyRepoName) : null
+  const roots = repo.root ? rootForms(directory, repo.root) : []
+  const [session] = getRecentSessionsForRepo({ repoName: repo.repoName ?? '', otherRepoName, roots }, 1)
+  return session ? sessionViewOf(session) : null
+}
+
+function runRepoContext(isJson: boolean): void {
+  const directory = currentDirectory()
+  const repo = getRepoContext(directory, readConfig())
+  if (!repo.repoName) {
+    printNothing(isJson, 'Not in a git repository. Run workscribe context from a project directory.')
+    return
+  }
+  const lookup: ThreadLookup = repo.project
+    ? lookUpProjectThread(repo.project.identity)
+    : { kind: 'fallback', isLocked: false }
+  const view = lookup.kind === 'found' ? threadViewOf(lookup.answer) : repoSessionView(repo, directory)
+  if (!view) {
+    printNothing(isJson, `No sessions found for ${repo.repoName}`)
+    return
+  }
+  if (isJson) log.plain(JSON.stringify(toContextJson(view)))
+  else printContext(view, `Last session on ${repo.repoName}`)
 }
 
 export function registerContext(program: Command): void {
@@ -114,46 +132,7 @@ export function registerContext(program: Command): void {
     .option('--file <path>', 'narrow to last session that touched this file')
     .option('--json', 'output as JSON instead of formatted text — null when no session is found')
     .action((opts) => {
-      if (opts.file) {
-        const normalizedFile = path.normalize(opts.file)
-        groupDayOfLatestSave(normalizedFile)
-        const session = getLastSessionTouchingFile(normalizedFile)
-        if (!session) {
-          if (opts.json) log.plain(JSON.stringify(null))
-          else log.plain(`  No sessions found touching ${normalizedFile}`)
-          return
-        }
-        if (opts.json) {
-          log.plain(JSON.stringify(toFileContextJson(session, normalizedFile)))
-          return
-        }
-        printSessionContext(session, `Last session touching ${path.basename(normalizedFile)}`)
-        return
-      }
-
-      const config = readConfig()
-      const directory = currentDirectory()
-      const { repoName, root, remote } = getRepoContext(directory, config)
-      if (!repoName) {
-        if (opts.json) log.plain(JSON.stringify(null))
-        else log.plain('  Not in a git repository. Run workscribe context from a project directory.')
-        return
-      }
-
-      // Also finds sessions stored under the other name form — captured before the setting changed, or before WOR-118
-      const otherRepoName = remote ? formatRepoName(remote, !config.git.qualifyRepoName) : null
-      const roots = root ? rootForms(directory, root) : []
-      const sessions = getRecentSessionsForRepo({ repoName, otherRepoName, roots }, 1)
-      if (sessions.length === 0) {
-        if (opts.json) log.plain(JSON.stringify(null))
-        else log.plain(`  No sessions found for ${repoName}`)
-        return
-      }
-
-      if (opts.json) {
-        log.plain(JSON.stringify(toContextJson(sessions[0])))
-        return
-      }
-      printSessionContext(sessions[0], `Last session on ${repoName}`)
+      if (opts.file) runFileContext(opts.file, Boolean(opts.json))
+      else runRepoContext(Boolean(opts.json))
     })
 }
