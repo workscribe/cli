@@ -34,7 +34,10 @@ export function parseSessionKey(key: string): ParsedSessionKey | null {
   return { repoName: repoName === '' ? null : repoName, startedAt }
 }
 
-function newestFirst(first: SessionSummaryRow, second: SessionSummaryRow): number {
+/** What picking a summary reads from a stored one — rows of `session_summaries` and of `summary` both fit. */
+export type RankableSummary = Pick<SessionSummaryRow, 'engine' | 'text' | 'created_at'>
+
+function newestFirst(first: RankableSummary, second: RankableSummary): number {
   return second.created_at.localeCompare(first.created_at)
 }
 
@@ -55,9 +58,9 @@ export function pickSavedSummary(rows: SessionSummaryRow[]): SavedSummary | null
 }
 
 /** The best stored summary for a session regardless of the configured engine (used by `context`). */
-export function pickBestSummary(rows: SessionSummaryRow[]): string | null {
+export function pickBestSummary(rows: RankableSummary[]): string | null {
   // Rows come from the DB, so an engine name this build doesn't know is ignored like a template row
-  const rank = (row: SessionSummaryRow): number => ENGINE_RANK[row.engine as StoredEngine] ?? 0
+  const rank = (row: RankableSummary): number => ENGINE_RANK[row.engine as StoredEngine] ?? 0
   const [best] = rows
     .filter((row) => rank(row) > 0)
     .sort((first, second) => rank(second) - rank(first) || newestFirst(first, second))

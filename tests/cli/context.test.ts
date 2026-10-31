@@ -31,6 +31,12 @@ vi.mock('../../src/capture/git', () => ({
   getRepoContext: vi.fn(),
 }))
 
+// The thread path's I/O is tested in context-threads-database.test.ts: here it falls back unless a test says so
+vi.mock('../../src/cli/context-threads', () => ({
+  lookUpFileThread: vi.fn(() => ({ kind: 'fallback', isLocked: false })),
+  lookUpProjectThread: vi.fn(() => ({ kind: 'fallback', isLocked: false })),
+}))
+
 import { execFileSync } from 'child_process'
 import { Command } from 'commander'
 import {
@@ -46,6 +52,7 @@ import { getRepoContext } from '../../src/capture/git'
 import { log } from '../../src/utils/logger'
 import { registerContext } from '../../src/cli/context'
 import { getFileDetails, groupDayOfLatestSave } from '../../src/cli/context-file'
+import { lookUpFileThread, lookUpProjectThread } from '../../src/cli/context-threads'
 
 const mockGetRecentSessionsForRepo = getRecentSessionsForRepo as ReturnType<typeof vi.fn>
 const mockGetLastSessionTouchingFile = getLastSessionTouchingFile as ReturnType<typeof vi.fn>
@@ -329,7 +336,12 @@ describe('workscribe context --file — file details and grouping', () => {
         'summary',
       ])
     )
-    expect(getFileDetails).toHaveBeenCalledWith('/Users/dev/myapp/src/auth.ts', SAMPLE_SESSION)
+    expect(getFileDetails).toHaveBeenCalledWith('/Users/dev/myapp/src/auth.ts', {
+      events: expect.any(Array),
+      branch: 'feature/auth',
+      startedAt: SAMPLE_SESSION.started_at,
+      endedAt: SAMPLE_SESSION.ended_at,
+    })
   })
 
   it('groups the day of the latest save before looking the file up', async () => {
@@ -363,5 +375,144 @@ describe('workscribe context (repo mode) — repoName', () => {
     const parsed = JSON.parse(mockLog.plain.mock.calls[0][0] as string)
     expect(parsed.repoName).toBe('myapp')
     expect(parsed).not.toHaveProperty('file')
+  })
+})
+
+// WOR-149: a file's context is its own project's thread, with the projects worked alongside it
+describe('workscribe context — on threads', () => {
+  const THREAD_ANSWER = {
+    threadId: 12,
+    context: {
+      repoName: 'workscribe/landing-page',
+      date: '2026-10-28',
+      startedAt: '2026-10-28T12:31:00.000Z',
+      endedAt: '2026-10-28T13:48:00.000Z',
+      durationMinutes: 77,
+      branch: null,
+      eventCount: 3,
+      savedSummary: null,
+      thread: { key: 'workscribe/landing-page|2026-10-28T12:31:00.000Z', projectId: 3, activeMinutes: 15 },
+      block: { startedAt: '2026-10-28T12:09:00.000Z', endedAt: '2026-10-28T13:48:00.000Z', activeMinutes: 80 },
+      alongside: [
+        {
+          repoName: 'workscribe/cli',
+          startedAt: '2026-10-28T12:09:00.000Z',
+          endedAt: '2026-10-28T13:40:00.000Z',
+          eventCount: 89,
+          activeMinutes: 70,
+        },
+        {
+          repoName: 'workscribe/vscode',
+          startedAt: '2026-10-28T12:15:00.000Z',
+          endedAt: '2026-10-28T13:30:00.000Z',
+          eventCount: 35,
+          activeMinutes: 40,
+        },
+      ],
+    },
+    events: [],
+  }
+
+  beforeEach(() => {
+    mockReadConfig.mockReturnValue(createTestConfig())
+  })
+
+  it('answers --file from the thread, keeping every field the extension reads and adding the thread ones', async () => {
+    vi.mocked(lookUpFileThread).mockReturnValueOnce({ kind: 'found', answer: THREAD_ANSWER })
+
+    await makeProgram().parseAsync(['context', '--file', '/repo/README.md', '--json'], { from: 'user' })
+
+    const parsed = JSON.parse(mockLog.plain.mock.calls[0][0] as string)
+    expect(parsed).toMatchObject({
+      repoName: 'workscribe/landing-page',
+      date: '2026-10-28',
+      startedAt: '2026-10-28T12:31:00.000Z',
+      eventCount: 3,
+      schemaVersion: 1,
+      thread: THREAD_ANSWER.context.thread,
+      block: THREAD_ANSWER.context.block,
+      alongside: THREAD_ANSWER.context.alongside,
+    })
+    expect(parsed).toHaveProperty('file')
+    expect(typeof parsed.summary).toBe('string')
+    expect(typeof parsed.timeAgo).toBe('string')
+    expect(mockGetLastSessionTouchingFile).not.toHaveBeenCalled()
+    expect(groupDayOfLatestSave).not.toHaveBeenCalled()
+  })
+
+  it("builds the file details from the thread's own events", async () => {
+    const save = { ...COMMIT_EVENT, id: 4, category: 'code_edit', file_path: '/repo/README.md' }
+    vi.mocked(lookUpFileThread).mockReturnValueOnce({ kind: 'found', answer: { ...THREAD_ANSWER, events: [save] } })
+
+    await makeProgram().parseAsync(['context', '--file', '/repo/README.md', '--json'], { from: 'user' })
+
+    expect(getFileDetails).toHaveBeenCalledWith('/repo/README.md', {
+      events: [save],
+      branch: null,
+      startedAt: '2026-10-28T12:31:00.000Z',
+      endedAt: '2026-10-28T13:48:00.000Z',
+    })
+  })
+
+  it('names the projects worked alongside in the text output', async () => {
+    vi.mocked(lookUpFileThread).mockReturnValueOnce({ kind: 'found', answer: THREAD_ANSWER })
+
+    await makeProgram().parseAsync(['context', '--file', '/repo/README.md'], { from: 'user' })
+
+    const lines = mockLog.plain.mock.calls.map((call) => call[0] as string)
+    expect(lines.some((line) => line.includes('Alongside') && line.includes('workscribe/cli, workscribe/vscode'))).toBe(
+      true
+    )
+  })
+
+  it("answers context from the repo's latest thread, by its project identity", async () => {
+    mockGetRepoContext.mockReturnValue({
+      repoName: 'workscribe/cli',
+      branch: 'main',
+      root: '/repo',
+      remote: null,
+      project: { identity: 'remote:github.com/workscribe/cli', kind: 'remote' },
+    })
+    vi.mocked(lookUpProjectThread).mockReturnValueOnce({ kind: 'found', answer: THREAD_ANSWER })
+
+    await makeProgram().parseAsync(['context', '--json'], { from: 'user' })
+
+    expect(lookUpProjectThread).toHaveBeenCalledWith('remote:github.com/workscribe/cli')
+    expect(mockGetRecentSessionsForRepo).not.toHaveBeenCalled()
+    expect(JSON.parse(mockLog.plain.mock.calls[0][0] as string)).toMatchObject({ schemaVersion: 1, eventCount: 3 })
+  })
+
+  it('falls back to the old session without waiting for the lock a second time', async () => {
+    vi.mocked(lookUpFileThread).mockReturnValueOnce({ kind: 'fallback', isLocked: true })
+    mockGetLastSessionTouchingFile.mockReturnValue(SAMPLE_SESSION)
+
+    await makeProgram().parseAsync(['context', '--file', '/repo/README.md', '--json'], { from: 'user' })
+
+    expect(groupDayOfLatestSave).not.toHaveBeenCalled()
+    expect(JSON.parse(mockLog.plain.mock.calls[0][0] as string)).toMatchObject({ eventCount: 42 })
+  })
+
+  it('groups the day as before when the thread path found nothing, the lock not being why', async () => {
+    vi.mocked(lookUpFileThread).mockReturnValueOnce({ kind: 'fallback', isLocked: false })
+    mockGetLastSessionTouchingFile.mockReturnValue(SAMPLE_SESSION)
+
+    await makeProgram().parseAsync(['context', '--file', '/repo/README.md', '--json'], { from: 'user' })
+
+    expect(groupDayOfLatestSave).toHaveBeenCalledWith('/repo/README.md')
+    expect(JSON.parse(mockLog.plain.mock.calls[0][0] as string)).toMatchObject({ eventCount: 42, thread: null })
+  })
+
+  it('marks an answer from the old sessions with null thread fields', async () => {
+    mockGetLastSessionTouchingFile.mockReturnValue(SAMPLE_SESSION)
+
+    await makeProgram().parseAsync(['context', '--file', '/repo/README.md', '--json'], { from: 'user' })
+
+    expect(groupDayOfLatestSave).toHaveBeenCalled()
+    expect(JSON.parse(mockLog.plain.mock.calls[0][0] as string)).toMatchObject({
+      schemaVersion: 1,
+      thread: null,
+      block: null,
+      alongside: null,
+    })
   })
 })

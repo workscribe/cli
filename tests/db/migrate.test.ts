@@ -302,3 +302,24 @@ describe('applyMigrations — the summaries migration', () => {
     expect(() => db.exec(summariesMigration?.sql ?? '')).not.toThrow()
   })
 })
+
+describe('applyMigrations — the project time index', () => {
+  it('adds the index, leaving every event as it was', () => {
+    const indexMigration = MIGRATIONS.find((migration) => migration.description.startsWith('Index events by project'))
+    expect(indexMigration).toBeDefined()
+    const db = new DatabaseSync(':memory:')
+    applyMigrations(
+      db,
+      MIGRATIONS.filter((migration) => migration.version < (indexMigration?.version ?? 0))
+    )
+    insertEvent(db, 'git status', 'versioning', null)
+    const before = events(db)
+
+    applyMigrations(db, MIGRATIONS)
+
+    expect(events(db)).toEqual(before)
+    expect(db.prepare("SELECT name FROM sqlite_master WHERE name = 'idx_events_project_time'").get()).toEqual({
+      name: 'idx_events_project_time',
+    })
+  })
+})
