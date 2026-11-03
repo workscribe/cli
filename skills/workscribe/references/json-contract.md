@@ -1,11 +1,22 @@
 # `workscribe sessions --json` — fields this skill uses
 
-The full contract is documented at workscribe.co/docs/commands#json-output-contract. Within `schemaVersion: 1`, fields are only ever added — ignore any you don't recognise.
+The full contract is documented at workscribe.co/docs/commands#json-output-contract. Within `schemaVersion: 2`, fields are only ever added — ignore any you don't recognise.
+
+Each session is one project's **thread**: that project's work inside a work block (a stretch between idle gaps). Working across several repos at once gives one block with a thread per repo, so sessions of one block overlap in time.
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "date": "2026-10-25",
+  "blocks": [
+    {
+      "id": 1,
+      "startedAt": "2026-10-25T09:00:00.000Z",
+      "endedAt": "2026-10-25T10:30:00.000Z",
+      "activeMinutes": 85,
+      "threadKeys": ["api|2026-10-25T09:00:00.000Z", "web|2026-10-25T09:40:00.000Z"]
+    }
+  ],
   "sessions": [
     {
       "key": "api|2026-10-25T09:00:00.000Z",
@@ -15,7 +26,9 @@ The full contract is documented at workscribe.co/docs/commands#json-output-contr
       "branches": ["feature/auth", "main"],
       "startedAt": "2026-10-25T09:00:00.000Z",
       "endedAt": "2026-10-25T10:30:00.000Z",
-      "durationMinutes": 90,
+      "activeMinutes": 70,
+      "blockId": 1,
+      "alongside": ["web|2026-10-25T09:40:00.000Z"],
       "notes": ["blocked on staging credentials"],
       "commits": [
         { "hash": "a1b2c3d", "subject": "fix: token refresh race", "committedAt": "2026-10-25T10:12:00+01:00", "source": "git" },
@@ -34,8 +47,9 @@ The full contract is documented at workscribe.co/docs/commands#json-output-contr
 | Field | Use it for |
 |---|---|
 | `key` | The `--key` when saving this session's summary. Copy it exactly. |
-| `project`, `branch`, `durationMinutes` | The block heading. `project` is the repo name, a `~/path` for work outside git, or `null` (write `unknown`). |
+| `project`, `branch`, `activeMinutes` | The block heading. `project` is the project's name, a `~/path` for work outside any project, or `null` (write `unknown`). `activeMinutes` is the time spent on this project; `startedAt`–`endedAt` can span other projects' work too. |
 | `branches` | Every branch the session touched, in the order first seen. `branch` is the latest of them, the one the session ended on. Each commit's `committedAt` says when it was made. |
+| `alongside` | The keys of the sessions worked in the same block. Mention those projects at most once; their work belongs in their own blocks. |
 | `repoPath` | Where to read files if a commit needs context. `null` outside a git repo. |
 | `notes` | The developer's own notes — always include them. |
 | `commits` | The main source of outcomes. `source: "git"` has a short `hash` to cite; `"captured"` commits have `hash: null` (amended or rebased). |

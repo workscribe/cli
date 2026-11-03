@@ -77,6 +77,27 @@ export function anchorOfKeyedSession(events: EventRow[], key: string): SummaryAn
   return anchorOfSession(events, parseSessionKey(key)?.repoName ?? null)
 }
 
+/** A thread's anchor: one project's events, so never mixed. */
+export interface ThreadAnchor extends AnchorRange {
+  isMixed: false
+}
+
+/** The anchor of a summary saved for a thread: its project, and its first and last events in grouping order. */
+export function anchorOfThread(events: EventRow[], projectId: number | null): ThreadAnchor {
+  return {
+    projectId,
+    firstEventId: events[0]?.id ?? null,
+    lastEventId: events.at(-1)?.id ?? null,
+    isMixed: false,
+  }
+}
+
+/** What attaching a stored summary to a thread reads. */
+export interface StoredAnchor extends AnchorRange {
+  /** Saved for a thread by `sessions summary set`, rather than for an old session */
+  isThreadSaved: boolean
+}
+
 export interface BlockEvent {
   id: number
   threadId: number
@@ -90,18 +111,21 @@ export interface CandidateThread {
 /**
  * The thread a summary belongs to, in the block holding its first event: its project's thread, when that thread
  * holds more than half of the block's events from the first event to the last (or to the block's end, if the last
- * is outside it). Null for an unanchored summary, a day with no threads built, or a range that mixed projects.
+ * is outside it). A summary saved for a thread needs only its first event to still be in that thread: a small
+ * thread worked in between a busier project's events never holds most of its own range. Null for an unanchored
+ * summary, a day with no threads built, or a range that mixed projects.
  */
 export function findSummaryThread(
-  anchor: AnchorRange,
+  anchor: StoredAnchor,
   block: { threads: CandidateThread[]; events: BlockEvent[] }
 ): CandidateThread | null {
   const start = block.events.findIndex((event) => event.id === anchor.firstEventId)
   if (start === -1) return null
-  const end = block.events.findIndex((event) => event.id === anchor.lastEventId)
-  const rangeEvents = block.events.slice(start, end === -1 ? block.events.length : end + 1)
   const thread = block.threads.find((candidate) => candidate.projectId === anchor.projectId)
   if (!thread) return null
+  if (anchor.isThreadSaved) return block.events[start].threadId === thread.id ? thread : null
+  const end = block.events.findIndex((event) => event.id === anchor.lastEventId)
+  const rangeEvents = block.events.slice(start, end === -1 ? block.events.length : end + 1)
   const held = rangeEvents.filter((event) => event.threadId === thread.id).length
   return held / rangeEvents.length > MAJORITY_SHARE ? thread : null
 }

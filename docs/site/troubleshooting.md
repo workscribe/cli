@@ -137,9 +137,21 @@ and answer **yes** when asked to remove the old AI settings. `workscribe config 
 
 ---
 
+## `sessions`: "Workscribe hasn't finished upgrading your data"
+
+After an update, Workscribe links your earlier activity to its projects once, a couple of seconds at a time whenever you run commands like `status` or `summary`. `workscribe sessions` and `workscribe sessions summary set` read your work by project, so they wait for that instead of showing earlier days wrongly. Run it to the end once:
+
+```bash
+workscribe upgrade
+```
+
+It backs up your database first, then shows its progress. The Workscribe agent skill asks you before running it.
+
+---
+
 ## Saving a summary: "No session matches this key"
 
-The session's `key` came from an earlier `workscribe sessions --json`, and new activity has since regrouped that day's sessions (a session's key is its repo and start time). Run `workscribe sessions --json` again and save with the new key. The Workscribe agent skill does this automatically.
+The session's `key` came from an earlier `workscribe sessions --json`, and new activity has since regrouped that day (a session's key is its project and the time its thread started). A key from an older Workscribe version may match nothing either. Run `workscribe sessions --json` again and save with the new key. The Workscribe agent skill does this automatically.
 
 ---
 

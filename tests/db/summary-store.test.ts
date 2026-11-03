@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { DatabaseSync } from 'node:sqlite'
 import { applyMigrations } from '../../src/db/migrate'
 import { MIGRATIONS } from '../../src/db/migrations'
-import { getSummaryBySource, mapSummary, saveSummaryToBothStores } from '../../src/db/summary-store'
+import { getSummaryBySource, mapSummary, saveAnchoredSummary } from '../../src/db/summary-store'
 
 // Migration 006 normalises stored events using the user's config — keep it off the real one
 vi.mock('../../src/config', () => ({ readConfig: vi.fn(() => ({ capture: { aiTools: true } })) }))
@@ -24,19 +24,17 @@ const record = (overrides: Partial<Parameters<typeof mapSummary>[1]> = {}) => ({
   text: 'Fixed the token refresh race',
   createdAt: '2026-10-28T10:00:00.000Z',
   anchor: ANCHOR,
-  anchorSource: 'live' as const,
+  anchorSource: 'thread' as const,
   ...overrides,
 })
 
 describe('summary-store', () => {
-  it('saves to both stores at once, the anchored row marked as saved', () => {
+  it('saves only the anchored row, marked as saved, and never writes session_summaries', () => {
     const db = database()
 
-    saveSummaryToBothStores(db, record())
+    saveAnchoredSummary(db, record())
 
-    expect(db.prepare('SELECT session_key, engine, text FROM session_summaries').all()).toEqual([
-      { session_key: KEY, engine: 'skill', text: 'Fixed the token refresh race' },
-    ])
+    expect(db.prepare('SELECT COUNT(*) AS count FROM session_summaries').get()).toEqual({ count: 0 })
     expect(getSummaryBySource(db, KEY, 'skill')).toMatchObject({
       scope: 'session',
       project_id: 4,
@@ -44,14 +42,14 @@ describe('summary-store', () => {
       last_event_id: 9,
       text: 'Fixed the token refresh race',
       origin: 'saved',
-      anchor_source: 'live',
+      anchor_source: 'thread',
       is_mixed: 0,
     })
   })
 
   it('refuses a second row for the same key and engine', () => {
     const db = database()
-    saveSummaryToBothStores(db, record())
+    saveAnchoredSummary(db, record())
     const insert = () =>
       db
         .prepare(
@@ -69,7 +67,7 @@ describe('summary-store', () => {
       record({ text: 'old text', anchor: { projectId: null, firstEventId: 1, lastEventId: 2, isMixed: false } })
     )
 
-    saveSummaryToBothStores(db, record({ text: 'new text' }))
+    saveAnchoredSummary(db, record({ text: 'new text' }))
 
     expect(getSummaryBySource(db, KEY, 'skill')).toMatchObject({ origin: 'saved', text: 'new text', first_event_id: 7 })
     expect(db.prepare('SELECT COUNT(*) AS count FROM summary').get()).toEqual({ count: 1 })
@@ -77,10 +75,7 @@ describe('summary-store', () => {
 
   it("never changes a saved row's range or text when mapping, only fills in its missing project", () => {
     const db = database()
-    saveSummaryToBothStores(
-      db,
-      record({ anchor: { projectId: null, firstEventId: 7, lastEventId: 9, isMixed: false } })
-    )
+    saveAnchoredSummary(db, record({ anchor: { projectId: null, firstEventId: 7, lastEventId: 9, isMixed: false } }))
 
     mapSummary(
       db,

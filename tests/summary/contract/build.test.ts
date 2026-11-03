@@ -1,14 +1,24 @@
 import { describe, it, expect } from 'vitest'
-import { buildEventsJson, buildSessionsJson, eventToJson, sessionToJson } from '../../../src/summary/contract/build'
-import { SCHEMA_VERSION } from '../../../src/summary/contract/constants'
-import { HOME, capturedRow, row, session } from './fixtures'
+import {
+  blockToJson,
+  buildEventsJson,
+  buildSessionsJson,
+  eventToJson,
+  threadToJson,
+} from '../../../src/summary/contract/build'
+import { EVENTS_SCHEMA_VERSION, SESSIONS_SCHEMA_VERSION } from '../../../src/summary/contract/constants'
+import { HOME, block, capturedRow, row, thread } from './fixtures'
 
 const NO_GIT = { repoPath: null, commits: [], othersSubjects: [] }
 const OPTIONS = { location: { projects: {}, homeDir: HOME }, git: NO_GIT, includeCategories: [] }
 
-// Pinned so an accidental rename or removal fails here — see the stability rule in SCHEMA_VERSION.
+// Pinned so an accidental rename or removal fails here — see the stability rule in contract/constants.ts.
 const EVENT_KEYS = ['capturedAt', 'category', 'durationMs', 'exitCode', 'metadata', 'source']
 const SESSION_KEYS = [
+  'activeMinutes',
+  'agentSessions',
+  'alongside',
+  'blockId',
   'branch',
   'branches',
   'commits',
@@ -24,6 +34,13 @@ const SESSION_KEYS = [
   'repoPath',
   'startedAt',
 ]
+const BLOCK_KEYS = ['activeMinutes', 'endedAt', 'eventCount', 'id', 'startedAt', 'threadKeys']
+
+/** A thread alone in its block. */
+function soloThreadToJson(events: Parameters<typeof thread>[0], overrides: Parameters<typeof thread>[1] = {}) {
+  const member = thread(events, overrides)
+  return threadToJson(member, block([member]), OPTIONS)
+}
 
 describe('eventToJson', () => {
   it.each([
@@ -84,9 +101,9 @@ describe('eventToJson', () => {
   })
 })
 
-describe('sessionToJson', () => {
-  it('describes the session with the documented keys', () => {
-    const json = sessionToJson(session([capturedRow('npm test')]), OPTIONS)
+describe('threadToJson', () => {
+  it('describes the thread with the documented keys', () => {
+    const json = soloThreadToJson([capturedRow('npm test')])
 
     expect(Object.keys(json).sort()).toEqual(SESSION_KEYS)
     expect(json).toMatchObject({
@@ -96,11 +113,16 @@ describe('sessionToJson', () => {
       cwd: '/Users/dev/api',
       branch: 'feature/auth',
       branches: ['feature/auth'],
+      durationMinutes: 60,
+      activeMinutes: 30,
       eventCount: 1,
+      blockId: 1,
+      alongside: [],
+      agentSessions: [],
     })
   })
 
-  it('lists every branch the session touched, with branch the latest of them', () => {
+  it('lists every branch the thread touched, with branch the latest of them', () => {
     const events = [
       capturedRow('npm test', { branch: 'main' }),
       capturedRow('npm test', { branch: 'feat/x' }),
@@ -109,22 +131,54 @@ describe('sessionToJson', () => {
       capturedRow('npm test', { branch: null }),
     ]
 
-    expect(sessionToJson(session(events), OPTIONS)).toMatchObject({
+    expect(soloThreadToJson(events)).toMatchObject({
       branch: 'fix/typo',
       branches: ['main', 'feat/x', 'fix/typo'],
     })
   })
 
-  it('names a session outside git by its directory, with no repo path', () => {
-    const outside = session([capturedRow('npm test', { cwd: '/Users/dev/scripts', repo_name: null })], {
+  it('names the "elsewhere" thread by its directory, with no repo name or path', () => {
+    const json = soloThreadToJson([capturedRow('npm test', { cwd: '/Users/dev/scripts', repo_name: null })], {
+      projectId: null,
       repoName: null,
+      key: '|2026-10-25T09:00:00.000Z',
     })
 
-    expect(sessionToJson(outside, OPTIONS)).toMatchObject({
+    expect(json).toMatchObject({
       key: '|2026-10-25T09:00:00.000Z',
       project: '~/scripts',
+      repoName: null,
       repoPath: null,
     })
+  })
+
+  it("names the block's other threads alongside it, by key, in block order", () => {
+    const cli = thread([capturedRow('npm test')], { id: 1, key: 'cli|2026-10-28T12:09:00.000Z' })
+    const vscode = thread([capturedRow('npm test')], { id: 2, key: 'vscode|2026-10-28T12:15:00.000Z' })
+    const site = thread([capturedRow('npm test')], { id: 3, key: 'landing-page|2026-10-28T12:30:00.000Z' })
+    const day = block([cli, vscode, site], { id: 7 })
+
+    expect(threadToJson(vscode, day, OPTIONS)).toMatchObject({
+      blockId: 7,
+      alongside: ['cli|2026-10-28T12:09:00.000Z', 'landing-page|2026-10-28T12:30:00.000Z'],
+    })
+  })
+
+  it('lists the agent sessions the thread came from, never their working folder', () => {
+    const agentSessions = [
+      {
+        source: 'claude-code',
+        sessionId: 'abc-123',
+        startedAt: '2026-10-25T09:00:00.000Z',
+        lastSeenAt: '2026-10-25T09:40:00.000Z',
+      },
+    ]
+    const json = soloThreadToJson([capturedRow('npm test')], {
+      agentSessions: [{ ...agentSessions[0], cwd: '/Users/dev/secret' } as (typeof agentSessions)[0]],
+    })
+
+    expect(json.agentSessions).toEqual(agentSessions)
+    expect(JSON.stringify(json)).not.toContain('/Users/dev/secret')
   })
 
   it('merges git commits with captured ones and moves notes out of events', () => {
@@ -137,7 +191,8 @@ describe('sessionToJson', () => {
       commits: [{ hash: 'a1b2c3d', subject: 'fix: token', committedAt: '2026-10-25T09:20:00+01:00' }],
       othersSubjects: [],
     }
-    const json = sessionToJson(session(events), { ...OPTIONS, git })
+    const member = thread(events)
+    const json = threadToJson(member, block([member]), { ...OPTIONS, git })
 
     expect(json.repoPath).toBe('/Users/dev/api')
     expect(json.commits).toEqual([
@@ -149,11 +204,31 @@ describe('sessionToJson', () => {
   })
 })
 
+describe('blockToJson', () => {
+  it("describes the block with the documented keys and its threads' keys", () => {
+    const cli = thread([capturedRow('npm test')], { id: 1, key: 'cli|2026-10-28T12:09:00.000Z' })
+    const site = thread([capturedRow('npm test')], { id: 2, key: 'landing-page|2026-10-28T12:30:00.000Z' })
+    const json = blockToJson(block([cli, site], { id: 7 }))
+
+    expect(Object.keys(json).sort()).toEqual(BLOCK_KEYS)
+    expect(json).toEqual({
+      id: 7,
+      startedAt: '2026-10-25T09:00:00.000Z',
+      endedAt: '2026-10-25T10:00:00.000Z',
+      eventCount: 2,
+      activeMinutes: 40,
+      threadKeys: ['cli|2026-10-28T12:09:00.000Z', 'landing-page|2026-10-28T12:30:00.000Z'],
+    })
+  })
+})
+
 describe('buildSessionsJson / buildEventsJson', () => {
-  it('wraps sessions with the schema version, including an empty day (and pins its keys)', () => {
-    expect(buildSessionsJson('2026-10-25', [])).toEqual({
-      schemaVersion: SCHEMA_VERSION,
+  it('wraps blocks and sessions with version 2, including an empty day (and pins its keys)', () => {
+    expect(SESSIONS_SCHEMA_VERSION).toBe(2)
+    expect(buildSessionsJson('2026-10-25', [], [])).toEqual({
+      schemaVersion: 2,
       date: '2026-10-25',
+      blocks: [],
       sessions: [],
     })
   })
@@ -173,8 +248,9 @@ describe('buildSessionsJson / buildEventsJson', () => {
   })
 
   it('returns an empty list for a day with no events', () => {
+    expect(EVENTS_SCHEMA_VERSION).toBe(1)
     expect(buildEventsJson('2026-10-25', [], { includeCategories: [] })).toEqual({
-      schemaVersion: SCHEMA_VERSION,
+      schemaVersion: 1,
       date: '2026-10-25',
       total: 0,
       events: [],

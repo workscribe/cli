@@ -83,9 +83,21 @@ function mostFrequentCwdOf(events: EventRow[]): string | null {
   return best
 }
 
+/** What naming a session or thread by its folders reads. */
+type WorkEvents = Pick<Session, 'repoName' | 'events'>
+
 /** The directory most of a session's events ran in, or null for a session with no events. */
-export function mostFrequentCwd(session: Session): string | null {
+export function mostFrequentCwd(session: Pick<Session, 'events'>): string | null {
   return mostFrequentCwdOf(session.events)
+}
+
+/**
+ * A directory inside a thread's repo, for git lookups: the most-used one among its events captured inside a repo,
+ * else its most-used one. Unlike `repoCwd`, it doesn't match `repo_name` against a name — a project's name can
+ * differ from the text its events were stored under.
+ */
+export function threadRepoCwd(events: EventRow[]): string | null {
+  return mostFrequentCwdOf(events.filter((event) => event.repo_name !== null)) ?? mostFrequentCwdOf(events)
 }
 
 /**
@@ -108,7 +120,10 @@ function homeRelative(directory: string, homeDir: string): string {
  * most of its commands ran in (a config.projects name if one is set, else the home-relative path),
  * so the user can always tell where the work happened.
  */
-export function sessionLocation(session: Session, context: LocationContext = DEFAULT_LOCATION_CONTEXT): string | null {
+export function sessionLocation(
+  session: WorkEvents,
+  context: LocationContext = DEFAULT_LOCATION_CONTEXT
+): string | null {
   if (session.repoName) return session.repoName
   const cwd = mostFrequentCwd(session)
   if (!cwd) return null

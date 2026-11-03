@@ -33,6 +33,25 @@ export function upsertAgentSession(
   return row.id
 }
 
+/** What `sessions --json` says about an agent session: never its working folder. */
+export interface AgentSessionInfo {
+  source: string
+  sessionId: string
+  startedAt: string
+  lastSeenAt: string
+}
+
+/** The distinct agent sessions these events came from, oldest first. */
+export function getAgentSessionsOfEvents(db: MigrationDatabase, eventIds: number[]): AgentSessionInfo[] {
+  return db
+    .prepare(
+      `SELECT source, session_id AS sessionId, started_at AS startedAt, last_seen_at AS lastSeenAt FROM agent_sessions
+       WHERE id IN (SELECT agent_session_id FROM events WHERE id IN (SELECT value FROM json_each(?)))
+       ORDER BY started_at, id`
+    )
+    .all(JSON.stringify(eventIds)) as unknown as AgentSessionInfo[]
+}
+
 /** The agent sessions these events belong to — read before deleting them. */
 export function agentSessionIdsOfEvents(db: MigrationDatabase, eventIds: number[]): number[] {
   const rows = db

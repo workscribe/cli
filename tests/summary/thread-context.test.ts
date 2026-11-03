@@ -122,6 +122,33 @@ describe('buildThreadContext', () => {
     expect(context.savedSummary).toBe('by the skill')
   })
 
+  it("serves a summary saved for a small thread worked in between a busier project's events", () => {
+    // landing-page saves at events 2 and 6, with cli and vscode in between: it never holds most of its own range
+    const blockEvents = [
+      { id: 1, threadId: 10 },
+      { id: 2, threadId: 12 },
+      { id: 3, threadId: 10 },
+      { id: 4, threadId: 11 },
+      { id: 5, threadId: 10 },
+      { id: 6, threadId: 12 },
+    ]
+    const saved = summary({
+      first_event_id: 2,
+      last_event_id: 6,
+      origin: 'saved',
+      anchor_source: 'thread',
+      is_mixed: 0,
+      text: 'Rewrote the landing-page README',
+    })
+
+    expect(buildThreadContext(input({ blockEvents, summaries: [saved] })).savedSummary).toBe(
+      'Rewrote the landing-page README'
+    )
+    expect(
+      buildThreadContext(input({ blockEvents, summaries: [{ ...saved, anchor_source: 'cached' }] })).savedSummary
+    ).toBeNull()
+  })
+
   it('has no one alongside when the block is a single project', () => {
     const single = [thread(10, CLI, '2026-10-28T12:09:00.000Z', 2)]
     const context = buildThreadContext(

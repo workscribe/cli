@@ -43,6 +43,19 @@ export function readDataStatus(db: MigrationDatabase, jobs: DataJob[]): DataStat
   }
 }
 
+/** What a command that reads data only after a job has run says while that job hasn't. */
+export const UPGRADE_NEEDED_MESSAGE =
+  "Workscribe hasn't finished upgrading your data — run workscribe upgrade, then try again."
+
+/**
+ * Whether every job named is in `jobs` and done. A name missing from `jobs` counts as not done, so a reader gated on
+ * a job never answers before it ran.
+ */
+export function areJobsDone(db: MigrationDatabase, jobs: DataJob[], names: ReadonlySet<string>): boolean {
+  const named = jobs.filter((job) => names.has(job.name))
+  return named.length === names.size && named.every((job) => isJobDone(getJobRow(db, job.name), job))
+}
+
 /** Remembers the last CLI version that ran a data command — the upgrade signal the CLI had no record of before. */
 export function recordCliVersion(db: MigrationDatabase, version: string): void {
   if (getMetaValue(db, CLI_VERSION_KEY) === version) return

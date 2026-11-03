@@ -1,8 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, onTestFinished } from 'vitest'
 
-vi.mock('../../src/sessions/detector', () => ({
-  getOrBuildSessions: vi.fn(),
-}))
+const DB = vi.hoisted(() => ({ name: 'the database' }))
+
+vi.mock('../../src/db', () => ({ getDb: vi.fn(() => DB), saveThreadSummary: vi.fn() }))
+vi.mock('../../src/db/day-threads', () => ({ isReadyForThreads: vi.fn(), readDayThreads: vi.fn() }))
+vi.mock('../../src/sessions/threads', () => ({ ensureDayThreads: vi.fn() }))
 
 vi.mock('../../src/config', () => ({
   readConfig: vi.fn(),
@@ -16,39 +18,60 @@ vi.mock('../../src/summary/git-commits', () => ({
 }))
 
 import { Command } from 'commander'
-import { getOrBuildSessions } from '../../src/sessions/detector'
+import { isReadyForThreads, readDayThreads } from '../../src/db/day-threads'
+import { ensureDayThreads } from '../../src/sessions/threads'
 import { log } from '../../src/utils/logger'
 import { registerSessions } from '../../src/cli/sessions'
 import { readConfig } from '../../src/config'
 import { getRepoRoot, getUserEmail, getCommitsInWindow, getOthersSubjects } from '../../src/summary/git-commits'
 import { createTestConfig } from '../helpers/config'
+import { block, row, thread } from '../summary/contract/fixtures'
 
-const mockGetOrBuildSessions = getOrBuildSessions as ReturnType<typeof vi.fn>
 const mockLog = log as Record<string, ReturnType<typeof vi.fn>>
 
-const SAMPLE_SESSIONS = [
-  {
-    id: 1,
-    date: '2026-05-28',
-    startedAt: '2026-05-28T09:00:00Z',
-    endedAt: '2026-05-28T10:30:00Z',
-    repoName: 'myapp',
-    durationMinutes: 90,
-    eventCount: 15,
-    summary: null,
-    events: [],
-  },
-  {
-    id: 2,
-    date: '2026-05-28',
-    startedAt: '2026-05-28T14:00:00Z',
-    endedAt: '2026-05-28T15:00:00Z',
-    repoName: 'api',
-    durationMinutes: 60,
-    eventCount: 8,
-    summary: null,
-    events: [],
-  },
+const CLI_START = '2026-10-28T12:09:00.000Z'
+const CLI_KEY = `cli|${CLI_START}`
+const VSCODE_KEY = 'vscode|2026-10-28T12:15:00.000Z'
+const SITE_KEY = 'landing-page|2026-10-28T12:30:00.000Z'
+
+const COMMIT_EVENT = row({
+  id: 9,
+  captured_at: '2026-10-28T12:40:00.000Z',
+  command: 'git commit -m "fix: login redirect"',
+  cwd: '/Users/dev/cli',
+  repo_name: 'cli',
+  branch: 'main',
+  category: 'shipping',
+  metadata: '{"message":"fix: login redirect"}',
+})
+
+const CLI = thread([COMMIT_EVENT], {
+  id: 1,
+  projectId: 1,
+  key: CLI_KEY,
+  repoName: 'cli',
+  startedAt: CLI_START,
+  endedAt: '2026-10-28T13:48:00.000Z',
+  activeSlots: 16,
+})
+const VSCODE = thread([row({ id: 10, cwd: '/Users/dev/vscode', repo_name: 'vscode' })], {
+  id: 2,
+  projectId: 2,
+  key: VSCODE_KEY,
+  repoName: 'vscode',
+  startedAt: '2026-10-28T12:15:00.000Z',
+  activeSlots: 6,
+})
+const SITE = thread([row({ id: 11, cwd: '/Users/dev/landing-page', repo_name: 'landing-page' })], {
+  id: 3,
+  projectId: 3,
+  key: SITE_KEY,
+  repoName: 'landing-page',
+  startedAt: '2026-10-28T12:30:00.000Z',
+  activeSlots: 1,
+})
+const DAY = [
+  block([CLI, VSCODE, SITE], { id: 5, startedAt: CLI_START, endedAt: '2026-10-28T13:48:00.000Z', activeSlots: 18 }),
 ]
 
 function makeProgram() {
@@ -58,158 +81,170 @@ function makeProgram() {
   return program
 }
 
+function stubExit() {
+  const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+    throw new Error('exit')
+  }) as never)
+  onTestFinished(() => exitSpy.mockRestore())
+  return exitSpy
+}
+
+function printedLines(): string {
+  return mockLog.plain.mock.calls.map((call: unknown[]) => call[0] as string).join('\n')
+}
+
+beforeEach(() => {
+  vi.mocked(readConfig).mockReturnValue(createTestConfig())
+  vi.mocked(isReadyForThreads).mockReturnValue(true)
+  vi.mocked(readDayThreads).mockReturnValue(DAY)
+})
+
 describe('workscribe sessions', () => {
-  describe('no sessions', () => {
-    it('logs a no-sessions message', async () => {
-      mockGetOrBuildSessions.mockReturnValue([])
-      await makeProgram().parseAsync(['sessions'], { from: 'user' })
-      expect(mockLog.plain).toHaveBeenCalledWith(expect.stringContaining('No sessions detected'))
-    })
+  it('logs a no-sessions message for a day with no blocks', async () => {
+    vi.mocked(readDayThreads).mockReturnValue([])
+    await makeProgram().parseAsync(['sessions'], { from: 'user' })
+    expect(mockLog.plain).toHaveBeenCalledWith(expect.stringContaining('No sessions detected'))
   })
 
-  describe('with sessions', () => {
-    it('logs a header with session count', async () => {
-      mockGetOrBuildSessions.mockReturnValue(SAMPLE_SESSIONS)
-      await makeProgram().parseAsync(['sessions'], { from: 'user' })
-      expect(mockLog.plain).toHaveBeenCalledWith(expect.stringContaining('2 sessions'))
-    })
+  it('lists each block with every project thread inside it and its active time', async () => {
+    await makeProgram().parseAsync(['sessions'], { from: 'user' })
 
-    it('uses singular "session" for a single result', async () => {
-      mockGetOrBuildSessions.mockReturnValue([SAMPLE_SESSIONS[0]])
-      await makeProgram().parseAsync(['sessions'], { from: 'user' })
-      const calls = mockLog.plain.mock.calls.map((call: unknown[]) => call[0] as string)
-      expect(calls.some((call) => call.includes('1 session') && !call.includes('1 sessions'))).toBe(true)
-    })
-
-    it('logs a line per session containing the repo name', async () => {
-      mockGetOrBuildSessions.mockReturnValue(SAMPLE_SESSIONS)
-      await makeProgram().parseAsync(['sessions'], { from: 'user' })
-      expect(mockLog.plain).toHaveBeenCalledWith(expect.stringContaining('myapp'))
-    })
-
-    it('shows "no repo" for sessions without a repo', async () => {
-      mockGetOrBuildSessions.mockReturnValue([{ ...SAMPLE_SESSIONS[0], repoName: null }])
-      await makeProgram().parseAsync(['sessions'], { from: 'user' })
-      expect(mockLog.plain).toHaveBeenCalledWith(expect.stringContaining('no repo'))
-    })
+    const printed = printedLines()
+    expect(printed).toContain('3 threads in 1 block')
+    expect(printed).toContain('1h 30m active')
+    for (const name of ['cli', 'vscode', 'landing-page']) expect(printed).toContain(name)
+    expect(printed).toContain('1h 20m active')
   })
 
-  describe('notes', () => {
-    it('displays note text indented under the session', async () => {
-      mockGetOrBuildSessions.mockReturnValue([
-        {
-          ...SAMPLE_SESSIONS[0],
-          events: [{ category: 'note', metadata: JSON.stringify({ text: 'Fixed race condition' }) }],
-        },
-      ])
-      await makeProgram().parseAsync(['sessions'], { from: 'user' })
-      expect(mockLog.plain).toHaveBeenCalledWith(expect.stringContaining('Fixed race condition'))
-    })
-
-    it('does not display note lines when there are no note events', async () => {
-      mockGetOrBuildSessions.mockReturnValue([
-        {
-          ...SAMPLE_SESSIONS[0],
-          events: [{ category: 'shipping', metadata: '{}' }],
-        },
-      ])
-      await makeProgram().parseAsync(['sessions'], { from: 'user' })
-      const calls = (mockLog.plain as ReturnType<typeof vi.fn>).mock.calls.flat().join(' ')
-      expect(calls).not.toContain('note')
-    })
-
-    it('skips note events with missing or malformed metadata', async () => {
-      mockGetOrBuildSessions.mockReturnValue([
-        {
-          ...SAMPLE_SESSIONS[0],
-          events: [{ category: 'note', metadata: '{ bad json' }],
-        },
-      ])
-      await expect(makeProgram().parseAsync(['sessions'], { from: 'user' })).resolves.not.toThrow()
-    })
+  it('uses singular nouns for a single thread and event', async () => {
+    vi.mocked(readDayThreads).mockReturnValue([block([SITE])])
+    await makeProgram().parseAsync(['sessions'], { from: 'user' })
+    const printed = printedLines()
+    expect(printed).toContain('1 thread in 1 block')
+    expect(printed).toContain('1 event')
+    expect(printed).not.toContain('1 events')
   })
 
-  describe('--date', () => {
-    it('passes the specified date to getOrBuildSessions', async () => {
-      mockGetOrBuildSessions.mockReturnValue([])
-      await makeProgram().parseAsync(['sessions', '--date', '2026-01-15'], { from: 'user' })
-      expect(mockGetOrBuildSessions).toHaveBeenCalledWith('2026-01-15')
-    })
-
-    it('logs an error and exits on an invalid date', async () => {
-      await expect(makeProgram().parseAsync(['sessions', '--date', 'bad-date'], { from: 'user' })).rejects.toThrow()
-      expect(mockLog.error).toHaveBeenCalledWith(expect.stringContaining('Invalid date'))
-    })
+  it('names the "elsewhere" thread by its folder, or "no repo" without one', async () => {
+    const elsewhere = thread([row({ cwd: '/Users/dev/scripts', repo_name: null })], { projectId: null, repoName: null })
+    vi.mocked(readDayThreads).mockReturnValue([
+      block([elsewhere]),
+      block([thread([], { projectId: null, repoName: null })]),
+    ])
+    await makeProgram().parseAsync(['sessions'], { from: 'user' })
+    const printed = printedLines()
+    expect(printed).toContain('/scripts')
+    expect(printed).toContain('no repo')
   })
+
+  it("shows a thread's notes under it, skipping malformed ones", async () => {
+    const notes = [
+      row({ category: 'note', metadata: JSON.stringify({ text: 'Fixed race condition' }) }),
+      row({ category: 'note', metadata: '{ bad json' }),
+    ]
+    vi.mocked(readDayThreads).mockReturnValue([block([thread(notes)])])
+    await makeProgram().parseAsync(['sessions'], { from: 'user' })
+    expect(mockLog.plain).toHaveBeenCalledWith(expect.stringContaining('Fixed race condition'))
+  })
+
+  it('builds and reads the day given with --date', async () => {
+    await makeProgram().parseAsync(['sessions', '--date', '2026-01-15'], { from: 'user' })
+    expect(ensureDayThreads).toHaveBeenCalledWith('2026-01-15')
+    expect(readDayThreads).toHaveBeenCalledWith(DB, '2026-01-15')
+  })
+
+  it('logs an error and exits on an invalid date', async () => {
+    stubExit()
+    await expect(makeProgram().parseAsync(['sessions', '--date', 'bad-date'], { from: 'user' })).rejects.toThrow()
+    expect(mockLog.error).toHaveBeenCalledWith(expect.stringContaining('Invalid date'))
+  })
+
+  it.each([[['sessions']], [['sessions', '--json']]])(
+    'asks for workscribe upgrade, reading nothing, while old events are not linked to projects (%j)',
+    async (args) => {
+      vi.mocked(isReadyForThreads).mockReturnValue(false)
+      const exitSpy = stubExit()
+
+      await expect(makeProgram().parseAsync(args, { from: 'user' })).rejects.toThrow('exit')
+
+      expect(mockLog.error).toHaveBeenCalledWith(expect.stringContaining('run workscribe upgrade'))
+      expect(exitSpy).toHaveBeenCalledWith(1)
+      expect(ensureDayThreads).not.toHaveBeenCalled()
+      expect(readDayThreads).not.toHaveBeenCalled()
+    }
+  )
 })
 
 describe('workscribe sessions --json', () => {
-  const COMMIT_EVENT = {
-    id: 9,
-    captured_at: '2026-05-28T09:30:00Z',
-    command: 'git commit -m "fix: login redirect"',
-    cwd: '/Users/dev/myapp',
-    exit_code: 0,
-    duration_ms: 80,
-    repo_name: 'myapp',
-    branch: 'main',
-    category: 'shipping',
-    metadata: '{"message":"fix: login redirect"}',
-    source: 'shell',
-    file_path: null,
-  }
-  const SESSION_WITH_COMMIT = { ...SAMPLE_SESSIONS[0], eventCount: 1, events: [COMMIT_EVENT] }
-
   function printedJson() {
     const [[printed]] = mockLog.plain.mock.calls
     return JSON.parse(printed as string)
   }
 
   beforeEach(() => {
-    vi.mocked(readConfig).mockReturnValue(createTestConfig())
-    vi.mocked(getRepoRoot).mockReturnValue('/Users/dev/myapp')
+    vi.mocked(getRepoRoot).mockImplementation((cwd: string) => cwd)
     vi.mocked(getUserEmail).mockReturnValue('dev@example.com')
-    vi.mocked(getCommitsInWindow).mockReturnValue([
-      { hash: 'a1b2c3d', subject: 'fix: login redirect', committedAt: '2026-10-25T09:20:00+01:00' },
-    ])
+    vi.mocked(getCommitsInWindow).mockReturnValue([])
     vi.mocked(getOthersSubjects).mockReturnValue([])
   })
 
-  it('prints one line of JSON with the session, its git repo and commits', async () => {
-    mockGetOrBuildSessions.mockReturnValue([SESSION_WITH_COMMIT])
-
-    await makeProgram().parseAsync(['sessions', '--json'], { from: 'user' })
+  it('prints version 2: a session per thread, each naming the others alongside, and the block', async () => {
+    await makeProgram().parseAsync(['sessions', '--json', '--date', '2026-10-28'], { from: 'user' })
 
     expect(mockLog.plain).toHaveBeenCalledTimes(1)
     const json = printedJson()
-    expect(json.schemaVersion).toBe(1)
-    expect(json.sessions[0]).toMatchObject({
-      key: 'myapp|2026-05-28T09:00:00Z',
-      repoPath: '/Users/dev/myapp',
-      commits: [
-        { hash: 'a1b2c3d', subject: 'fix: login redirect', committedAt: '2026-10-25T09:20:00+01:00', source: 'git' },
-      ],
-    })
-    expect(getCommitsInWindow).toHaveBeenCalledWith({
-      repoRoot: '/Users/dev/myapp',
-      since: '2026-05-28T09:00:00Z',
-      until: '2026-05-28T10:30:00Z',
-      author: 'dev@example.com',
+    expect(json).toMatchObject({ schemaVersion: 2, date: '2026-10-28' })
+    expect(json.blocks).toEqual([
+      {
+        id: 5,
+        startedAt: CLI_START,
+        endedAt: '2026-10-28T13:48:00.000Z',
+        eventCount: 3,
+        activeMinutes: 90,
+        threadKeys: [CLI_KEY, VSCODE_KEY, SITE_KEY],
+      },
+    ])
+    expect(json.sessions.map((session: { key: string }) => session.key)).toEqual([CLI_KEY, VSCODE_KEY, SITE_KEY])
+    expect(json.sessions[2]).toMatchObject({
+      project: 'landing-page',
+      repoPath: '/Users/dev/landing-page',
+      blockId: 5,
+      activeMinutes: 5,
+      alongside: [CLI_KEY, VSCODE_KEY],
     })
     expect(JSON.stringify(json)).not.toContain('git commit -m')
   })
 
-  it('prints an empty list for a day with no sessions', async () => {
-    mockGetOrBuildSessions.mockReturnValue([])
+  it("merges git's commits for the thread's own window in its repo", async () => {
+    vi.mocked(getCommitsInWindow).mockReturnValue([
+      { hash: 'a1b2c3d', subject: 'fix: login redirect', committedAt: '2026-10-28T12:40:00+00:00' },
+    ])
+    vi.mocked(readDayThreads).mockReturnValue([block([CLI])])
+
+    await makeProgram().parseAsync(['sessions', '--json'], { from: 'user' })
+
+    expect(getCommitsInWindow).toHaveBeenCalledWith({
+      repoRoot: '/Users/dev/cli',
+      since: CLI_START,
+      until: '2026-10-28T13:48:00.000Z',
+      author: 'dev@example.com',
+    })
+    expect(printedJson().sessions[0].commits).toEqual([
+      { hash: 'a1b2c3d', subject: 'fix: login redirect', committedAt: '2026-10-28T12:40:00+00:00', source: 'git' },
+    ])
+  })
+
+  it('prints empty lists for a day with no blocks', async () => {
+    vi.mocked(readDayThreads).mockReturnValue([])
 
     await makeProgram().parseAsync(['sessions', '--json', '--date', '2026-05-28'], { from: 'user' })
 
-    expect(printedJson()).toEqual({ schemaVersion: 1, date: '2026-05-28', sessions: [] })
+    expect(printedJson()).toEqual({ schemaVersion: 2, date: '2026-05-28', blocks: [], sessions: [] })
   })
 
-  it('keeps captured commits when the session is not in a git repo', async () => {
+  it('keeps captured commits when the thread is not in a git repo', async () => {
     vi.mocked(getRepoRoot).mockReturnValue(null)
-    mockGetOrBuildSessions.mockReturnValue([SESSION_WITH_COMMIT])
+    vi.mocked(readDayThreads).mockReturnValue([block([CLI])])
 
     await makeProgram().parseAsync(['sessions', '--json'], { from: 'user' })
 
@@ -220,22 +255,9 @@ describe('workscribe sessions --json', () => {
     expect(getCommitsInWindow).not.toHaveBeenCalled()
   })
 
-  it('still prints captured commits when git returns nothing and no email is configured', async () => {
-    vi.mocked(getUserEmail).mockReturnValue(null)
-    vi.mocked(getCommitsInWindow).mockReturnValue([])
-    mockGetOrBuildSessions.mockReturnValue([SESSION_WITH_COMMIT])
-
-    await makeProgram().parseAsync(['sessions', '--json'], { from: 'user' })
-
-    expect(getCommitsInWindow).toHaveBeenCalledWith(expect.objectContaining({ author: null }))
-    expect(printedJson().sessions[0]).toMatchObject({
-      repoPath: '/Users/dev/myapp',
-      commits: [{ hash: null, subject: 'fix: login redirect', source: 'captured' }],
-    })
-  })
-
-  it('asks git for the repo root and email once per run, not once per session', async () => {
-    mockGetOrBuildSessions.mockReturnValue([SESSION_WITH_COMMIT, { ...SESSION_WITH_COMMIT, id: 3 }])
+  it('asks git for the repo root and email once per run, not once per thread', async () => {
+    const later = { ...CLI, id: 4, key: 'cli|2026-10-28T15:00:00.000Z' }
+    vi.mocked(readDayThreads).mockReturnValue([block([CLI], { id: 5 }), block([later], { id: 6 })])
 
     await makeProgram().parseAsync(['sessions', '--json'], { from: 'user' })
 
@@ -246,22 +268,12 @@ describe('workscribe sessions --json', () => {
   })
 
   it('drops a captured commit that someone else made, such as one pulled in during an AI session', async () => {
-    vi.mocked(getCommitsInWindow).mockReturnValue([])
     vi.mocked(getOthersSubjects).mockReturnValue(['fix: login redirect'])
-    mockGetOrBuildSessions.mockReturnValue([SESSION_WITH_COMMIT])
+    vi.mocked(readDayThreads).mockReturnValue([block([CLI])])
 
     await makeProgram().parseAsync(['sessions', '--json'], { from: 'user' })
 
-    expect(getOthersSubjects).toHaveBeenCalledWith('/Users/dev/myapp', 'dev@example.com')
+    expect(getOthersSubjects).toHaveBeenCalledWith('/Users/dev/cli', 'dev@example.com')
     expect(printedJson().sessions[0].commits).toEqual([])
-  })
-
-  it('does not look up git for a session without events', async () => {
-    mockGetOrBuildSessions.mockReturnValue([SAMPLE_SESSIONS[0]])
-
-    await makeProgram().parseAsync(['sessions', '--json'], { from: 'user' })
-
-    expect(getRepoRoot).not.toHaveBeenCalled()
-    expect(printedJson().sessions[0]).toMatchObject({ repoPath: null, cwd: null, commits: [] })
   })
 })

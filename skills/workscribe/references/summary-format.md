@@ -1,6 +1,6 @@
 # Summary format
 
-One block per session, in exactly the shape Workscribe uses everywhere else, so saved summaries look native in `workscribe summary`, `workscribe context` and the VS Code status bar.
+One block per session, in exactly the shape Workscribe uses everywhere else, so saved summaries look native in `workscribe context`, the VS Code status bar and `workscribe summary`.
 
 ## Heading
 
@@ -11,7 +11,7 @@ One block per session, in exactly the shape Workscribe uses everywhere else, so 
 - `<branches>` is every branch in `branches`, in order, separated by `, ` — for example `## api (main, feature/auth) — 1h 30m`. With one branch it's just that branch.
 - Leave out the parentheses when `branches` is empty.
 - If `project` is `null` (no repo and no events), use `unknown`, as Workscribe does.
-- Duration from `durationMinutes`: under an hour as `45m`; otherwise `1h` or `1h 30m`.
+- Duration from `activeMinutes` — the time actually spent on that project; a session's start-to-end span can include work on other projects. Under an hour as `45m`; otherwise `1h` or `1h 30m`.
 
 ## Bullets
 

@@ -4,7 +4,7 @@ import { applyMigrations } from '../../src/db/migrate'
 import { MIGRATIONS } from '../../src/db/migrations'
 import { runPendingJobs, type RunOptions } from '../../src/db/jobs/runner'
 import { summaryAnchorsJob } from '../../src/db/jobs/summary-anchors'
-import { getSummaryBySource, saveSummaryToBothStores } from '../../src/db/summary-store'
+import { getSummaryBySource, saveAnchoredSummary } from '../../src/db/summary-store'
 import type { DataJob } from '../../src/db/jobs/types'
 
 // Migration 006 normalises stored events using the user's config — keep it off the real one
@@ -143,30 +143,36 @@ describe('the summary-anchors job', () => {
     expect(issues(db).map((issue) => issue.reason)).toEqual(["the session's events aren't linked to a project yet"])
   })
 
-  it('keeps the range of a summary saved by the agent skill, filling in only its missing project', () => {
-    const db = database()
-    const ids = [insertEvent(db, 0, 'api', 1), insertEvent(db, 5, 'api', 1)]
-    const key = sessionWithSummary(db, 'api', ids, 'skill')
-    saveSummaryToBothStores(db, {
-      sourceKey: key,
-      engine: 'skill',
-      text: 'written by the skill',
-      createdAt: '2026-10-28T21:00:00.000Z',
-      anchor: { projectId: null, firstEventId: 2, lastEventId: 2, isMixed: false },
-      anchorSource: 'live',
-    })
+  it.each([
+    ['for an old session', 'live' as const],
+    ['for a thread', 'thread' as const],
+  ])(
+    'keeps the range of a summary the agent skill saved %s, filling in only its missing project',
+    (_case, anchorSource) => {
+      const db = database()
+      const ids = [insertEvent(db, 0, 'api', 1), insertEvent(db, 5, 'api', 1)]
+      const key = sessionWithSummary(db, 'api', ids, 'skill')
+      saveAnchoredSummary(db, {
+        sourceKey: key,
+        engine: 'skill',
+        text: 'written by the skill',
+        createdAt: '2026-10-28T21:00:00.000Z',
+        anchor: { projectId: null, firstEventId: 2, lastEventId: 2, isMixed: false },
+        anchorSource,
+      })
 
-    run(db)
-    run(db, { ...summaryAnchorsJob, version: 2 })
+      run(db)
+      run(db, { ...summaryAnchorsJob, version: 2 })
 
-    expect(getSummaryBySource(db, key, 'skill')).toMatchObject({
-      origin: 'saved',
-      text: 'written by the skill',
-      first_event_id: 2,
-      last_event_id: 2,
-      project_id: 1,
-    })
-  })
+      expect(getSummaryBySource(db, key, 'skill')).toMatchObject({
+        origin: 'saved',
+        text: 'written by the skill',
+        first_event_id: 2,
+        last_event_id: 2,
+        project_id: 1,
+      })
+    }
+  )
 
   it('ends with the same rows after an interrupted run, and a version bump never duplicates them', () => {
     const clean = database()
