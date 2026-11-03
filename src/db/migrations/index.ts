@@ -9,6 +9,7 @@ import dimensions from './008_dimensions'
 import workBlocks from './009_work_blocks'
 import summaries from './010_summaries'
 import eventsProjectTime from './011_events_project_time'
+import agentSessions from './012_agent_sessions'
 import type { Migration } from '../migration-types'
 
 export type { Migration } from '../migration-types'
@@ -26,4 +27,5 @@ export const MIGRATIONS: Migration[] = [
   workBlocks,
   summaries,
   eventsProjectTime,
+  agentSessions,
 ]

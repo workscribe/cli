@@ -31,7 +31,7 @@ import { DB_PATH } from '../../src/utils/paths'
 const at = (minutes: number) => new Date(Date.parse('2026-10-31T12:00:00.000Z') + minutes * 60_000).toISOString()
 const DATE = localDateOf(at(0))
 
-function captureCommand(minutes: number): void {
+function captureAgentCommand(minutes: number, sessionId: string): void {
   insertEvent({
     captured_at: at(minutes),
     command: `npm test ${minutes}`,
@@ -42,20 +42,23 @@ function captureCommand(minutes: number): void {
     branch: 'main',
     category: 'testing',
     metadata: null,
-    source: 'shell',
+    source: 'claude-code',
     file_path: null,
+    agentSession: { source: 'claude-code', sessionId },
   })
 }
 
-const eventIds = () =>
-  (getDb().prepare('SELECT id FROM events ORDER BY id').all() as { id: number }[]).map((row) => row.id)
+const sessionIds = () =>
+  (getDb().prepare('SELECT session_id FROM agent_sessions ORDER BY id').all() as { session_id: string }[]).map(
+    (row) => row.session_id
+  )
 
 if (!fs.realpathSync(path.dirname(DB_PATH)).startsWith(fs.realpathSync(os.tmpdir()))) {
   throw new Error(`delete-events-database.test.ts must use a temp database, not ${DB_PATH}`)
 }
 
 beforeEach(() => {
-  getDb().exec('DELETE FROM session_events; DELETE FROM sessions; DELETE FROM events')
+  getDb().exec('DELETE FROM session_events; DELETE FROM sessions; DELETE FROM events; DELETE FROM agent_sessions')
 })
 
 afterAll(async () => {
@@ -64,43 +67,56 @@ afterAll(async () => {
 })
 
 describe('deleting events on a real database', () => {
-  it('undo deletes events from a day already grouped into sessions', () => {
-    captureCommand(0)
-    captureCommand(5)
+  it('undo removes the agent session its last event belonged to, and keeps one that still has events', () => {
+    captureAgentCommand(0, 'conversation-1')
+    captureAgentCommand(5, 'conversation-2')
+    captureAgentCommand(10, 'conversation-2')
     getOrBuildSessions(DATE)
+    const ids = (getDb().prepare('SELECT id FROM events ORDER BY id').all() as { id: number }[]).map((row) => row.id)
 
-    deleteEventsByIds([eventIds()[0]])
+    deleteEventsByIds([ids[0], ids[1]])
 
-    expect(eventIds()).toHaveLength(1)
+    expect(sessionIds()).toEqual(['conversation-2'])
   })
 
   it('undo still deletes an event whose session was grouped under another day, as after a time zone change', () => {
-    captureCommand(0)
-    captureCommand(5)
+    captureAgentCommand(0, 'conversation-1')
+    captureAgentCommand(5, 'conversation-1')
     getOrBuildSessions(DATE)
     // Grouped somewhere the event fell on the day before: its session is stored under that date
     getDb().prepare("UPDATE sessions SET date = date($date, '-1 day')").run({ date: DATE })
-    const [first] = eventIds()
+    const [first] = (getDb().prepare('SELECT id FROM events ORDER BY id').all() as { id: number }[]).map(
+      (row) => row.id
+    )
 
     deleteEventsByIds([first])
 
-    expect(eventIds()).toHaveLength(1)
+    expect(getDb().prepare('SELECT COUNT(*) AS count FROM events').get()).toEqual({ count: 1 })
     expect(getDb().prepare('SELECT event_id FROM session_events WHERE event_id = ?').all(first)).toEqual([])
   })
 
   it('undo deletes events from a day that was never grouped', () => {
-    captureCommand(0)
+    captureAgentCommand(0, 'conversation-1')
+    const [first] = (getDb().prepare('SELECT id FROM events').all() as { id: number }[]).map((row) => row.id)
 
-    deleteEventsByIds(eventIds())
+    deleteEventsByIds([first])
 
-    expect(eventIds()).toEqual([])
+    expect(sessionIds()).toEqual([])
   })
 
   it('clear deletes a day whose session was grouped under another day', () => {
-    captureCommand(0)
+    captureAgentCommand(0, 'conversation-1')
     getOrBuildSessions(DATE)
     getDb().prepare("UPDATE sessions SET date = date($date, '-1 day')").run({ date: DATE })
 
     expect(deleteEventsForDate(DATE)).toBe(1)
+  })
+
+  it("clear removes the day's agent sessions with its events", () => {
+    captureAgentCommand(0, 'conversation-1')
+    getOrBuildSessions(DATE)
+
+    expect(deleteEventsForDate(DATE)).toBe(1)
+    expect(sessionIds()).toEqual([])
   })
 })

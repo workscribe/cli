@@ -13,6 +13,7 @@ import { loadAIToolRegistry } from '../config/registry'
 import { effectiveDirectory } from '../normalize/git-directory'
 import { readCommitMessageFile } from './commit-message-file'
 import { eventDimensions, fileEventDimensions } from './dimensions'
+import type { AgentSessionRef } from '../db/agent-sessions'
 
 /**
  * `git commit -F <file>`: the message, read now while the file may still exist and redacted like the command — and
@@ -38,6 +39,8 @@ export function captureCommand(opts: {
   source?: string
   type?: string
   file?: string
+  /** The agent conversation a hook command ran in; only shell commands from a hook have one */
+  agentSession?: AgentSessionRef
 }): void {
   // Check pause flag before any I/O
   if (fs.existsSync(PAUSE_FLAG_PATH)) return
@@ -154,5 +157,6 @@ export function captureCommand(opts: {
     source: opts.source ?? null,
     file_path: null,
     dimensions: eventDimensions(context),
+    agentSession: opts.agentSession,
   })
 }

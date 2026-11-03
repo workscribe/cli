@@ -289,6 +289,37 @@ describe('captureCommand — project links', () => {
   })
 })
 
+// WOR-143: a hook command records the agent conversation it came from
+describe('captureCommand — agent sessions', () => {
+  const CONVERSATION = { source: 'claude-code', sessionId: 'conversation-1' }
+
+  it('passes the agent session on with a shell command', () => {
+    captureCommand({ command: 'npm test', cwd: '/repo', exitCode: 0, durationMs: 10, agentSession: CONVERSATION })
+
+    expect(mockInsertEvent).toHaveBeenCalledWith(expect.objectContaining({ agentSession: CONVERSATION }))
+  })
+
+  it('passes none with a shell command that came without one', () => {
+    captureCommand({ command: 'npm test', cwd: '/repo', exitCode: 0, durationMs: 10 })
+
+    expect(mockInsertEvent).toHaveBeenCalledWith(expect.objectContaining({ agentSession: undefined }))
+  })
+
+  it('never links an editor event to one, even when given one', () => {
+    captureCommand({
+      cwd: '/repo',
+      exitCode: null,
+      durationMs: null,
+      type: 'code_edit',
+      file: '/repo/src/a.ts',
+      agentSession: CONVERSATION,
+    })
+
+    expect(mockInsertEvent).toHaveBeenCalledOnce()
+    expect(mockInsertEvent.mock.calls[0][0]).not.toHaveProperty('agentSession')
+  })
+})
+
 // WOR-127: a commit belongs to the repo it was made in, which isn't always where the command was typed
 describe('captureCommand — where the work happened', () => {
   function capturedWith(command: string, matchedStep: string, source?: string) {
