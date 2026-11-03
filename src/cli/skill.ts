@@ -15,15 +15,11 @@ import {
   removeSkills,
 } from '../skills/actions'
 import type { SkillAgent } from '../skills/types'
+import { fail } from './fail'
 
 interface AgentOptions {
   agent?: string[]
   force?: boolean
-}
-
-function fail(message: string): never {
-  log.error(message)
-  process.exit(1)
 }
 
 /** The agents named with --agent (all must be known), or the given default. */
