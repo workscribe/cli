@@ -1,6 +1,6 @@
 import type { EventRow } from '../db/types'
 import type { StoredThread } from '../db/thread-store'
-import type { SummaryRow } from '../db/summary-store'
+import { THREAD_ANCHOR_SOURCE, type SummaryRow } from '../db/summary-store'
 import type { WorkBlockRow } from '../db/context-lookup'
 import { toActiveMinutes } from '../sessions/blocks'
 import { findSummaryThread, type BlockEvent } from './anchors'
@@ -65,6 +65,7 @@ function summaryOfThread(input: ThreadContextInput): string | null {
       projectId: summary.project_id,
       firstEventId: summary.first_event_id,
       lastEventId: summary.last_event_id,
+      isThreadSaved: summary.anchor_source === THREAD_ANCHOR_SOURCE,
     }
     return findSummaryThread(anchor, block)?.id === input.thread.id
   })

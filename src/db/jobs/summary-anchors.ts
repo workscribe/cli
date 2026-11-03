@@ -124,6 +124,7 @@ function countRows(db: MigrationDatabase, sql: string): number {
 }
 
 const SOURCE_LABELS: Record<AnchorSource, string> = {
+  thread: 'saved for a thread by the agent skill',
   live: 'from the live session, saved by the agent skill since this upgrade',
   cached: "from the old session's cached events",
   regrouped: "from the old session's day, regrouped",

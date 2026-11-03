@@ -8,9 +8,9 @@ import { findRecentSessionsForRepo, type RepoLookup } from './session-lookup'
 import { BUSY_TIMEOUT_MS, withImmediateTransaction, type TransactionOptions } from './transaction'
 import type { StoredEngine } from '../ai/engine'
 import { insertEventRecord, type NewEvent } from './event-writer'
-import { saveSummaryToBothStores } from './summary-store'
+import { saveAnchoredSummary, THREAD_ANCHOR_SOURCE } from './summary-store'
 import { agentSessionIdsOfDate, agentSessionIdsOfEvents, deleteEmptyAgentSessions } from './agent-sessions'
-import type { SummaryAnchor } from '../summary/anchors'
+import type { ThreadAnchor } from '../summary/anchors'
 export type { EventRow, SessionRow, SessionSummaryRow } from './types'
 
 let _db: DatabaseSync | null = null
@@ -217,21 +217,18 @@ export function getSessionSummaries(sessionKey: string): SessionSummaryRow[] {
   return stmt.all({ session_key: sessionKey }) as unknown as SessionSummaryRow[]
 }
 
-/**
- * Saves a session's summary to `session_summaries`, as before, and to `summary`, anchored to the session's events,
- * in one transaction. Readers still read `session_summaries`; `summary` is what survives regrouping.
- */
-export function saveSessionSummary(
-  sessionKey: string,
-  summary: { engine: StoredEngine; text: string; anchor: SummaryAnchor }
+/** Saves a thread's summary to `summary`, anchored to the thread's events, under the thread's key. */
+export function saveThreadSummary(
+  threadKey: string,
+  summary: { engine: StoredEngine; text: string; anchor: ThreadAnchor }
 ): void {
-  saveSummaryToBothStores(getDb(), {
-    sourceKey: sessionKey,
+  saveAnchoredSummary(getDb(), {
+    sourceKey: threadKey,
     engine: summary.engine,
     text: summary.text,
     createdAt: new Date().toISOString(),
     anchor: summary.anchor,
-    anchorSource: 'live',
+    anchorSource: THREAD_ANCHOR_SOURCE,
   })
 }
 

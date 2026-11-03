@@ -171,10 +171,11 @@ export function replaceDayBlocks(db: MigrationDatabase, build: DayBuild): void {
 /** The day's blocks in time order, each with its threads in the order their projects first appear. */
 export function getBlocksForDate(db: MigrationDatabase, date: string): StoredBlock[] {
   // One snapshot: a rebuild by another process between the two reads would otherwise leave blocks without threads
-  return withReadTransaction(db, () => readBlocks(db, date))
+  return withReadTransaction(db, () => readBlocksForDate(db, date))
 }
 
-function readBlocks(db: MigrationDatabase, date: string): StoredBlock[] {
+/** `getBlocksForDate` without a transaction of its own, for a caller already inside one. */
+export function readBlocksForDate(db: MigrationDatabase, date: string): StoredBlock[] {
   const blocks = db
     .prepare(
       `SELECT id, date, started_at AS startedAt, ended_at AS endedAt, event_count AS eventCount,

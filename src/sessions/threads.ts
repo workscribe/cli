@@ -16,7 +16,7 @@ import { localDayBounds } from '../utils/format'
 import { buildDayBlocks, GROUPING_VERSION, MS_PER_MINUTE } from './blocks'
 
 // Builds a day's work blocks, threads and slots next to its old sessions (src/sessions/detector.ts), the same
-// locked, rechecked way. Nothing reads them yet: `sessions --json` v2 and `context` move onto them in later tickets.
+// locked, rechecked way. `sessions` and `context` read them; `summary` and `export` move onto them in WOR-148.
 
 export interface ThreadGroupingOptions {
   /** Wait at most this long for another process's write lock (default: the connection's 5 s). */

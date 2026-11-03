@@ -1,4 +1,4 @@
-import type { SCHEMA_VERSION } from './constants'
+import type { EVENTS_SCHEMA_VERSION, SESSIONS_SCHEMA_VERSION } from './constants'
 import type { LocationContext } from '../payload'
 import type { GitCommit } from '../git-commits'
 
@@ -21,38 +21,67 @@ export interface CommitJson {
   source: 'git' | 'captured'
 }
 
+/** An agent conversation some of a thread's events came from. Never its working folder. */
+export interface AgentSessionJson {
+  source: string
+  sessionId: string
+  startedAt: string
+  lastSeenAt: string
+}
+
+/** A session is one project's thread inside a work block. */
 export interface SessionJson {
   key: string
   project: string | null
+  /** The project's name; null for the block's "elsewhere" thread (work outside any project) */
   repoName: string | null
   repoPath: string | null
   cwd: string | null
   branch: string | null
-  /** Every branch the session touched, in the order first seen */
+  /** Every branch the thread touched, in the order first seen */
   branches: string[]
   startedAt: string
   endedAt: string
   durationMinutes: number
+  /** 5-minute slots with this project's activity */
+  activeMinutes: number
   eventCount: number
+  /** The block's `id` in this document; blocks are rebuilt, so it means nothing across runs */
+  blockId: number
+  /** The `key`s of the block's other threads, in block order */
+  alongside: string[]
+  agentSessions: AgentSessionJson[]
   notes: string[]
   commits: CommitJson[]
   events: EventJson[]
 }
 
+/** A work block: a stretch of work between idle gaps, across every project. */
+export interface BlockJson {
+  id: number
+  startedAt: string
+  endedAt: string
+  eventCount: number
+  /** 5-minute slots with any activity — time worked, never the sum of the threads' */
+  activeMinutes: number
+  threadKeys: string[]
+}
+
 export interface SessionsJson {
-  schemaVersion: typeof SCHEMA_VERSION
+  schemaVersion: typeof SESSIONS_SCHEMA_VERSION
   date: string
+  blocks: BlockJson[]
   sessions: SessionJson[]
 }
 
 export interface EventsJson {
-  schemaVersion: typeof SCHEMA_VERSION
+  schemaVersion: typeof EVENTS_SCHEMA_VERSION
   date: string
   total: number
   events: EventJson[]
 }
 
-/** Git facts for a session, looked up by the caller so the builders stay free of I/O. */
+/** Git facts for a thread, looked up by the caller so the builders stay free of I/O. */
 export interface SessionGitInfo {
   repoPath: string | null
   commits: GitCommit[]

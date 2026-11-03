@@ -77,13 +77,9 @@ Install the Workscribe skill into your coding agents (`workscribe init` offers t
 workscribe skill install
 ```
 
-Then ask the agent in plain language — *"summarize my work today"*, *"write my standup"*, *"what did I do this week?"* — or type `/workscribe` in Claude Code. The agent reads `workscribe sessions --json`, looks at your repos for context, writes one summary per session and saves it.
+Then ask the agent in plain language — *"summarize my work today"*, *"write my standup"*, *"what did I do this week?"* — or type `/workscribe` in Claude Code. The agent reads `workscribe sessions --json`, looks at your repos for context, writes one summary per session and saves it. A session there is one project's thread inside a stretch of work, so working across three repos at once gets three summaries, one per repo, each noting the others worked alongside.
 
-A saved summary is what `workscribe summary`, `workscribe context` and the VS Code status bar show for that session from then on. To see the template version instead for one run:
-
-```bash
-workscribe summary --fresh
-```
+A saved summary is what `workscribe context` and the VS Code status bar show for that thread from then on. It's tied to the thread's events, so it stays with that work when the day is regrouped.
 
 See [`workscribe skill`](/commands#workscribe-skill) for installing, checking and removing the skill, and [Privacy](/privacy#the-workscribe-agent-skill) for exactly what the agent sends.
 

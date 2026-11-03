@@ -93,14 +93,14 @@ Your activity leaves your machine only when **you ask your coding agent to summa
 
 ## JSON output for coding agents
 
-`workscribe sessions --json` and `workscribe events --json` expose the structured data described above — categories, structured fields, unclassified-command hints and commit subjects — plus, for each session, its repo path and the directory most commands ran in. They never include full commands, per-event working directories or IDE file paths. The output goes wherever you or your tools send it: when a coding-agent skill reads it, it is sent to that agent's model provider.
+`workscribe sessions --json` and `workscribe events --json` expose the structured data described above — categories, structured fields, unclassified-command hints and commit subjects — plus, for each session, its repo path, the directory most commands ran in, and the ids the agent gave the conversations its events came from (never those conversations' folders). They never include full commands, per-event working directories or IDE file paths. The output goes wherever you or your tools send it: when a coding-agent skill reads it, it is sent to that agent's model provider.
 
 ### The Workscribe agent skill
 
 When you ask your coding agent to summarize your work with the Workscribe skill:
 
 - **What leaves your machine:** the `sessions --json` output above, plus any files the agent chooses to read in your repos for context, go to the agent's model provider (as all of your conversation with that agent does).
-- **What's stored locally:** the summary the agent writes is saved in `~/.workscribe/workscribe.db`, after the same secret redaction as captured commands. It's kept in two tables for now: `session_summaries`, and `summary`, which ties it to the events it describes so it survives regrouping. Both hold the same text, and the old table goes once nothing reads it. It's shown by `workscribe summary`, `workscribe context` and the VS Code status bar for that session.
+- **What's stored locally:** the summary the agent writes is saved in `~/.workscribe/workscribe.db`, after the same secret redaction as captured commands. It's kept in the `summary` table, tied to the events it describes so it survives regrouping. Summaries saved by older versions were copied there from the old `session_summaries` table, which is removed once nothing reads it. It's shown by `workscribe context` and the VS Code status bar for that session.
 - **What isn't recorded:** the skill's own `workscribe` commands are kept out of your captured activity.
 
 If you need summaries that never leave your machine, don't use the skill — `workscribe summary` runs entirely locally.

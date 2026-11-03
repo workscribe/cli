@@ -5,7 +5,7 @@ import { describe, it, expect, vi, beforeEach, onTestFinished } from 'vitest'
 // the module under test so the import chain never reaches node:sqlite.
 vi.mock('../../src/db', () => ({
   getSessionSummaries: vi.fn(() => []),
-  saveSessionSummary: vi.fn(),
+  saveThreadSummary: vi.fn(),
 }))
 
 vi.mock('../../src/sessions/detector', () => ({
@@ -64,7 +64,7 @@ import fs from 'fs'
 import { getOrBuildSessions } from '../../src/sessions/detector'
 import { createSummaryWriter } from '../../src/summary/writer'
 import { readConfig } from '../../src/config'
-import { getSessionSummaries, saveSessionSummary } from '../../src/db'
+import { getSessionSummaries, saveThreadSummary } from '../../src/db'
 import { postToWebhook } from '../../src/integrations/webhook'
 import { isSlackWebhookUrl } from '../../src/integrations/slack'
 import { log } from '../../src/utils/logger'
@@ -78,7 +78,7 @@ const mockGetOrBuildSessions = getOrBuildSessions as ReturnType<typeof vi.fn>
 const mockCreateSummaryWriter = createSummaryWriter as ReturnType<typeof vi.fn>
 const mockReadConfig = readConfig as ReturnType<typeof vi.fn>
 const mockGetSessionSummaries = getSessionSummaries as ReturnType<typeof vi.fn>
-const mockSaveSessionSummary = saveSessionSummary as ReturnType<typeof vi.fn>
+const mockSaveThreadSummary = saveThreadSummary as ReturnType<typeof vi.fn>
 const mockPostToWebhook = postToWebhook as ReturnType<typeof vi.fn>
 const mockIsSlackWebhookUrl = isSlackWebhookUrl as ReturnType<typeof vi.fn>
 const mockLog = log as Record<string, ReturnType<typeof vi.fn>>
@@ -244,7 +244,7 @@ describe('workscribe summary (daily)', () => {
         },
       ],
     })
-    expect(mockSaveSessionSummary).not.toHaveBeenCalled()
+    expect(mockSaveThreadSummary).not.toHaveBeenCalled()
     expect(mockLog.plain).toHaveBeenCalledWith(expect.stringContaining('## my-app (main) — 1h'))
   })
 

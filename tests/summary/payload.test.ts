@@ -12,6 +12,7 @@ import {
   buildDayPayload,
   sessionLocation,
   repoCwd,
+  threadRepoCwd,
 } from '../../src/summary/payload'
 import type { EventRow } from '../../src/db/types'
 import type { Session } from '../../src/sessions/detector'
@@ -312,5 +313,28 @@ describe('repoCwd', () => {
     const session = makeSession({ repoName: null, events: [makeEvent({ repo_name: null, cwd: '/tmp/scripts' })] })
 
     expect(repoCwd(session)).toBe('/tmp/scripts')
+  })
+})
+
+describe('threadRepoCwd', () => {
+  it("finds the repo directory though the project's name differs from what its events were stored under", () => {
+    // The project is named workscribe/movies now; its events were captured as plain movies
+    const events = [
+      makeEvent({ repo_name: null, cwd: '/Users/dev' }),
+      makeEvent({ repo_name: null, cwd: '/Users/dev' }),
+      makeEvent({ repo_name: 'movies', cwd: '/Users/dev/movies' }),
+    ]
+
+    expect(threadRepoCwd(events)).toBe('/Users/dev/movies')
+  })
+
+  it('falls back to the most-used directory when no event was captured inside a repo', () => {
+    const events = [makeEvent({ repo_name: null, cwd: '/tmp/scripts' }), makeEvent({ repo_name: null, cwd: '/tmp' })]
+
+    expect(threadRepoCwd(events)).toBe('/tmp/scripts')
+  })
+
+  it('is null for no events', () => {
+    expect(threadRepoCwd([])).toBeNull()
   })
 })

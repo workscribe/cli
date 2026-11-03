@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { anchorOfSession, findSummaryThread } from '../../src/summary/anchors'
+import { anchorOfSession, anchorOfThread, findSummaryThread } from '../../src/summary/anchors'
 import type { EventRow } from '../../src/db/types'
 
 const CLI = 1
@@ -116,12 +116,15 @@ describe('findSummaryThread', () => {
 
   it("attaches a summary to its project's thread when that thread holds most of its range", () => {
     expect(
-      findSummaryThread({ projectId: CLI, firstEventId: 1, lastEventId: 4 }, { threads, events: blockEvents })
+      findSummaryThread(
+        { projectId: CLI, firstEventId: 1, lastEventId: 4, isThreadSaved: false },
+        { threads, events: blockEvents }
+      )
     ).toEqual(threads[0])
   })
 
   it("attaches to nothing when the project's thread holds half its range or less", () => {
-    const anchor = { projectId: SITE, firstEventId: 1, lastEventId: 5 }
+    const anchor = { projectId: SITE, firstEventId: 1, lastEventId: 5, isThreadSaved: false }
 
     expect(findSummaryThread(anchor, { threads, events: blockEvents })).toBeNull()
   })
@@ -129,16 +132,48 @@ describe('findSummaryThread', () => {
   it('counts only the events inside the range, so a thread running past it gains nothing', () => {
     // From event 3 to 5: the site thread holds 2 of 3, though the cli thread has more events in the block
     expect(
-      findSummaryThread({ projectId: SITE, firstEventId: 3, lastEventId: 5 }, { threads, events: blockEvents })
+      findSummaryThread(
+        { projectId: SITE, firstEventId: 3, lastEventId: 5, isThreadSaved: false },
+        { threads, events: blockEvents }
+      )
     ).toEqual(threads[1])
   })
 
   it('attaches to nothing for an unanchored summary, or a day with no threads built', () => {
     expect(
-      findSummaryThread({ projectId: CLI, firstEventId: null, lastEventId: null }, { threads, events: blockEvents })
+      findSummaryThread(
+        { projectId: CLI, firstEventId: null, lastEventId: null, isThreadSaved: false },
+        { threads, events: blockEvents }
+      )
     ).toBeNull()
     expect(
-      findSummaryThread({ projectId: CLI, firstEventId: 1, lastEventId: 2 }, { threads: [], events: [] })
+      findSummaryThread(
+        { projectId: CLI, firstEventId: 1, lastEventId: 2, isThreadSaved: true },
+        { threads: [], events: [] }
+      )
     ).toBeNull()
+  })
+
+  it('attaches a summary saved for a thread to that thread, though it holds half its range or less', () => {
+    // From event 3 to 7 the site thread holds 2 of 5: no majority, but the summary was saved for that thread
+    const events = [...blockEvents, { id: 6, threadId: 10 }, { id: 7, threadId: 10 }]
+    const saved = { projectId: SITE, firstEventId: 3, lastEventId: 7, isThreadSaved: true }
+
+    expect(findSummaryThread(saved, { threads, events })).toEqual(threads[1])
+    expect(findSummaryThread({ ...saved, isThreadSaved: false }, { threads, events })).toBeNull()
+  })
+
+  it("attaches a thread's summary to nothing once its first event belongs to another thread", () => {
+    const saved = { projectId: SITE, firstEventId: 1, lastEventId: 5, isThreadSaved: true }
+
+    expect(findSummaryThread(saved, { threads, events: blockEvents })).toBeNull()
+  })
+})
+
+describe('anchorOfThread', () => {
+  it("anchors to the thread's project and its first and last events, never mixed", () => {
+    const events = [event(4, 30, 'landing-page', SITE), event(9, 100, 'landing-page', SITE)]
+
+    expect(anchorOfThread(events, SITE)).toEqual({ projectId: SITE, firstEventId: 4, lastEventId: 9, isMixed: false })
   })
 })

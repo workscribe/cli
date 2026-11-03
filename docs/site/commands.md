@@ -127,7 +127,7 @@ Then run `workscribe week --slack` to post. See [workscribe summary](#workscribe
 
 ## workscribe sessions
 
-List detected work sessions for a date.
+List a day's work: each work block, and each project's thread inside it.
 
 ```bash
 workscribe sessions
@@ -138,13 +138,15 @@ workscribe sessions --json | jq .
 | Option | Description |
 |---|---|
 | `--date <YYYY-MM-DD>` | Show sessions for a specific date |
-| `--json` | Print the [JSON output contract](#json-output-contract) — sessions with their events, notes and commits |
+| `--json` | Print the [JSON output contract](#json-output-contract) — threads with their events, notes and commits, and their blocks |
 
-Sessions are computed by grouping events with idle gaps greater than `session.idleTimeout` (default 30 minutes) and splitting across different repositories.
+A **work block** is a stretch of work between idle gaps longer than `session.idleTimeout` (default 30 minutes), across every repo. Inside a block, each project gets one **thread** holding all of its events, however you switched between repos — so working on three repos at once shows one block with three threads, never a session named after whichever repo came last. Work outside any project goes in the block's "elsewhere" thread, named by its folder. Active time counts the 5-minute slots with activity, so a block's is never the sum of its threads'.
+
+Right after an update, `sessions` may say Workscribe hasn't finished upgrading your data: run `workscribe upgrade` once, then try again. See [Troubleshooting](/troubleshooting).
 
 ### workscribe sessions summary set
 
-Save a summary for one session. This is how the [Workscribe agent skill](#agent-skill) saves what it wrote; you can use it from scripts too. The summary text is read from stdin.
+Save a summary for one session (a project's thread). This is how the [Workscribe agent skill](#agent-skill) saves what it wrote; you can use it from scripts too. The summary text is read from stdin.
 
 ```bash
 workscribe sessions summary set --key 'api|2026-10-25T09:00:00.000Z' <<'EOF'
@@ -159,8 +161,8 @@ EOF
 
 - The text must be non-empty and at most 8 KB. Secrets are redacted before it's stored, using the same rules as captured commands (including `redact.extra`).
 - Saving again for the same session replaces the earlier summary.
-- If the key no longer matches a session (new activity can regroup a day), run `workscribe sessions --json` again and use the new key.
-- A saved summary is what `workscribe summary`, `workscribe context` and the VS Code status bar show for that session. `workscribe summary --fresh` renders the template for that run only; the saved summary stays until the skill (or this command) saves a new one. Saved summaries are per session, so weekly digests (`summary --week`, `week`) don't use them.
+- The key must name a thread from `workscribe sessions --json`; a key an older Workscribe listed for a session may match no thread. If the key no longer matches (new activity can regroup a day), run `workscribe sessions --json` again and use the new key.
+- The summary is saved against the thread's events, so it survives the day being regrouped. `workscribe context` and the VS Code status bar show it for that thread. Saved summaries are per thread, so weekly digests (`summary --week`, `week`) don't use them.
 
 ### Agent skill
 
@@ -345,27 +347,49 @@ The file holds the same day `workscribe summary` shows: a summary the agent skil
 
 `workscribe sessions --json` and `workscribe events --json` print a versioned, machine-readable view of your activity — what coding-agent skills and other tools read instead of scraping the text output. Each prints one line of compact JSON (pipe it through `jq` to read it).
 
-**Stability:** every document carries `schemaVersion` (currently `1`). Within a version, fields may be **added** but are never renamed, removed or retyped — those changes bump `schemaVersion`. Ignore fields you don't recognise.
+**Stability:** every document carries its own `schemaVersion`: `sessions --json` is at `2`, `events --json` at `1`. Within a version, fields may be **added** but are never renamed, removed, retyped or given a new meaning — those changes bump that document's `schemaVersion`. Ignore fields you don't recognise.
+
+**What changed in `sessions` version 2:** each session is now a project's thread inside a work block, not a stretch of one repo cut at every repo switch. Threads of one block overlap in time, so add up `activeMinutes` per block (or use the block's), never `durationMinutes` across sessions. `repoName` is the project's name (it can differ from the folder name the events were captured under), and `null` for the "elsewhere" thread. `blocks`, `blockId`, `activeMinutes`, `alongside` and `agentSessions` are new.
 
 ```ts
 // workscribe sessions --json
-{ schemaVersion: 1, date: string, sessions: Session[] }
+{ schemaVersion: 2, date: string, blocks: Block[], sessions: Session[] }
 
-Session = {
-  key: string              // stable session id: "<repo>|<startedAt>"
-  project: string | null   // repo name, projects display name, or ~/path for work outside git
-  repoName: string | null
-  repoPath: string | null  // git toplevel; null outside a git repo
-  cwd: string | null       // directory most commands ran in
-  branch: string | null    // the latest branch the session was on
-  branches: string[]       // every branch the session touched, in the order first seen
+Block = {
+  id: number               // only meaningful within this document: blocks are rebuilt
   startedAt: string        // ISO 8601
   endedAt: string
-  durationMinutes: number
+  eventCount: number
+  activeMinutes: number    // 5-minute slots with any activity: time worked
+  threadKeys: string[]     // the keys of its sessions, in block order
+}
+
+Session = {                // one project's thread inside a block
+  key: string              // stable id: "<project>|<startedAt>" — the same key `context --json` gives the thread
+  project: string | null   // the project's name, or ~/path (or a projects display name) for work outside any project
+  repoName: string | null  // the project's name; null for the "elsewhere" thread
+  repoPath: string | null  // git toplevel; null outside a git repo
+  cwd: string | null       // directory most commands ran in
+  branch: string | null    // the latest branch the thread was on
+  branches: string[]       // every branch the thread touched, in the order first seen
+  startedAt: string        // the thread's first event, ISO 8601
+  endedAt: string          // its last event
+  durationMinutes: number  // startedAt to endedAt — can include other projects' work
+  activeMinutes: number    // 5-minute slots with this project's activity
   eventCount: number       // all captured events, before filtering
+  blockId: number          // the Block it belongs to
+  alongside: string[]      // the keys of the block's other sessions, in block order
+  agentSessions: AgentSession[]
   notes: string[]          // workscribe note texts
   commits: Commit[]
   events: Event[]
+}
+
+AgentSession = {           // an agent conversation some of the thread's events came from
+  source: string           // claude-code, …
+  sessionId: string        // the agent's id for the conversation
+  startedAt: string
+  lastSeenAt: string
 }
 
 Commit = {
@@ -396,7 +420,7 @@ Event = {
 
 **Commits** combine two sources, git commits first (oldest first), then captured-only ones:
 
-- `git` — commits found with `git log` in the session's repo from two minutes before its start (covering commit hooks) to a minute after its end, limited to commits *committed* by your `user.email` when one is configured (so cherry-picks you made count). Matched on committer date, so a commit rebased or amended later may fall outside the window, and only commits reachable from `HEAD` are seen; after a rebase leaves commit dates out of order, `git log` can stop early and miss a few. Two commits with the same subject are both listed. Because of the grace period, a commit right at the boundary between two nearby sessions in the same repo can appear in both.
+- `git` — commits found with `git log` in the thread's repo from two minutes before its start (covering commit hooks) to a minute after its end, limited to commits *committed* by your `user.email` when one is configured (so cherry-picks you made count). Matched on committer date, so a commit rebased or amended later may fall outside the window, and only commits reachable from `HEAD` are seen; after a rebase leaves commit dates out of order, `git log` can stop early and miss a few. Two commits with the same subject are both listed. Because of the grace period, a commit right at the boundary between two nearby sessions in the same repo can appear in both.
 - `committedAt` — for a `git` commit, its committer date from git; for a `captured` one, when Workscribe recorded the `git commit` finishing. An AI-tool session records which commits reached `HEAD` but not when, so those are `null`.
 - `captured` — commit messages Workscribe recorded itself (`git commit -m`, AI-tool sessions) that git didn't return, with `hash: null`. A `git commit` that failed (rejected by a hook, nothing staged) is not listed, and neither is a subject that recent history shows was committed only by someone else (an AI session records every commit that reaches `HEAD`, including ones it pulled in).
 

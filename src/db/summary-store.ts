@@ -1,22 +1,22 @@
 import type { MigrationDatabase } from './migration-types'
-import { withImmediateTransaction } from './transaction'
 import type { StoredEngine } from '../ai/engine'
 import type { AnchorRange } from '../summary/anchors'
 
-// The `summary` table (migration 010): summaries anchored to the events they describe. Until every reader is on it,
-// `sessions summary set` writes here and to `session_summaries`, and the `summary-anchors` job maps the old store.
+// The `summary` table (migration 010): summaries anchored to the events they describe. `sessions summary set` writes
+// here only; the `summary-anchors` job mapped the old `session_summaries` store into it.
 // `node:sqlite`-free, so tests run it on an in-memory database.
 
-/** `saved`: written by `sessions summary set`, from the live session. `mapped`: rebuilt by the job from the old store. */
+/** `saved`: written by `sessions summary set`. `mapped`: rebuilt by the job from the old store. */
 export type SummaryOrigin = 'saved' | 'mapped'
 export const SAVED_ORIGIN: SummaryOrigin = 'saved'
 export const MAPPED_ORIGIN: SummaryOrigin = 'mapped'
 
 /**
- * Where a summary's range came from: the live session it was saved from, the cached old session, the old session
- * regrouped from its day, or nowhere (kept without a range).
+ * Where a summary's range came from: the thread it was saved for, the live old session it was saved from (before
+ * WOR-147), the cached old session, the old session regrouped from its day, or nowhere (kept without a range).
  */
-export type AnchorSource = 'live' | 'cached' | 'regrouped' | 'none'
+export type AnchorSource = 'thread' | 'live' | 'cached' | 'regrouped' | 'none'
+export const THREAD_ANCHOR_SOURCE: AnchorSource = 'thread'
 
 export interface SummaryRow {
   id: number
@@ -34,7 +34,7 @@ export interface SummaryRow {
   is_mixed: number
 }
 
-/** A summary of an old session, by the key it was saved under. */
+/** A summary of a thread or an old session, by the key it was saved under. */
 export interface SessionSummaryRecord {
   sourceKey: string
   engine: StoredEngine
@@ -76,18 +76,11 @@ function parametersOf(record: SessionSummaryRecord, origin: SummaryOrigin): Reco
 }
 
 /**
- * Saves a summary the agent skill wrote to both stores in one transaction: `session_summaries` exactly as before,
- * and `summary`, anchored from the live session — overwriting a row the job mapped for the same key and engine.
+ * Saves a summary the agent skill wrote — overwriting whatever row its key and engine had, one the job mapped
+ * included. Never writes `session_summaries`.
  */
-export function saveSummaryToBothStores(db: MigrationDatabase, record: SessionSummaryRecord): void {
-  withImmediateTransaction(db, () => {
-    db.prepare(
-      `INSERT INTO session_summaries (session_key, engine, text, created_at)
-       VALUES ($session_key, $engine, $text, $created_at)
-       ON CONFLICT (session_key, engine) DO UPDATE SET text = excluded.text, created_at = excluded.created_at`
-    ).run({ session_key: record.sourceKey, engine: record.engine, text: record.text, created_at: record.createdAt })
-    db.prepare(SAVE_SUMMARY).run(parametersOf(record, SAVED_ORIGIN))
-  })
+export function saveAnchoredSummary(db: MigrationDatabase, record: SessionSummaryRecord): void {
+  db.prepare(SAVE_SUMMARY).run(parametersOf(record, SAVED_ORIGIN))
 }
 
 /**

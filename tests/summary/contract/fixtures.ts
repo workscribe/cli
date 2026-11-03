@@ -1,6 +1,7 @@
 import { normalizeCommand } from '../../../src/normalize/patterns'
 import type { EventRow } from '../../../src/db/types'
 import type { Session } from '../../../src/sessions/detector'
+import type { DayBlock, DayThread } from '../../../src/db/day-threads'
 
 export const HOME = '/Users/dev'
 
@@ -39,6 +40,37 @@ export function session(events: EventRow[], overrides: Partial<Session> = {}): S
     eventCount: events.length,
     summary: null,
     events,
+    ...overrides,
+  }
+}
+
+export function thread(events: EventRow[], overrides: Partial<DayThread> = {}): DayThread {
+  return {
+    id: 1,
+    blockId: 1,
+    projectId: 4,
+    key: 'api|2026-10-25T09:00:00.000Z',
+    repoName: 'api',
+    startedAt: '2026-10-25T09:00:00.000Z',
+    endedAt: '2026-10-25T10:00:00.000Z',
+    eventCount: events.length,
+    activeSlots: 6,
+    events,
+    agentSessions: [],
+    ...overrides,
+  }
+}
+
+export function block(threads: DayThread[], overrides: Partial<DayBlock> = {}): DayBlock {
+  return {
+    id: 1,
+    date: '2026-10-25',
+    startedAt: '2026-10-25T09:00:00.000Z',
+    endedAt: '2026-10-25T10:00:00.000Z',
+    eventCount: threads.reduce((total, member) => total + member.eventCount, 0),
+    activeSlots: 8,
+    groupingVersion: 1,
+    threads,
     ...overrides,
   }
 }
