@@ -38,6 +38,7 @@ describe('parseHookPayload', () => {
       cwd: '/home/user/projects/myapp',
       exitCode: 0,
       durationMs: null,
+      sessionId: null,
     })
   })
 
@@ -86,6 +87,7 @@ describe('parseHookPayload', () => {
       cwd: '/home/user/app',
       exitCode: 0,
       durationMs: null,
+      sessionId: 'abc-123',
     })
   })
 })
@@ -150,6 +152,32 @@ describe('_hook integration', () => {
     expect(mockCapture).toHaveBeenCalledWith(expect.objectContaining({ source: undefined }))
   })
 
+  it("links the command to the agent's conversation, named by the hook's source", async () => {
+    const withSession = JSON.stringify({ ...JSON.parse(VALID_HOOK_PAYLOAD), session_id: 'conversation-1' })
+    await withStdin(withSession, async () => {
+      await makeProgram().parseAsync(['_hook', '--source', 'claude-code'], { from: 'user' })
+      await new Promise((resolve) => setImmediate(resolve))
+    })
+
+    expect(mockCapture).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: 'claude-code',
+        agentSession: { source: 'claude-code', sessionId: 'conversation-1' },
+      })
+    )
+    expect(mockCapture.mock.calls[0][0]).not.toHaveProperty('sessionId')
+  })
+
+  it('links no conversation without a --source, so an event and its session never disagree', async () => {
+    const withSession = JSON.stringify({ ...JSON.parse(VALID_HOOK_PAYLOAD), session_id: 'conversation-1' })
+    await withStdin(withSession, async () => {
+      await makeProgram().parseAsync(['_hook'], { from: 'user' })
+      await new Promise((resolve) => setImmediate(resolve))
+    })
+
+    expect(mockCapture.mock.calls[0][0].agentSession).toBeUndefined()
+  })
+
   it('does not call captureCommand when payload is empty', async () => {
     await withStdin('', async () => {
       await makeProgram().parseAsync(['_hook'], { from: 'user' })
@@ -196,7 +224,17 @@ describe('parseHookPayload — recorded Claude Code payloads', () => {
       cwd: '/Users/dev/api',
       exitCode: 0,
       durationMs: 1381,
+      sessionId: '<session_id>',
     })
+  })
+
+  it('has no session id when the payload has none, or an empty one', () => {
+    const payload = (sessionId: unknown) =>
+      JSON.stringify({ tool_name: 'Bash', tool_input: { command: 'ls' }, cwd: '/repo', session_id: sessionId })
+
+    expect(parseHookPayload(payload(''))?.sessionId).toBeNull()
+    expect(parseHookPayload(payload(42))?.sessionId).toBeNull()
+    expect(parseHookPayload(payload(undefined))?.sessionId).toBeNull()
   })
 
   it.each([

@@ -9,6 +9,7 @@ import { BUSY_TIMEOUT_MS, withImmediateTransaction, type TransactionOptions } fr
 import type { StoredEngine } from '../ai/engine'
 import { insertEventRecord, type NewEvent } from './event-writer'
 import { saveSummaryToBothStores } from './summary-store'
+import { agentSessionIdsOfDate, agentSessionIdsOfEvents, deleteEmptyAgentSessions } from './agent-sessions'
 import type { SummaryAnchor } from '../summary/anchors'
 export type { EventRow, SessionRow, SessionSummaryRow } from './types'
 
@@ -254,25 +255,40 @@ export function deleteEventsByIds(ids: number[]): void {
   const db = getDb()
   const placeholders = ids.map(() => '?').join(', ')
 
-  const affectedDates = db
-    .prepare(`SELECT DISTINCT date(captured_at, 'localtime') as date FROM events WHERE id IN (${placeholders})`)
-    .all(...ids) as { date: string }[]
+  runInImmediateTransaction(() => {
+    const affectedDates = db
+      .prepare(`SELECT DISTINCT date(captured_at, 'localtime') as date FROM events WHERE id IN (${placeholders})`)
+      .all(...ids) as { date: string }[]
+    const agentSessionIds = agentSessionIdsOfEvents(db, ids)
 
-  db.prepare(`DELETE FROM events WHERE id IN (${placeholders})`).run(...ids)
-
-  for (const { date } of affectedDates) {
-    clearSessionsForDate(date)
-  }
+    // The events' session_events go first, by event id — FK constraint order. A session's day can differ from the
+    // event's local day now (grouped in another time zone), so clearing by date alone could miss them
+    db.prepare(`DELETE FROM session_events WHERE event_id IN (${placeholders})`).run(...ids)
+    // The days' sessions are regrouped the next time each day is read
+    for (const { date } of affectedDates) {
+      clearSessionsForDate(date)
+    }
+    db.prepare(`DELETE FROM events WHERE id IN (${placeholders})`).run(...ids)
+    deleteEmptyAgentSessions(db, agentSessionIds)
+  })
 }
 
 export function deleteEventsForDate(date: string): number {
   const db = getDb()
-  // Clear sessions (and session_events) before deleting events — FK constraint order
-  clearSessionsForDate(date)
-  const result = db.prepare(`DELETE FROM events WHERE date(captured_at, 'localtime') = $date`).run({ date }) as {
-    changes: number
-  }
-  return result.changes
+  return runInImmediateTransaction(() => {
+    const agentSessionIds = agentSessionIdsOfDate(db, date)
+    // As in deleteEventsByIds: the events' session_events by event id first, then the day's sessions
+    db.prepare(
+      `DELETE FROM session_events
+       WHERE event_id IN (SELECT id FROM events WHERE date(captured_at, 'localtime') = $date)`
+    ).run({ date })
+    clearSessionsForDate(date)
+    const result = db.prepare(`DELETE FROM events WHERE date(captured_at, 'localtime') = $date`).run({ date }) as {
+      changes: number
+    }
+    deleteEmptyAgentSessions(db, agentSessionIds)
+    return result.changes
+  })
 }
 
 export function getOtherEventToolCounts(days: number): { tool: string; count: number }[] {

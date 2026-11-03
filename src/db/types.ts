@@ -16,6 +16,8 @@ export interface EventRow {
   /** The project, branch the event links to (migration 008) — null until linked; not read by anything yet */
   project_id?: number | null
   branch_id?: number | null
+  /** The agent conversation a hook event came from (migration 012) */
+  agent_session_id?: number | null
 }
 
 export interface SessionRow {

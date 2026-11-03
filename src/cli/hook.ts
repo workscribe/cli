@@ -15,6 +15,8 @@ export interface HookCommand {
   /** 0 for a success, the real code for a failure, null when it's unknown (an interrupted call) */
   exitCode: number | null
   durationMs: number | null
+  /** The agent conversation the command ran in — the same across every folder it worked in. Null if not sent */
+  sessionId: string | null
 }
 
 // PostToolUseFailure's `error` starts with this for a Bash command that ran and exited
@@ -43,7 +45,8 @@ export function parseHookPayload(raw: string, event: ToolEvent = 'PostToolUse'):
   const cwd = typeof payload.cwd === 'string' ? payload.cwd : null
   if (!command || !cwd) return null
   const durationMs = typeof payload.duration_ms === 'number' ? payload.duration_ms : null
-  return { command, cwd, exitCode: exitCodeOf(event, payload), durationMs }
+  const sessionId = typeof payload.session_id === 'string' && payload.session_id !== '' ? payload.session_id : null
+  return { command, cwd, exitCode: exitCodeOf(event, payload), durationMs, sessionId }
 }
 
 function isToolEvent(event: string): event is ToolEvent {
@@ -108,7 +111,10 @@ export function registerHook(program: Command): void {
           if (readConfig().capture.aiTools === false) return
           const parsed = parseHookPayload(raw, opts.event)
           if (!parsed) return
-          captureCommand({ ...parsed, source: opts.source })
+          const { sessionId, ...command } = parsed
+          // Only with a source, so the event and its session always name the same agent
+          const agentSession = sessionId && opts.source ? { source: opts.source, sessionId } : undefined
+          captureCommand({ ...command, source: opts.source, agentSession })
         } catch (err) {
           debugLog('_hook', err)
         }

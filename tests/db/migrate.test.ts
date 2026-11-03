@@ -323,3 +323,30 @@ describe('applyMigrations — the project time index', () => {
     })
   })
 })
+
+describe('applyMigrations — the agent sessions migration', () => {
+  it('is in the list, adds the table and column, keeps events as they were, and allows one row per conversation', () => {
+    const agentMigration = MIGRATIONS.find((migration) => migration.description.startsWith('Add agent sessions'))
+    expect(agentMigration).toBeDefined()
+    const db = new DatabaseSync(':memory:')
+    applyMigrations(
+      db,
+      MIGRATIONS.filter((migration) => migration.version < (agentMigration?.version ?? 0))
+    )
+    insertEvent(db, 'git status', 'versioning', null)
+    const before = events(db)
+
+    applyMigrations(db, MIGRATIONS)
+
+    expect(events(db)).toEqual(before)
+    expect(db.prepare('SELECT agent_session_id FROM events').all()).toEqual([{ agent_session_id: null }])
+    const insert = () =>
+      db
+        .prepare(
+          "INSERT INTO agent_sessions (source, session_id, started_at, last_seen_at) VALUES ('a', 's', 'x', 'x')"
+        )
+        .run()
+    insert()
+    expect(insert).toThrow(/UNIQUE/)
+  })
+})
