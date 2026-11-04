@@ -10,6 +10,7 @@ import { BUSY_TIMEOUT_MS, withImmediateTransaction, type TransactionOptions } fr
 import type { StoredEngine } from '../ai/engine'
 import { insertEventRecord, type NewEvent } from './event-writer'
 import { saveAnchoredSummary } from './summary-store'
+import { countOtherEventsSince, countOtherEventTools, sinceIso } from './recent-events'
 import { agentSessionIdsOfDate, agentSessionIdsOfEvents, deleteEmptyAgentSessions } from './agent-sessions'
 import { THREAD_ANCHOR_SOURCE, type ThreadAnchor } from '../summary/anchors'
 export type { EventRow, SessionRow, SessionSummaryRow } from './types'
@@ -288,31 +289,11 @@ export function deleteEventsForDate(date: string): number {
 }
 
 export function getOtherEventToolCounts(days: number): { tool: string; count: number }[] {
-  const db = getDb()
-  return db
-    .prepare(
-      `SELECT json_extract(metadata, '$.tool') as tool, COUNT(*) as count
-       FROM events
-       WHERE category = 'other'
-         AND captured_at >= datetime('now', $offset)
-         AND json_extract(metadata, '$.tool') IS NOT NULL
-       GROUP BY tool
-       ORDER BY count DESC`
-    )
-    .all({ offset: `-${days} days` }) as { tool: string; count: number }[]
+  return countOtherEventTools(getDb(), sinceIso(days))
 }
 
 export function getRecentOtherRate(days: number): { total: number; otherCount: number } {
-  const db = getDb()
-  const row = db
-    .prepare(
-      `SELECT COUNT(*) as total,
-              SUM(CASE WHEN category = 'other' THEN 1 ELSE 0 END) as otherCount
-       FROM events
-       WHERE captured_at >= datetime('now', $offset)`
-    )
-    .get({ offset: `-${days} days` }) as { total: number; otherCount: number }
-  return row
+  return countOtherEventsSince(getDb(), sinceIso(days))
 }
 
 export function clearSessionsForDate(date: string): void {
