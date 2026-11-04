@@ -1,7 +1,6 @@
 import { Command } from 'commander'
 import fs from 'fs'
 import path from 'path'
-import { getOrBuildSessions } from '../sessions/detector'
 import { readConfig } from '../config'
 import { log } from '../utils/logger'
 import { todayDate, parseDate } from '../utils/format'
@@ -11,6 +10,7 @@ import { buildExcludedSet } from '../summary/exclusions'
 import { printExcludedFooter, printSavedNote } from './day-notes'
 import { createSummaryWriter } from '../summary/writer'
 import { printLegacyAiNotice } from './notices'
+import { loadDayThreads, requireThreadData } from './thread-day'
 
 export function registerExport(program: Command): void {
   program
@@ -33,8 +33,9 @@ export function registerExport(program: Command): void {
         }
       }
 
-      const sessions = getOrBuildSessions(date)
-      if (sessions.length === 0) {
+      requireThreadData()
+      const blocks = loadDayThreads(date)
+      if (blocks.length === 0) {
         log.plain(`No activity captured for ${date}`)
         return
       }
@@ -42,7 +43,7 @@ export function registerExport(program: Command): void {
       // The same day `workscribe summary` shows, saved summaries included — always as markdown, whatever summary.format
       let day: RenderedDay
       try {
-        day = await renderDay({ date, sessions, config, provider: createSummaryWriter(config), fresh: options.fresh })
+        day = await renderDay({ date, blocks, config, provider: createSummaryWriter(config), fresh: options.fresh })
       } catch (error) {
         log.error(`Export failed: ${(error as Error).message}`)
         process.exit(1)

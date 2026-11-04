@@ -49,7 +49,7 @@ Each session is one project's **thread**: that project's work inside a work bloc
 | `key` | The `--key` when saving this session's summary. Copy it exactly. |
 | `project`, `branch`, `activeMinutes` | The block heading. `project` is the project's name, a `~/path` for work outside any project, or `null` (write `unknown`). `activeMinutes` is the time spent on this project; `startedAt`–`endedAt` can span other projects' work too. |
 | `branches` | Every branch the session touched, in the order first seen. `branch` is the latest of them, the one the session ended on. Each commit's `committedAt` says when it was made. |
-| `alongside` | The keys of the sessions worked in the same block. Mention those projects at most once; their work belongs in their own blocks. |
+| `alongside` | The keys of the sessions worked in the same block. Don't mention those projects — Workscribe adds an `Alongside:` line under each summary itself — and leave their work to their own blocks. |
 | `repoPath` | Where to read files if a commit needs context. `null` outside a git repo. |
 | `notes` | The developer's own notes — always include them. |
 | `commits` | The main source of outcomes. `source: "git"` has a short `hash` to cite; `"captured"` commits have `hash: null` (amended or rebased). |

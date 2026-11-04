@@ -82,9 +82,17 @@ On feat/auth:
 - Added dependencies: bcrypt
 - Pushed to origin/feat/auth
 With an AI coding assistant (126 commands) · 3 file saves in the editor
+Alongside: web
+
+## web (main) — 40m
+- Committed: feat: login page
+With an AI coding assistant (31 commands)
+Alongside: api
+
+Time worked: 2h 30m
 ```
 
-Each session gets its own heading, always generated from your captured data: the project, every branch the session touched (in the order you worked on them), and the duration. When a session spans several branches, its work is grouped under a plain `On <branch>:` line for each, so you can see what happened where. Commits come from what Workscribe captured and from `git log` in the session's repo (your commits only, looked up within 3 seconds per run). The last line sums up how you worked: commands your coding agent ran, and files saved in the editor.
+The day is told one section per project thread: each project's work inside a stretch of work between idle gaps, however you switched between repos (see [`workscribe sessions`](#workscribe-sessions)). Each gets its own heading, always generated from your captured data: the project, every branch it touched (in the order you worked on them), and its active time — the 5-minute slots with that project's activity, since its start-to-end span can include other projects' work. When you worked on several projects in the same stretch, each section ends with an `Alongside:` line naming the others, and the day ends with `Time worked:` — counted once across projects, never their sum. When a session spans several branches, its work is grouped under a plain `On <branch>:` line for each, so you can see what happened where. Commits come from what Workscribe captured and from `git log` in the session's repo (your commits only, looked up within 3 seconds per run). The last line sums up how you worked: commands your coding agent ran, and files saved in the editor.
 
 **Saved summaries:**
 - A summary the agent skill saved for a session is shown instead of the template
@@ -162,7 +170,7 @@ EOF
 - The text must be non-empty and at most 8 KB. Secrets are redacted before it's stored, using the same rules as captured commands (including `redact.extra`).
 - Saving again for the same session replaces the earlier summary.
 - The key must name a thread from `workscribe sessions --json`; a key an older Workscribe listed for a session may match no thread. If the key no longer matches (new activity can regroup a day), run `workscribe sessions --json` again and use the new key.
-- The summary is saved against the thread's events, so it survives the day being regrouped. `workscribe context` and the VS Code status bar show it for that thread. Saved summaries are per thread, so weekly digests (`summary --week`, `week`) don't use them.
+- The summary is saved against the thread's events, so it survives the day being regrouped. `workscribe summary`, `workscribe export`, `workscribe context` and the VS Code status bar show it for that thread. `workscribe summary --fresh` renders the template for that run only; the saved summary stays until the skill (or this command) saves a new one. Saved summaries are per thread, so weekly digests (`summary --week`, `week`) don't use them.
 
 ### Agent skill
 
@@ -339,7 +347,7 @@ workscribe export --fresh
 | `--output <path>` | Custom output path (default: `~/.workscribe/exports/workscribe-<date>.md`) |
 | `--fresh` | Ignore saved summaries and write the template's summary for every session |
 
-The file holds the same day `workscribe summary` shows: a summary the agent skill saved for a session is used, and the template tells the rest, each session under its own `## ` heading. It's always markdown, whatever `summary.format` is set to. Notes about the summary (which sessions came from saved summaries, events left out) are printed to the terminal, not written to the file.
+The file holds the same day `workscribe summary` shows: a summary the agent skill saved for a thread is used, and the template tells the rest, each thread under its own `## ` heading, with the `Alongside:` lines and the day's `Time worked:` line. It's always markdown, whatever `summary.format` is set to. Notes about the summary (which sessions came from saved summaries, events left out) are printed to the terminal, not written to the file.
 
 ---
 

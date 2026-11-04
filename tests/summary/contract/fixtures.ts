@@ -71,6 +71,7 @@ export function block(threads: DayThread[], overrides: Partial<DayBlock> = {}): 
     activeSlots: 8,
     groupingVersion: 1,
     threads,
+    summaries: [],
     ...overrides,
   }
 }

@@ -5,7 +5,7 @@ import type { SessionPayload } from '../ai/types'
 export const UNKNOWN_LOCATION = 'unknown'
 
 type HeadingFields = Pick<SessionPayload, 'project' | 'branch' | 'durationMinutes'> &
-  Partial<Pick<SessionPayload, 'branches'>>
+  Partial<Pick<SessionPayload, 'branches' | 'activeMinutes'>>
 
 /** Every branch the session touched, in the order first seen — or its one branch when that's all that's known. */
 function headingBranches(session: HeadingFields): string[] {
@@ -13,11 +13,15 @@ function headingBranches(session: HeadingFields): string[] {
   return session.branch ? [session.branch] : []
 }
 
-/** `project (feat/auth, main) — duration`, as used in headings and the --verbose event listing. */
+/**
+ * `project (feat/auth, main) — duration`, as used in headings and the --verbose event listing. A thread shows its
+ * active time: its span can include other projects' work.
+ */
 export function formatSessionLabel(session: HeadingFields): string {
   const branches = headingBranches(session)
   const branchList = branches.length > 0 ? ` (${branches.join(', ')})` : ''
-  return `${session.project ?? UNKNOWN_LOCATION}${branchList} — ${formatDuration(session.durationMinutes)}`
+  const minutes = session.activeMinutes ?? session.durationMinutes
+  return `${session.project ?? UNKNOWN_LOCATION}${branchList} — ${formatDuration(minutes)}`
 }
 
 /** The `## project (branches) — duration` line every session summary starts with. */

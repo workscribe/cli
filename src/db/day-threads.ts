@@ -2,11 +2,12 @@ import type { MigrationDatabase } from './migration-types'
 import type { EventRow } from './types'
 import { withReadTransaction } from './transaction'
 import { getThreadEvents, readBlocksForDate, type StoredBlock, type StoredThread } from './thread-store'
-import { getProjectNames } from './context-lookup'
+import { getAnchoredSummariesInBlock, getProjectNames } from './context-lookup'
 import { getAgentSessionsOfEvents, type AgentSessionInfo } from './agent-sessions'
 import { sessionKey } from '../summary/store'
 import { areJobsDone } from './jobs/state'
 import type { DataJob } from './jobs/types'
+import type { SummaryRow } from './summary-store'
 
 // A day's built work blocks with what `sessions` says about each thread, read in one snapshot so another process
 // rebuilding the day can't split the read. `node:sqlite`-free, so tests run it on an in-memory database.
@@ -39,6 +40,8 @@ export interface DayThread extends StoredThread {
 export interface DayBlock extends Omit<StoredBlock, 'threads'> {
   /** In the order their projects first appear in the block */
   threads: DayThread[]
+  /** The anchored summaries whose range starts in this block — the ones that can belong to one of its threads */
+  summaries: SummaryRow[]
 }
 
 function projectIdsOf(blocks: StoredBlock[]): number[] {
@@ -66,9 +69,10 @@ export function readDayThreads(db: MigrationDatabase, date: string): DayBlock[] 
   return withReadTransaction(db, () => {
     const blocks = readBlocksForDate(db, date)
     const projectNames = getProjectNames(db, projectIdsOf(blocks))
-    return blocks.map((block) => ({
-      ...block,
-      threads: block.threads.map((thread) => toDayThread(db, thread, projectNames)),
-    }))
+    return blocks.map((block) => {
+      const threads = block.threads.map((thread) => toDayThread(db, thread, projectNames))
+      const eventIds = threads.flatMap((thread) => thread.events.map((event) => event.id))
+      return { ...block, threads, summaries: getAnchoredSummariesInBlock(db, eventIds) }
+    })
   })
 }

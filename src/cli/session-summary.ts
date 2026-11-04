@@ -57,7 +57,7 @@ function saveSkillSummary(options: { key: string }): void {
     anchor: anchorOfThread(thread.events, thread.projectId),
   })
   log.success(
-    `Saved the summary for ${thread.repoName ?? 'this session'} — workscribe context and the VS Code status bar now show it.`
+    `Saved the summary for ${thread.repoName ?? 'this session'} — workscribe summary, workscribe context and the VS Code status bar now show it.`
   )
 }
 

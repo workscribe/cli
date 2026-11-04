@@ -20,7 +20,9 @@ Workscribe gives you two ways to get a summary of your work. Neither needs an AI
 
 `workscribe summary`, `workscribe week` and `workscribe export` use the template engine. It's deterministic and instant, and it never sends anything off your machine.
 
-Each session reads as a short story of what you did:
+The day is told one section per project thread (each project's work inside a stretch of work, however you switched between repos), headed with that project's active time. When you worked on several projects in the same stretch, each section ends with an `Alongside:` line naming the others, and the day ends with its `Time worked:`, counted once across projects.
+
+Each section reads as a short story of what you did:
 
 - **Your notes** (`workscribe note`) come first.
 - **Then the work on each branch**, in the order you worked on them. A session that touched several branches groups each one under a plain `On <branch>:` line; a session on one branch needs none, since the heading names it. Each branch leads with:
@@ -79,7 +81,11 @@ workscribe skill install
 
 Then ask the agent in plain language — *"summarize my work today"*, *"write my standup"*, *"what did I do this week?"* — or type `/workscribe` in Claude Code. The agent reads `workscribe sessions --json`, looks at your repos for context, writes one summary per session and saves it. A session there is one project's thread inside a stretch of work, so working across three repos at once gets three summaries, one per repo, each noting the others worked alongside.
 
-A saved summary is what `workscribe context` and the VS Code status bar show for that thread from then on. It's tied to the thread's events, so it stays with that work when the day is regrouped.
+A saved summary is what `workscribe summary`, `workscribe export`, `workscribe context` and the VS Code status bar show for that thread from then on. It's tied to the thread's events, so it stays with that work when the day is regrouped. To see the template version instead for one run:
+
+```bash
+workscribe summary --fresh
+```
 
 See [`workscribe skill`](/commands#workscribe-skill) for installing, checking and removing the skill, and [Privacy](/privacy#the-workscribe-agent-skill) for exactly what the agent sends.
 

@@ -10,6 +10,10 @@ import type { EventRow } from '../db/types'
 import type { Session } from '../sessions/detector'
 import type { WorkscribeConfig } from '../config'
 import type { GitCommit } from './git-commits'
+import type { DayBlock, DayThread } from '../db/day-threads'
+import { minutesBetween } from '../sessions/grouper'
+import { toActiveMinutes } from '../sessions/blocks'
+import { UNKNOWN_LOCATION } from './heading'
 
 /** What sessionLocation needs to name a session that isn't in a git repo. */
 export interface LocationContext {
@@ -152,6 +156,29 @@ export function sessionToPayload(
     durationMinutes: session.durationMinutes,
     events: session.events.map(eventRowToPayload),
     commits: storyCommitsOf(session.events, gitCommits),
+  }
+}
+
+/** One thread of a block as the template tells it: its own span and active time, and the projects alongside it. */
+export function threadToPayload(
+  thread: DayThread,
+  block: DayBlock,
+  { context = DEFAULT_LOCATION_CONTEXT, gitCommits = null }: SessionPayloadOptions = {}
+): SessionPayload {
+  return {
+    date: block.date,
+    project: sessionLocation(thread, context),
+    branch: sessionBranch(thread.events),
+    branches: branchesOf(thread.events),
+    startTime: formatDate(thread.startedAt),
+    endTime: formatDate(thread.endedAt),
+    durationMinutes: minutesBetween(thread.startedAt, thread.endedAt),
+    activeMinutes: toActiveMinutes(thread.activeSlots),
+    alongside: block.threads
+      .filter((other) => other.id !== thread.id)
+      .map((other) => sessionLocation(other, context) ?? UNKNOWN_LOCATION),
+    events: thread.events.map(eventRowToPayload),
+    commits: storyCommitsOf(thread.events, gitCommits),
   }
 }
 

@@ -16,7 +16,6 @@ export const MAPPED_ORIGIN: SummaryOrigin = 'mapped'
  * WOR-147), the cached old session, the old session regrouped from its day, or nowhere (kept without a range).
  */
 export type AnchorSource = 'thread' | 'live' | 'cached' | 'regrouped' | 'none'
-export const THREAD_ANCHOR_SOURCE: AnchorSource = 'thread'
 
 export interface SummaryRow {
   id: number
