@@ -5,6 +5,7 @@ import { execFileSync } from 'child_process'
 import { log } from '../utils/logger'
 import { CompletionCommand, bashCompletion, zshCompletion, fishCompletion } from '../utils/completion-scripts'
 import { WORKSCRIBE_DIR } from '../utils/paths'
+import { ensurePrivateDirectory } from '../utils/private-directory'
 import { backUpFile } from '../utils/backup'
 import {
   COMPLETIONS_MARKER,
@@ -142,7 +143,7 @@ export function writeCompletionScript(shell: ShellTarget, commands: CompletionCo
     return
   }
   const script = shell.name === 'zsh' ? zshCompletion(commands) : bashCompletion(commands)
-  fs.mkdirSync(WORKSCRIBE_DIR, { recursive: true })
+  ensurePrivateDirectory(WORKSCRIBE_DIR)
   fs.writeFileSync(completionScriptFile(shell.name), script, { mode: 0o644 })
 }
 

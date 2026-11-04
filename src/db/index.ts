@@ -1,6 +1,7 @@
 import { DatabaseSync } from 'node:sqlite'
 import fs from 'fs'
 import { WORKSCRIBE_DIR, DB_PATH } from '../utils/paths'
+import { ensurePrivateDirectory } from '../utils/private-directory'
 import type { EventRow, SessionRow, SessionSummaryRow } from './types'
 import { MIGRATIONS } from './migrations'
 import { applyMigrations } from './migrate'
@@ -18,16 +19,14 @@ let _db: DatabaseSync | null = null
 export function getDb(): DatabaseSync {
   if (_db) return _db
 
-  // Ensure ~/.workscribe/ exists
-  if (!fs.existsSync(WORKSCRIBE_DIR)) {
-    try {
-      fs.mkdirSync(WORKSCRIBE_DIR, { recursive: true })
-    } catch (error) {
-      // Rethrown as a clean, actionable message — callers reaching this
-      // (explicit commands, or _capture/_hook's own try/catch) otherwise
-      // only see a raw native stack trace with the real cause buried in it.
-      throw new Error(`Could not create data directory ${WORKSCRIBE_DIR}: ${(error as Error).message}`)
-    }
+  // The data folder exists and is private before SQLite creates anything in it
+  try {
+    ensurePrivateDirectory(WORKSCRIBE_DIR)
+  } catch (error) {
+    // Rethrown as a clean, actionable message — callers reaching this
+    // (explicit commands, or _capture/_hook's own try/catch) otherwise
+    // only see a raw native stack trace with the real cause buried in it.
+    throw new Error(`Could not create data directory ${WORKSCRIBE_DIR}: ${(error as Error).message}`)
   }
 
   // Don't assign to _db until after migrations succeed — if applyMigrations
