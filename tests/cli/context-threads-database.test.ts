@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest'
 
-// Real SQLite, like detector-database.test.ts: the thread path builds a day under the real lock. The database path
+// Real SQLite: the thread path builds a day under the real lock. The database path
 // points at a temp folder before the module loads, so it never opens ~/.workscribe.
 const temp = vi.hoisted(async () => {
   const fs = await import('fs')
@@ -77,56 +77,67 @@ describe('the context thread path on a real database', () => {
   it("answers a file's save with its own project's thread, and the projects alongside it", () => {
     markJobsDone()
 
-    const lookup = lookUpFileThread(README)
+    const answer = lookUpFileThread(README)
 
-    if (lookup.kind !== 'found') throw new Error(`expected a thread, got ${JSON.stringify(lookup)}`)
-    expect(lookup.answer.context).toMatchObject({
+    expect(answer?.context).toMatchObject({
       repoName: 'workscribe/landing-page',
       eventCount: 1,
       startedAt: at(10),
     })
-    expect(lookup.answer.context.alongside.map((other) => other.repoName)).toEqual(['workscribe/cli'])
-    expect(lookup.answer.events.map((event) => event.file_path)).toEqual([README])
+    expect(answer?.context.alongside.map((other) => other.repoName)).toEqual(['workscribe/cli'])
+    expect(answer?.events.map((event) => event.file_path)).toEqual([README])
   })
 
   it("answers a repo with its project's latest thread", () => {
     markJobsDone()
 
-    const lookup = lookUpProjectThread(CLI)
-
-    expect(lookup.kind === 'found' && lookup.answer.context).toMatchObject({
+    expect(lookUpProjectThread(CLI)?.context).toMatchObject({
       repoName: 'workscribe/cli',
       eventCount: 3,
     })
   })
 
-  it('falls back, the lock not being why, when the built day has no thread holding the save', () => {
+  it('finds nothing when the built day has no thread holding the save', () => {
     markJobsDone()
     lookUpFileThread(README)
     getDb().exec('DELETE FROM thread_event WHERE event_id = (SELECT id FROM events WHERE file_path IS NOT NULL)')
 
-    expect(lookUpFileThread(README)).toEqual({ kind: 'fallback', isLocked: false })
+    expect(lookUpFileThread(README)).toBeNull()
   })
 
-  it('falls back to the old sessions until the data upgrade has run', () => {
-    expect(lookUpFileThread(README)).toEqual({ kind: 'fallback', isLocked: false })
+  it('finds nothing until the data upgrade has run — there are no old sessions to fall back to', () => {
+    expect(lookUpFileThread(README)).toBeNull()
   })
 
-  it('falls back, saying the lock was why, within the one lock wait', async () => {
-    markJobsDone()
+  async function lookUpWhileLocked(): Promise<ReturnType<typeof lookUpFileThread>> {
     const otherProcess = new DatabaseSync((await temp).databasePath)
     otherProcess.exec('BEGIN IMMEDIATE')
-    const startedAt = Date.now()
-
-    let lookup
     try {
-      lookup = lookUpFileThread(README)
+      return lookUpFileThread(README)
     } finally {
       otherProcess.exec('ROLLBACK')
       otherProcess.close()
     }
+  }
 
-    expect(lookup).toEqual({ kind: 'fallback', isLocked: true })
+  it('answers from the day as last built while another process holds the lock, within the one lock wait', async () => {
+    markJobsDone()
+    lookUpFileThread(README)
+    // New activity makes the day stale, so the lookup has to rebuild it — but the lock is taken
+    insertEvent(20, 2)
+    const startedAt = Date.now()
+
+    const answer = await lookUpWhileLocked()
+
+    expect(answer?.context).toMatchObject({ repoName: 'workscribe/landing-page', eventCount: 1 })
+    expect(Date.now() - startedAt).toBeLessThan(2000)
+  })
+
+  it('finds nothing while another process holds the lock on a day never built', async () => {
+    markJobsDone()
+    const startedAt = Date.now()
+
+    expect(await lookUpWhileLocked()).toBeNull()
     expect(Date.now() - startedAt).toBeLessThan(2000)
   })
 })

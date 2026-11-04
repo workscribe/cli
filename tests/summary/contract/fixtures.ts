@@ -1,6 +1,5 @@
 import { normalizeCommand } from '../../../src/normalize/patterns'
 import type { EventRow } from '../../../src/db/types'
-import type { Session } from '../../../src/sessions/detector'
 import type { DayBlock, DayThread } from '../../../src/db/day-threads'
 
 export const HOME = '/Users/dev'
@@ -27,21 +26,6 @@ export function row(overrides: Partial<EventRow> = {}): EventRow {
 export function capturedRow(command: string, overrides: Partial<EventRow> = {}): EventRow {
   const { category, metadata } = normalizeCommand(command)
   return row({ command, category, metadata: JSON.stringify(metadata), ...overrides })
-}
-
-export function session(events: EventRow[], overrides: Partial<Session> = {}): Session {
-  return {
-    id: 1,
-    date: '2026-10-25',
-    startedAt: '2026-10-25T09:00:00.000Z',
-    endedAt: '2026-10-25T10:00:00.000Z',
-    repoName: 'api',
-    durationMinutes: 60,
-    eventCount: events.length,
-    summary: null,
-    events,
-    ...overrides,
-  }
 }
 
 export function thread(events: EventRow[], overrides: Partial<DayThread> = {}): DayThread {

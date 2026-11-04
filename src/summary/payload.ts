@@ -5,9 +5,8 @@ import { parseMetadata } from './event-metadata'
 import { storyCommitsOf } from './story-commits'
 import { isFailedCommand } from './commits'
 import { gitMovesOf } from '../normalize/git-move'
-import type { DaySummaryPayload, EventPayload, SessionPayload } from '../ai/types'
+import type { EventPayload, SessionPayload } from '../ai/types'
 import type { EventRow } from '../db/types'
-import type { Session } from '../sessions/detector'
 import type { WorkscribeConfig } from '../config'
 import type { GitCommit } from './git-commits'
 import type { DayBlock, DayThread } from '../db/day-threads'
@@ -87,30 +86,25 @@ function mostFrequentCwdOf(events: EventRow[]): string | null {
   return best
 }
 
-/** What naming a session or thread by its folders reads. */
-type WorkEvents = Pick<Session, 'repoName' | 'events'>
+/** What naming a stretch of work by its folders reads: its project's name, null outside any project. */
+interface WorkEvents {
+  repoName: string | null
+  events: EventRow[]
+}
 
-/** The directory most of a session's events ran in, or null for a session with no events. */
-export function mostFrequentCwd(session: Pick<Session, 'events'>): string | null {
-  return mostFrequentCwdOf(session.events)
+/** The directory most of a stretch of work's events ran in, or null when it has no events. */
+export function mostFrequentCwd(work: Pick<WorkEvents, 'events'>): string | null {
+  return mostFrequentCwdOf(work.events)
 }
 
 /**
  * A directory inside a thread's repo, for git lookups: the most-used one among its events captured inside a repo,
- * else its most-used one. Unlike `repoCwd`, it doesn't match `repo_name` against a name — a project's name can
- * differ from the text its events were stored under.
+ * else its most-used one. It doesn't match `repo_name` against a name — a project's name can differ from the text
+ * its events were stored under. (Agents often run `cd repo && …` from a parent folder, so the most-used folder
+ * overall can miss the repo.)
  */
 export function threadRepoCwd(events: EventRow[]): string | null {
   return mostFrequentCwdOf(events.filter((event) => event.repo_name !== null)) ?? mostFrequentCwdOf(events)
-}
-
-/**
- * A directory inside the session's repo, for git lookups. Agents often run `cd repo && …` from a
- * parent directory that isn't a repo, so the most-used directory overall can miss the repo entirely.
- */
-export function repoCwd(session: Session): string | null {
-  if (!session.repoName) return mostFrequentCwd(session)
-  return mostFrequentCwdOf(session.events.filter((event) => event.repo_name === session.repoName))
 }
 
 function homeRelative(directory: string, homeDir: string): string {
@@ -124,12 +118,9 @@ function homeRelative(directory: string, homeDir: string): string {
  * most of its commands ran in (a config.projects name if one is set, else the home-relative path),
  * so the user can always tell where the work happened.
  */
-export function sessionLocation(
-  session: WorkEvents,
-  context: LocationContext = DEFAULT_LOCATION_CONTEXT
-): string | null {
-  if (session.repoName) return session.repoName
-  const cwd = mostFrequentCwd(session)
+export function sessionLocation(work: WorkEvents, context: LocationContext = DEFAULT_LOCATION_CONTEXT): string | null {
+  if (work.repoName) return work.repoName
+  const cwd = mostFrequentCwd(work)
   if (!cwd) return null
   return context.projects[cwd] ?? homeRelative(cwd, context.homeDir)
 }
@@ -141,21 +132,28 @@ export interface SessionPayloadOptions {
   gitCommits?: GitCommit[] | null
 }
 
-export function sessionToPayload(
-  session: Session,
+/** A stretch of work as the template tells it: the thread `context` answers with, or a thread of the day. */
+export interface PayloadSpan extends WorkEvents {
+  startedAt: string
+  endedAt: string
+  durationMinutes: number
+}
+
+export function spanToPayload(
+  span: PayloadSpan,
   date: string,
   { context = DEFAULT_LOCATION_CONTEXT, gitCommits = null }: SessionPayloadOptions = {}
 ): SessionPayload {
   return {
     date,
-    project: sessionLocation(session, context),
-    branch: sessionBranch(session.events),
-    branches: branchesOf(session.events),
-    startTime: formatDate(session.startedAt),
-    endTime: formatDate(session.endedAt),
-    durationMinutes: session.durationMinutes,
-    events: session.events.map(eventRowToPayload),
-    commits: storyCommitsOf(session.events, gitCommits),
+    project: sessionLocation(span, context),
+    branch: sessionBranch(span.events),
+    branches: branchesOf(span.events),
+    startTime: formatDate(span.startedAt),
+    endTime: formatDate(span.endedAt),
+    durationMinutes: span.durationMinutes,
+    events: span.events.map(eventRowToPayload),
+    commits: storyCommitsOf(span.events, gitCommits),
   }
 }
 
@@ -163,29 +161,14 @@ export function sessionToPayload(
 export function threadToPayload(
   thread: DayThread,
   block: DayBlock,
-  { context = DEFAULT_LOCATION_CONTEXT, gitCommits = null }: SessionPayloadOptions = {}
+  options: SessionPayloadOptions = {}
 ): SessionPayload {
+  const durationMinutes = minutesBetween(thread.startedAt, thread.endedAt)
   return {
-    date: block.date,
-    project: sessionLocation(thread, context),
-    branch: sessionBranch(thread.events),
-    branches: branchesOf(thread.events),
-    startTime: formatDate(thread.startedAt),
-    endTime: formatDate(thread.endedAt),
-    durationMinutes: minutesBetween(thread.startedAt, thread.endedAt),
+    ...spanToPayload({ ...thread, durationMinutes }, block.date, options),
     activeMinutes: toActiveMinutes(thread.activeSlots),
     alongside: block.threads
       .filter((other) => other.id !== thread.id)
-      .map((other) => sessionLocation(other, context) ?? UNKNOWN_LOCATION),
-    events: thread.events.map(eventRowToPayload),
-    commits: storyCommitsOf(thread.events, gitCommits),
+      .map((other) => sessionLocation(other, options.context) ?? UNKNOWN_LOCATION),
   }
-}
-
-export function buildDayPayload(
-  date: string,
-  sessions: Session[],
-  context: LocationContext = DEFAULT_LOCATION_CONTEXT
-): DaySummaryPayload {
-  return { date, sessions: sessions.map((session) => sessionToPayload(session, date, { context })) }
 }

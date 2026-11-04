@@ -80,10 +80,12 @@ export function registerSummary(program: Command): void {
       printLegacyAiNotice(config)
       const provider = createSummaryWriter(config)
 
+      requireThreadData()
+
       // ── Weekly branch ────────────────────────────────────────────────────────
       if (options.week) {
         try {
-          await runWeeklySummary({ options, config, provider })
+          await runWeeklySummary({ options, config, provider, loadDay: loadDayThreads })
         } catch (error) {
           log.error((error as Error).message)
           process.exit(1)
@@ -102,7 +104,6 @@ export function registerSummary(program: Command): void {
         }
       }
 
-      requireThreadData()
       const blocks = loadDayThreads(date)
 
       if (blocks.length === 0) {

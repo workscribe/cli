@@ -2,10 +2,9 @@ import { DatabaseSync } from 'node:sqlite'
 import fs from 'fs'
 import { WORKSCRIBE_DIR, DB_PATH } from '../utils/paths'
 import { ensurePrivateDirectory } from '../utils/private-directory'
-import type { EventRow, SessionRow, SessionSummaryRow } from './types'
+import type { EventRow } from './types'
 import { MIGRATIONS } from './migrations'
 import { applyMigrations } from './migrate'
-import { findRecentSessionsForRepo, type RepoLookup } from './session-lookup'
 import { BUSY_TIMEOUT_MS, withImmediateTransaction, type TransactionOptions } from './transaction'
 import type { StoredEngine } from '../ai/engine'
 import { insertEventRecord, type NewEvent } from './event-writer'
@@ -13,7 +12,7 @@ import { saveAnchoredSummary } from './summary-store'
 import { countOtherEventsSince, countOtherEventTools, sinceIso } from './recent-events'
 import { agentSessionIdsOfDate, agentSessionIdsOfEvents, deleteEmptyAgentSessions } from './agent-sessions'
 import { THREAD_ANCHOR_SOURCE, type ThreadAnchor } from '../summary/anchors'
-export type { EventRow, SessionRow, SessionSummaryRow } from './types'
+export type { EventRow } from './types'
 
 let _db: DatabaseSync | null = null
 
@@ -54,38 +53,6 @@ export function insertEvent(event: NewEvent): void {
   insertEventRecord(getDb(), event)
 }
 
-export function getRecentSessionsForRepo(lookup: RepoLookup, limit: number): SessionRow[] {
-  return findRecentSessionsForRepo(getDb(), lookup, limit)
-}
-
-export function getLastSessionTouchingFile(filePath: string): SessionRow | undefined {
-  const db = getDb()
-  return db
-    .prepare(
-      `SELECT s.* FROM sessions s
-       INNER JOIN session_events se ON se.session_id = s.id
-       INNER JOIN events e ON e.id = se.event_id
-       WHERE e.file_path = $file_path
-       ORDER BY s.started_at DESC
-       LIMIT 1`
-    )
-    .get({ file_path: filePath }) as SessionRow | undefined
-}
-
-export function getSessionBranch(sessionId: number): string | null {
-  const db = getDb()
-  const row = db
-    .prepare(
-      `SELECT e.branch FROM events e
-       INNER JOIN session_events se ON se.event_id = e.id
-       WHERE se.session_id = $session_id AND e.branch IS NOT NULL
-       ORDER BY e.captured_at DESC
-       LIMIT 1`
-    )
-    .get({ session_id: sessionId }) as { branch: string } | undefined
-  return row?.branch ?? null
-}
-
 export function getLastEventForFile(filePath: string, cwd: string): EventRow | undefined {
   const db = getDb()
   return db
@@ -116,35 +83,6 @@ export function getEventsForDate(date: string): EventRow[] {
   return stmt.all({ date }) as unknown as EventRow[]
 }
 
-/** Events captured in [start, end) — ISO bounds, so the `captured_at` index is used (unlike a `localtime` match). */
-export function countEventsBetween(start: string, end: string): number {
-  const row = getDb()
-    .prepare('SELECT COUNT(*) AS count FROM events WHERE captured_at >= $start AND captured_at < $end')
-    .get({ start, end }) as { count: number }
-  return row.count
-}
-
-/** How many events the day's grouped sessions hold — equal to the day's event count when the day is up to date. */
-export function sumSessionEventCounts(date: string): number {
-  const row = getDb()
-    .prepare('SELECT COALESCE(SUM(event_count), 0) AS total FROM sessions WHERE date = $date')
-    .get({ date }) as { total: number }
-  return row.total
-}
-
-/** When this file was last saved in an editor (its newest `code_edit` event), or null if never. */
-export function getLatestFileSaveAt(filePath: string): string | null {
-  const row = getDb()
-    .prepare(
-      `SELECT captured_at FROM events
-       WHERE file_path = $file_path AND category = 'code_edit'
-       ORDER BY captured_at DESC
-       LIMIT 1`
-    )
-    .get({ file_path: filePath }) as { captured_at: string } | undefined
-  return row?.captured_at ?? null
-}
-
 /** Runs `work` holding the database's write lock — see `withImmediateTransaction`. */
 export function runInImmediateTransaction<T>(work: () => T, options?: TransactionOptions): T {
   return withImmediateTransaction(getDb(), work, options)
@@ -161,60 +99,6 @@ export function getEventCount(): number {
   const stmt = db.prepare('SELECT COUNT(*) as count FROM events')
   const row = stmt.get() as { count: number }
   return row.count
-}
-
-export function insertSession(params: {
-  date: string
-  started_at: string
-  ended_at: string
-  repo_name: string | null
-  event_count: number
-  summary: string | null
-}): number {
-  const db = getDb()
-  const stmt = db.prepare(`
-    INSERT INTO sessions (date, started_at, ended_at, repo_name, event_count, summary)
-    VALUES ($date, $started_at, $ended_at, $repo_name, $event_count, $summary)
-  `)
-  const result = stmt.run(params)
-  return Number(result.lastInsertRowid)
-}
-
-export function insertSessionEvent(sessionId: number, eventId: number): void {
-  const db = getDb()
-  const stmt = db.prepare(`
-    INSERT OR IGNORE INTO session_events (session_id, event_id) VALUES ($session_id, $event_id)
-  `)
-  stmt.run({ session_id: sessionId, event_id: eventId })
-}
-
-export function getEventsBySessionId(sessionId: number): EventRow[] {
-  const db = getDb()
-  const stmt = db.prepare(`
-    SELECT e.* FROM events e
-    INNER JOIN session_events se ON se.event_id = e.id
-    WHERE se.session_id = $session_id
-    ORDER BY e.captured_at ASC, e.id ASC
-  `)
-  return stmt.all({ session_id: sessionId }) as unknown as EventRow[]
-}
-
-export function getSessionsForDate(date: string): SessionRow[] {
-  const db = getDb()
-  const stmt = db.prepare('SELECT * FROM sessions WHERE date = $date ORDER BY started_at ASC')
-  return stmt.all({ date }) as unknown as SessionRow[]
-}
-
-export function updateSessionSummary(sessionId: number, summary: string): void {
-  const db = getDb()
-  const stmt = db.prepare('UPDATE sessions SET summary = $summary WHERE id = $id')
-  stmt.run({ summary, id: sessionId })
-}
-
-export function getSessionSummaries(sessionKey: string): SessionSummaryRow[] {
-  const db = getDb()
-  const stmt = db.prepare('SELECT * FROM session_summaries WHERE session_key = $session_key')
-  return stmt.all({ session_key: sessionKey }) as unknown as SessionSummaryRow[]
 }
 
 /** Saves a thread's summary to `summary`, anchored to the thread's events, under the thread's key. */
@@ -247,23 +131,25 @@ export function getEventsByIds(ids: number[]): EventRow[] {
     .all(...ids) as unknown as EventRow[]
 }
 
+// The old sessions' links to events (migration 001), until the drop-old-sessions data job removes them: their foreign
+// key would refuse to delete an event they point at, so undo and clear remove those links first
+const OLD_SESSION_LINKS = 'session_events'
+
+function hasOldSessionLinks(db: DatabaseSync): boolean {
+  return (
+    db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(OLD_SESSION_LINKS) !== undefined
+  )
+}
+
 export function deleteEventsByIds(ids: number[]): void {
   if (ids.length === 0) return
   const db = getDb()
   const placeholders = ids.map(() => '?').join(', ')
 
   runInImmediateTransaction(() => {
-    const affectedDates = db
-      .prepare(`SELECT DISTINCT date(captured_at, 'localtime') as date FROM events WHERE id IN (${placeholders})`)
-      .all(...ids) as { date: string }[]
     const agentSessionIds = agentSessionIdsOfEvents(db, ids)
-
-    // The events' session_events go first, by event id — FK constraint order. A session's day can differ from the
-    // event's local day now (grouped in another time zone), so clearing by date alone could miss them
-    db.prepare(`DELETE FROM session_events WHERE event_id IN (${placeholders})`).run(...ids)
-    // The days' sessions are regrouped the next time each day is read
-    for (const { date } of affectedDates) {
-      clearSessionsForDate(date)
+    if (hasOldSessionLinks(db)) {
+      db.prepare(`DELETE FROM ${OLD_SESSION_LINKS} WHERE event_id IN (${placeholders})`).run(...ids)
     }
     db.prepare(`DELETE FROM events WHERE id IN (${placeholders})`).run(...ids)
     deleteEmptyAgentSessions(db, agentSessionIds)
@@ -274,12 +160,12 @@ export function deleteEventsForDate(date: string): number {
   const db = getDb()
   return runInImmediateTransaction(() => {
     const agentSessionIds = agentSessionIdsOfDate(db, date)
-    // As in deleteEventsByIds: the events' session_events by event id first, then the day's sessions
-    db.prepare(
-      `DELETE FROM session_events
-       WHERE event_id IN (SELECT id FROM events WHERE date(captured_at, 'localtime') = $date)`
-    ).run({ date })
-    clearSessionsForDate(date)
+    if (hasOldSessionLinks(db)) {
+      db.prepare(
+        `DELETE FROM ${OLD_SESSION_LINKS}
+         WHERE event_id IN (SELECT id FROM events WHERE date(captured_at, 'localtime') = $date)`
+      ).run({ date })
+    }
     const result = db.prepare(`DELETE FROM events WHERE date(captured_at, 'localtime') = $date`).run({ date }) as {
       changes: number
     }
@@ -294,17 +180,4 @@ export function getOtherEventToolCounts(days: number): { tool: string; count: nu
 
 export function getRecentOtherRate(days: number): { total: number; otherCount: number } {
   return countOtherEventsSince(getDb(), sinceIso(days))
-}
-
-export function clearSessionsForDate(date: string): void {
-  const db = getDb()
-  // Remove session_events first due to FK constraint
-  db.prepare(
-    `
-    DELETE FROM session_events WHERE session_id IN (
-      SELECT id FROM sessions WHERE date = $date
-    )
-  `
-  ).run({ date })
-  db.prepare('DELETE FROM sessions WHERE date = $date').run({ date })
 }

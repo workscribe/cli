@@ -66,9 +66,7 @@ if (!fs.realpathSync(path.dirname(DB_PATH)).startsWith(fs.realpathSync(os.tmpdir
 
 beforeEach(() => {
   useIdleTimeout(30)
-  getDb().exec(
-    'DELETE FROM work_block; DELETE FROM activity_slot; DELETE FROM grouping_day; DELETE FROM session_events; DELETE FROM sessions; DELETE FROM events'
-  )
+  getDb().exec('DELETE FROM work_block; DELETE FROM activity_slot; DELETE FROM grouping_day; DELETE FROM events')
 })
 
 afterAll(async () => {
@@ -150,20 +148,6 @@ describe('getOrBuildBlocks on a real database', () => {
 
     expect(stamp).toHaveLength(1)
     expect(getDb().prepare('SELECT * FROM grouping_day').all()).toEqual(stamp)
-  })
-
-  it('never touches the old sessions', () => {
-    capture(0)
-    getDb()
-      .prepare(
-        "INSERT INTO sessions (date, started_at, ended_at, repo_name, event_count) VALUES (?, 'a', 'b', 'api', 1)"
-      )
-      .run(DATE)
-    const sessionsBefore = getDb().prepare('SELECT * FROM sessions').all()
-
-    getOrBuildBlocks(DATE)
-
-    expect(getDb().prepare('SELECT * FROM sessions').all()).toEqual(sessionsBefore)
   })
 })
 

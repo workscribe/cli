@@ -1,5 +1,4 @@
 import type { StoredEngine } from '../ai/engine'
-import type { SessionSummaryRow } from '../db/types'
 
 /** Engine name for summaries migrated from the 1.x `sessions.summary` column (written by a provider or Ollama). */
 export const LEGACY_ENGINE = 'legacy' satisfies StoredEngine
@@ -34,8 +33,12 @@ export function parseSessionKey(key: string): ParsedSessionKey | null {
   return { repoName: repoName === '' ? null : repoName, startedAt }
 }
 
-/** What picking a summary reads from a stored one — rows of `session_summaries` and of `summary` both fit. */
-export type RankableSummary = Pick<SessionSummaryRow, 'engine' | 'text' | 'created_at'>
+/** What picking a summary reads from a stored one — `summary` rows fit. */
+export interface RankableSummary {
+  engine: string
+  text: string
+  created_at: string
+}
 
 function newestFirst(first: RankableSummary, second: RankableSummary): number {
   return second.created_at.localeCompare(first.created_at)

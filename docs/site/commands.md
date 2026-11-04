@@ -301,7 +301,7 @@ workscribe undo -n 3 --dry-run
 
 **Notes:**
 - Removes events from the database only — does not modify any exported markdown files
-- Automatically invalidates sessions for affected dates so they rebuild on next access
+- The days it touches are regrouped the next time they're read
 - Running undo twice is safe — the second call removes the next N events
 
 ---
@@ -325,7 +325,7 @@ workscribe clear --yes
 
 **Notes:**
 - Shows a category summary before asking for confirmation
-- Automatically invalidates cached sessions for the date
+- The day is regrouped the next time it's read
 - Use `--dry-run` to see what would be removed before committing
 
 ---
@@ -438,7 +438,7 @@ If git isn't installed, the session isn't in a repo, or git times out, `commits`
 
 ## workscribe context
 
-Surface the last session for the current repo — at the moment you need it, not at end of day.
+Surface the last work on the current repo — at the moment you need it, not at end of day.
 
 ```bash
 workscribe context
@@ -448,22 +448,18 @@ workscribe context --file src/auth.ts --json
 
 | Option | Description |
 |---|---|
-| `--file <path>` | Show the last session that touched this file (requires IDE integration) |
-| `--json` | Output structured JSON instead of formatted text — `null` when no session is found |
+| `--file <path>` | Show the last work that touched this file (requires IDE integration) |
+| `--json` | Output structured JSON instead of formatted text — `null` when nothing is found |
 
-**Without `--file`:** shows the most recent session for the current git repo — date, duration, branch, event count, and the session's summary — one the agent skill saved, one an AI provider wrote in 1.x, or else the template. The repo is named exactly as capture names it: a `projects.<path>` override for the current folder wins, and otherwise `git.qualifyRepoName` decides between `owner/repo` and bare `repo`. Sessions stored under the other form, from before you changed that setting, are found too when they ran inside this repo's folder.
+`context` answers with a *thread*: one project's work inside a stretch of work, whatever else you did in between. A save of `README.md` in your site repo gets the site's own thread, not whatever you happened to be doing in another repo at the same time, and the projects worked alongside it are named.
 
-**With `--file`:** narrows to the most recent session that included a `code_edit` event (a save in your editor) for that path. This is what powers the [VS Code extension](https://marketplace.visualstudio.com/items?itemName=workscribe.workscribe)'s status bar "last worked on" indicator — surfacing "3 days ago" when you switch to a file you haven't touched recently. Neovim and other editor integrations aren't built yet.
+**Without `--file`:** shows the current git repo's latest thread — date, duration, branch, event count, and its summary: one the agent skill saved for it, one an AI provider wrote in 1.x, or else the template. The repo is the project capture links its events to, so changing `projects` or `git.qualifyRepoName` doesn't lose its history.
 
-**Once your data is upgraded** (`workscribe upgrade`, or a few runs of `status`, `summary` and the like), `context` answers with a *thread*: one project's work inside a stretch of work, whatever else you did in between. A save of `README.md` in your site repo gets the site's own thread, not whatever you happened to be doing in another repo at the same time, and the projects worked alongside it are named. Before the upgrade, `context` answers from sessions as it always has.
+**With `--file`:** narrows to the thread holding the latest save of that path in your editor. This is what powers the [VS Code extension](https://marketplace.visualstudio.com/items?itemName=workscribe.workscribe)'s status bar "last worked on" indicator — surfacing "3 days ago" when you switch to a file you haven't touched recently. Neovim and other editor integrations aren't built yet.
 
-It finds today's work too, without running `workscribe summary` first: if the day the file was last saved hasn't been grouped into sessions yet, `context --file` groups it. It answers within a couple of seconds even when another Workscribe command is busy with the database, or git is slow — at worst with slightly older sessions, or without the file's commits.
+It finds today's work too, without running `workscribe summary` first: if the day hasn't been grouped since its latest activity, `context` groups it. It answers within a couple of seconds even when another Workscribe command is busy with the database, or git is slow — at worst from the day as it was last grouped, or without the file's commits.
 
-**If no summary exists** for the session, the default text output includes the command to generate one:
-
-```
-  No summary — run: workscribe summary 2026-08-25
-```
+**Right after an update**, `context` finds nothing until Workscribe has linked your earlier activity to its projects. That happens on its own the next time you run `status`, `summary` or another command that reads your data, or all at once with `workscribe upgrade`.
 
 **`--json` output shape**, intended for IDE integrations that need to render this themselves rather than parse formatted text:
 
@@ -477,29 +473,29 @@ It finds today's work too, without running `workscribe summary` first: if the da
   "durationMinutes": 134,
   "branch": "feature/auth",
   "eventCount": 42,
-  "summary": "Implemented authentication middleware.", // or null if no summary has been generated yet
+  "summary": "Implemented authentication middleware.", // the saved summary, else the template's
   "schemaVersion": 1,
-  "thread": { "key": "acme/api|2026-08-20T10:00:00.000Z", "projectId": 4, "activeMinutes": 95 }, // null from sessions
+  "thread": { "key": "acme/api|2026-08-20T10:00:00.000Z", "projectId": 4, "activeMinutes": 95 },
   "block": { "startedAt": "2026-08-20T09:40:00.000Z", "endedAt": "2026-08-20T12:30:00.000Z", "activeMinutes": 130 },
-  "alongside": [                             // the other projects in the same stretch of work; null from sessions
+  "alongside": [                             // the other projects in the same stretch of work
     { "repoName": "acme/web", "startedAt": "2026-08-20T11:00:00.000Z", "endedAt": "2026-08-20T11:45:00.000Z", "eventCount": 12, "activeMinutes": 25 }
   ],
-  "file": {                                  // with --file only; null if the session has no saves of the file
+  "file": {                                  // with --file only; null if the thread has no saves of the file
     "path": "/Users/me/api/src/auth.ts",
     "relativePath": "src/auth.ts",           // relative to the repo root, or just the file name
     "firstSavedAt": "2026-08-20T10:05:00.000Z",
     "lastSavedAt": "2026-08-20T11:40:00.000Z",
     "saveCount": 6,                          // saves recorded: one per file per 30 seconds at most
     "branch": "feature/auth",
-    "commits": [{ "hash": "a1b2c3d", "subject": "add auth middleware", "committedAt": "2026-10-25T09:20:00+01:00" }], // your commits in the session that changed it
-    "editedAlongside": { "files": ["src/routes.ts"], "total": 1 }         // up to 5 other files saved in the session
+    "commits": [{ "hash": "a1b2c3d", "subject": "add auth middleware", "committedAt": "2026-10-25T09:20:00+01:00" }], // your commits in the thread that changed it
+    "editedAlongside": { "files": ["src/routes.ts"], "total": 1 }         // up to 5 other files saved in the thread
   }
 }
 ```
 
-Prints the bare JSON value `null` (not an object) when no matching session exists.
+Prints the bare JSON value `null` (not an object) when nothing is found.
 
-On a thread, `startedAt`, `endedAt`, `durationMinutes` and `eventCount` describe that project's own work in the stretch, and `block` the whole stretch. `activeMinutes` counts 5-minute slots with activity, so a block's is never the sum of its threads'. `thread`, `block` and `alongside` are `null` when the answer came from sessions. Every field before `schemaVersion` keeps the meaning and type it always had, so existing integrations keep working.
+On a thread, `startedAt`, `endedAt`, `durationMinutes` and `eventCount` describe that project's own work in the stretch, and `block` the whole stretch. `activeMinutes` counts 5-minute slots with activity, so a block's is never the sum of its threads'. `thread`, `block` and `alongside` were `null` in answers from the old sessions, which Workscribe no longer keeps; an answer now always has them. Every field before `schemaVersion` keeps the meaning and type it always had, so existing integrations keep working.
 
 ---
 

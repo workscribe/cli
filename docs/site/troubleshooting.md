@@ -137,9 +137,9 @@ and answer **yes** when asked to remove the old AI settings. `workscribe config 
 
 ---
 
-## `sessions`: "Workscribe hasn't finished upgrading your data"
+## "Workscribe hasn't finished upgrading your data", or `context` finds nothing
 
-After an update, Workscribe links your earlier activity to its projects once, a couple of seconds at a time whenever you run commands like `status` or `summary`. `workscribe sessions` and `workscribe sessions summary set` read your work by project, so they wait for that instead of showing earlier days wrongly. Run it to the end once:
+After an update, Workscribe links your earlier activity to its projects once, a couple of seconds at a time whenever you run commands like `status` or `summary`. Everything that reads your work by project waits for that instead of showing earlier days wrongly: `sessions`, `summary`, `export` and the week say so, and `workscribe context` (and so the VS Code status bar) finds nothing until it's done. Run it to the end once:
 
 ```bash
 workscribe upgrade
@@ -255,6 +255,8 @@ workscribe resume
 ```
 
 Activity captured after the backup was taken isn't in it. If you're still on the same Workscribe version, the next data command runs the upgrade again on the restored copy.
+
+**Going back to an older version** needs that backup too: once the upgrade has removed the old session tables, Workscribe 2.1 and earlier can't use the database (`undo`, `clear`, the week and `context` stop working). Restore the backup taken before the upgrade, then install the older version.
 
 ---
 

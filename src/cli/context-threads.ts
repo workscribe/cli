@@ -1,6 +1,6 @@
-// The I/O behind `context` on threads: finds the event to answer from, builds its day's threads (waiting ~1 s at
-// most for the lock) and reads its block. Anything it can't answer — data not upgraded yet, the lock held, no
-// thread — falls back to the old sessions, saying whether the lock was why, so the caller never waits twice.
+// The I/O behind `context`: finds the event to answer from, builds its day's threads (waiting ~1 s at most for the
+// lock) and reads the thread holding it, with its block. When another process holds the lock, it answers from the day
+// as last built — it never waits twice; a day never built, or data not upgraded yet, finds nothing.
 import { getDb } from '../db'
 import type { EventRow } from '../db/types'
 import { isDatabaseLocked, withReadTransaction } from '../db/transaction'
@@ -26,10 +26,6 @@ export interface ThreadAnswer {
   /** The thread's events, for the template summary and the file details */
   events: EventRow[]
 }
-
-export type ThreadLookup = { kind: 'found'; answer: ThreadAnswer } | { kind: 'fallback'; isLocked: boolean }
-
-const FALLBACK: ThreadLookup = { kind: 'fallback', isLocked: false }
 
 /** The thread holding the event, from one snapshot — so another process rebuilding the day can't split the read. */
 function readBuiltThread(eventId: number): ThreadAnswer | null {
@@ -58,26 +54,25 @@ function readBuiltThread(eventId: number): ThreadAnswer | null {
   })
 }
 
-function lookUpThreadOf(findEvent: () => EventPoint | null): ThreadLookup {
+function lookUpThreadOf(findEvent: () => EventPoint | null): ThreadAnswer | null {
+  if (!isReadyForThreads(getDb(), JOBS)) return null
+  const event = findEvent()
+  if (event === null) return null
   try {
-    if (!isReadyForThreads(getDb(), JOBS)) return FALLBACK
-    const event = findEvent()
-    if (event === null) return FALLBACK
     ensureDayThreads(localDateOf(event.capturedAt), { lockWaitMs: LOCK_WAIT_MS })
-    const answer = readBuiltThread(event.id)
-    return answer === null ? FALLBACK : { kind: 'found', answer }
   } catch (error) {
-    if (isDatabaseLocked(error)) return { kind: 'fallback', isLocked: true }
-    throw error
+    // Another process is writing: the day as last built answers, and the next call catches up
+    if (!isDatabaseLocked(error)) throw error
   }
+  return readBuiltThread(event.id)
 }
 
 /** `context --file`: the thread holding the file's latest save. */
-export function lookUpFileThread(filePath: string): ThreadLookup {
+export function lookUpFileThread(filePath: string): ThreadAnswer | null {
   return lookUpThreadOf(() => findLatestFileSave(getDb(), filePath))
 }
 
 /** `context`: the thread holding the latest event of the project with this identity. */
-export function lookUpProjectThread(identity: string): ThreadLookup {
+export function lookUpProjectThread(identity: string): ThreadAnswer | null {
   return lookUpThreadOf(() => findLatestProjectEvent(getDb(), identity))
 }

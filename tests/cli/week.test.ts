@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, onTestFinished } from 'vitest'
 
 vi.mock('../../src/db', () => ({}))
-vi.mock('../../src/sessions/detector', () => ({ getOrBuildSessions: vi.fn() }))
+vi.mock('../../src/cli/thread-day', () => ({ requireThreadData: vi.fn(), loadDayThreads: vi.fn() }))
 vi.mock('../../src/summary/writer', () => ({ createSummaryWriter: vi.fn() }))
 vi.mock('../../src/config', () => ({ readConfig: vi.fn() }))
 vi.mock('../../src/integrations/webhook', () => ({ postToWebhook: vi.fn() }))
@@ -27,7 +27,8 @@ vi.mock('../../src/utils/format', () => ({
 
 import { Command } from 'commander'
 import fs from 'fs'
-import { getOrBuildSessions } from '../../src/sessions/detector'
+import { loadDayThreads, requireThreadData } from '../../src/cli/thread-day'
+import { block, row, thread } from '../summary/contract/fixtures'
 import { createSummaryWriter } from '../../src/summary/writer'
 import { readConfig } from '../../src/config'
 import { postToWebhook } from '../../src/integrations/webhook'
@@ -36,7 +37,6 @@ import { log } from '../../src/utils/logger'
 import { registerWeek } from '../../src/cli/week'
 
 const mockFs = fs as unknown as Record<string, ReturnType<typeof vi.fn>>
-const mockGetOrBuildSessions = getOrBuildSessions as ReturnType<typeof vi.fn>
 const mockCreateSummaryWriter = createSummaryWriter as ReturnType<typeof vi.fn>
 const mockReadConfig = readConfig as ReturnType<typeof vi.fn>
 const mockPostToWebhook = postToWebhook as ReturnType<typeof vi.fn>
@@ -44,15 +44,11 @@ const mockIsSlackWebhookUrl = isSlackWebhookUrl as ReturnType<typeof vi.fn>
 const mockFormatForSlack = formatForSlack as ReturnType<typeof vi.fn>
 const mockLog = log as Record<string, ReturnType<typeof vi.fn>>
 
-const FAKE_SESSION = {
-  repoName: 'my-app',
-  durationMinutes: 60,
-  startedAt: '2026-08-17T09:00:00.000Z',
-  endedAt: '2026-08-17T10:00:00.000Z',
-  events: [
-    { category: 'shipping', metadata: '{"message":"fix: bug"}', exit_code: 0, duration_ms: null, branch: 'main' },
-  ],
-}
+const MY_APP = thread(
+  [row({ category: 'shipping', metadata: '{"message":"fix: bug"}', repo_name: 'my-app', branch: 'main' })],
+  { repoName: 'my-app', startedAt: '2026-08-17T09:00:00.000Z', endedAt: '2026-08-17T10:00:00.000Z' }
+)
+const DAY = [block([MY_APP], { date: '2026-08-17' })]
 
 const BASE_CONFIG = {
   integrations: {},
@@ -67,7 +63,7 @@ function makeProgram() {
 
 beforeEach(() => {
   mockReadConfig.mockReturnValue(BASE_CONFIG)
-  mockGetOrBuildSessions.mockReturnValue([FAKE_SESSION])
+  vi.mocked(loadDayThreads).mockReturnValue(DAY)
   mockCreateSummaryWriter.mockReturnValue({
     summarizeWeek: vi.fn().mockResolvedValue('# Week summary\n- Shipped a fix'),
   })
@@ -118,8 +114,30 @@ describe('workscribe week', () => {
     expect(mockLog.plain).toHaveBeenCalledWith(expect.stringContaining('Fallback summary'))
   })
 
-  it('shows "No activity" message when there are no sessions this week', async () => {
-    mockGetOrBuildSessions.mockReturnValue([])
+  it('reads each day of the week from its threads and hands the digest a payload per thread', async () => {
+    const summarizeWeek = vi.fn().mockResolvedValue('# Week summary')
+    mockCreateSummaryWriter.mockReturnValue({ summarizeWeek })
+
+    await makeProgram().parseAsync(['week'], { from: 'user' })
+
+    expect(loadDayThreads).toHaveBeenCalledWith('2026-08-17')
+    const [[payload]] = summarizeWeek.mock.calls
+    expect(payload.days).toHaveLength(1)
+    expect(payload.days[0]).toMatchObject({ date: '2026-08-17', sessions: [{ project: 'my-app', branch: 'main' }] })
+  })
+
+  it("stops before reading the week while the data upgrade isn't finished", async () => {
+    vi.mocked(requireThreadData).mockImplementationOnce(() => {
+      throw new Error('exit')
+    })
+
+    await expect(makeProgram().parseAsync(['week'], { from: 'user' })).rejects.toThrow('exit')
+
+    expect(loadDayThreads).not.toHaveBeenCalled()
+  })
+
+  it('shows "No activity" message when there are no threads this week', async () => {
+    vi.mocked(loadDayThreads).mockReturnValue([])
     await makeProgram().parseAsync(['week'], { from: 'user' })
     expect(mockLog.plain).toHaveBeenCalledWith('No activity captured this week.')
   })

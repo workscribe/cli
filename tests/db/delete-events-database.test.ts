@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest'
 
-// Real SQLite, like detector-database.test.ts: `undo` and `clear` delete events under foreign keys, with old
-// sessions grouped over them. The database path points at a temp folder before the module loads.
+// Real SQLite: `undo` and `clear` delete events under foreign keys — with old sessions still linked to them, as
+// before the drop-old-sessions job runs, and after it. The database path points at a temp folder before the module
+// loads.
 const temp = vi.hoisted(async () => {
   const fs = await import('fs')
   const os = await import('os')
@@ -23,7 +24,7 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import { deleteEventsByIds, deleteEventsForDate, getDb, insertEvent } from '../../src/db'
-import { getOrBuildSessions } from '../../src/sessions/detector'
+import initialSchema from '../../src/db/migrations/001_initial_schema'
 import { localDateOf } from '../../src/utils/format'
 import { DB_PATH } from '../../src/utils/paths'
 
@@ -48,6 +49,20 @@ function captureAgentCommand(minutes: number, sessionId: string): void {
   })
 }
 
+/** An old session over these events, as databases grouped before WOR-151 have — its links point at the events. */
+function groupIntoOldSession(eventIds: number[]): void {
+  const { id } = getDb()
+    .prepare(
+      `INSERT INTO sessions (date, started_at, ended_at, repo_name, event_count) VALUES (?, ?, ?, 'api', ?) RETURNING id`
+    )
+    .get(DATE, at(0), at(10), eventIds.length) as { id: number }
+  const link = getDb().prepare('INSERT INTO session_events (session_id, event_id) VALUES (?, ?)')
+  for (const eventId of eventIds) link.run(id, eventId)
+}
+
+const eventIds = () =>
+  (getDb().prepare('SELECT id FROM events ORDER BY id').all() as { id: number }[]).map((row) => row.id)
+
 const sessionIds = () =>
   (getDb().prepare('SELECT session_id FROM agent_sessions ORDER BY id').all() as { session_id: string }[]).map(
     (row) => row.session_id
@@ -58,6 +73,8 @@ if (!fs.realpathSync(path.dirname(DB_PATH)).startsWith(fs.realpathSync(os.tmpdir
 }
 
 beforeEach(() => {
+  // A test may have dropped the old tables, as the data job does: bring them back as migration 001 made them
+  getDb().exec(initialSchema.sql)
   getDb().exec('DELETE FROM session_events; DELETE FROM sessions; DELETE FROM events; DELETE FROM agent_sessions')
 })
 
@@ -71,23 +88,19 @@ describe('deleting events on a real database', () => {
     captureAgentCommand(0, 'conversation-1')
     captureAgentCommand(5, 'conversation-2')
     captureAgentCommand(10, 'conversation-2')
-    getOrBuildSessions(DATE)
-    const ids = (getDb().prepare('SELECT id FROM events ORDER BY id').all() as { id: number }[]).map((row) => row.id)
+    groupIntoOldSession(eventIds())
+    const ids = eventIds()
 
     deleteEventsByIds([ids[0], ids[1]])
 
     expect(sessionIds()).toEqual(['conversation-2'])
   })
 
-  it('undo still deletes an event whose session was grouped under another day, as after a time zone change', () => {
+  it('undo deletes an event an old session still links to, and the link with it', () => {
     captureAgentCommand(0, 'conversation-1')
     captureAgentCommand(5, 'conversation-1')
-    getOrBuildSessions(DATE)
-    // Grouped somewhere the event fell on the day before: its session is stored under that date
-    getDb().prepare("UPDATE sessions SET date = date($date, '-1 day')").run({ date: DATE })
-    const [first] = (getDb().prepare('SELECT id FROM events ORDER BY id').all() as { id: number }[]).map(
-      (row) => row.id
-    )
+    groupIntoOldSession(eventIds())
+    const [first] = eventIds()
 
     deleteEventsByIds([first])
 
@@ -95,28 +108,42 @@ describe('deleting events on a real database', () => {
     expect(getDb().prepare('SELECT event_id FROM session_events WHERE event_id = ?').all(first)).toEqual([])
   })
 
-  it('undo deletes events from a day that was never grouped', () => {
+  it('undo deletes events no old session links to', () => {
     captureAgentCommand(0, 'conversation-1')
-    const [first] = (getDb().prepare('SELECT id FROM events').all() as { id: number }[]).map((row) => row.id)
+    const [first] = eventIds()
 
     deleteEventsByIds([first])
 
     expect(sessionIds()).toEqual([])
   })
 
-  it('clear deletes a day whose session was grouped under another day', () => {
+  it('clear deletes a day an old session still links to', () => {
     captureAgentCommand(0, 'conversation-1')
-    getOrBuildSessions(DATE)
-    getDb().prepare("UPDATE sessions SET date = date($date, '-1 day')").run({ date: DATE })
-
-    expect(deleteEventsForDate(DATE)).toBe(1)
-  })
-
-  it("clear removes the day's agent sessions with its events", () => {
-    captureAgentCommand(0, 'conversation-1')
-    getOrBuildSessions(DATE)
+    groupIntoOldSession(eventIds())
 
     expect(deleteEventsForDate(DATE)).toBe(1)
     expect(sessionIds()).toEqual([])
+  })
+})
+
+describe('deleting events once the old session tables are dropped', () => {
+  beforeEach(() => {
+    getDb().exec('DROP TABLE session_events; DROP TABLE sessions; DROP TABLE IF EXISTS session_summaries')
+  })
+
+  it('undo still deletes events and their emptied agent sessions', () => {
+    captureAgentCommand(0, 'conversation-1')
+    captureAgentCommand(5, 'conversation-2')
+
+    deleteEventsByIds([eventIds()[0]])
+
+    expect(eventIds()).toHaveLength(1)
+    expect(sessionIds()).toEqual(['conversation-2'])
+  })
+
+  it("clear still deletes a day's events", () => {
+    captureAgentCommand(0, 'conversation-1')
+
+    expect(deleteEventsForDate(DATE)).toBe(1)
   })
 })

@@ -3,7 +3,7 @@ import { LONG_RUNNING_THRESHOLD_MS, splitByIdleGap } from './grouper'
 
 // A day's work as work blocks, project threads and activity slots (pure). A block is an idle-gap stretch of every
 // event; a thread is one project's events inside it, whatever their order. Switching repos never starts, splits or
-// names anything — unlike `splitByRepo`, which the old sessions still use.
+// names anything.
 
 /** Bump when the rules below change: every day is then rebuilt the next time it's read. */
 export const GROUPING_VERSION = 1

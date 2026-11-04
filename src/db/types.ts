@@ -19,20 +19,3 @@ export interface EventRow {
   /** The agent conversation a hook event came from (migration 012) */
   agent_session_id?: number | null
 }
-
-export interface SessionRow {
-  id: number
-  date: string
-  started_at: string
-  ended_at: string
-  repo_name: string | null
-  event_count: number
-  summary: string | null
-}
-
-export interface SessionSummaryRow {
-  session_key: string
-  engine: string
-  text: string
-  created_at: string
-}
