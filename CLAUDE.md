@@ -98,7 +98,7 @@ Rules match one simple command. `normalizeCommand` splits compound commands with
 
 ### Data location
 
-All runtime data lives in `~/.workscribe/`:
+Fresh installs use the XDG folders (data `~/.local/share/workscribe/`, config `~/.config/workscribe/`, state `~/.local/state/workscribe/`); installs whose `~/.workscribe/` has a `workscribe.db` or `config.json` keep everything there. `src/utils/data-dirs.ts` (`resolveDataDirs`, pure) decides once per process and `src/utils/paths.ts` exports the paths — never decide by whether `~/.workscribe/` exists, since `init` and the alerts file (`~/.workscribe/alerts.pending`, always there for the shell hooks) create it on every install. The data folder (`getDb`), `~/.workscribe` for the alerts file and the folder the shell hook writes completions to go through `ensurePrivateDirectory` (`src/utils/private-directory.ts`: `0700`, tightening a looser existing one); `init`, `export`, `bug-report`, the backup and the config writer still create theirs with `mode: 0o700` themselves. The data folder holds (shown at its legacy `~/.workscribe/` path):
 - `workscribe.db` — SQLite database (WAL mode, foreign keys on)
 - `config.json` — user config
 - `exports/` — markdown files from `workscribe export`

@@ -2,6 +2,8 @@ import { Command } from 'commander'
 import { captureCommand } from '../capture'
 import { debugLog } from '../utils/logger'
 
+// Ends a capture that is still alive this long after starting. The capture itself is synchronous, so the timer can
+// only fire once it has finished: it never cuts short a wait for the database lock (busy_timeout, also 5 s).
 const CAPTURE_HANG_TIMEOUT_MS = 5_000
 
 export function registerCapture(program: Command): void {
