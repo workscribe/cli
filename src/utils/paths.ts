@@ -1,23 +1,15 @@
 import path from 'path'
 import os from 'os'
 import fs from 'fs'
+import { resolveDataDirs } from './data-dirs'
 
-const LEGACY_DIR = path.join(os.homedir(), '.workscribe')
-
-// Existing installs keep ~/.workscribe/ — fresh installs use XDG Base Directory spec
-const USE_XDG = !fs.existsSync(LEGACY_DIR)
-
-const xdgDataDir = USE_XDG
-  ? path.join(process.env.XDG_DATA_HOME ?? path.join(os.homedir(), '.local', 'share'), 'workscribe')
-  : LEGACY_DIR
-
-const xdgConfigDir = USE_XDG
-  ? path.join(process.env.XDG_CONFIG_HOME ?? path.join(os.homedir(), '.config'), 'workscribe')
-  : LEGACY_DIR
-
-const xdgStateDir = USE_XDG
-  ? path.join(process.env.XDG_STATE_HOME ?? path.join(os.homedir(), '.local', 'state'), 'workscribe')
-  : LEGACY_DIR
+// Decided once per process: legacy installs keep ~/.workscribe, fresh ones use XDG (see data-dirs.ts)
+const {
+  legacyDir: LEGACY_DIR,
+  dataDir: xdgDataDir,
+  configDir: xdgConfigDir,
+  stateDir: xdgStateDir,
+} = resolveDataDirs({ homeDir: os.homedir(), env: process.env, exists: fs.existsSync })
 
 // All directories that must exist for Workscribe to function (deduplicated for legacy installs).
 // LEGACY_DIR (~/.workscribe) is always included so the alerts signal file has a predictable

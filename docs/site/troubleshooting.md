@@ -193,9 +193,25 @@ workscribe config get integrations.slackWebhook
 
 ---
 
+## Where your data lives
+
+Installs from before Workscribe used the XDG folders keep everything in `~/.workscribe/`. Fresh installs use:
+
+| What | Where |
+|---|---|
+| Database, exports, backups | `~/.local/share/workscribe/` (or `$XDG_DATA_HOME/workscribe/`) |
+| `config.json` | `~/.config/workscribe/` (or `$XDG_CONFIG_HOME/workscribe/`) |
+| Debug log, pause flag | `~/.local/state/workscribe/` (or `$XDG_STATE_HOME/workscribe/`) |
+
+`~/.workscribe/` exists on fresh installs too, holding only `alerts.pending`, which the shell hook checks. Workscribe treats an install as the older kind only when `~/.workscribe/` has a `workscribe.db` or `config.json`.
+
+**Settings from `init` gone after installing?** Workscribe 2.1 and earlier moved a fresh install to a new, empty database and config in `~/.workscribe/` right after `workscribe init`. If that happened to you, your new activity is in `~/.workscribe/` and Workscribe keeps using it, but the choices you made in `init` are in `~/.config/workscribe/config.json`. Copy that file over `~/.workscribe/config.json`, or run `workscribe init` again. The activity captured before the move is in `~/.local/share/workscribe/workscribe.db`.
+
+---
+
 ## Database errors
 
-If you see SQLite errors, the database may be corrupted. The safest fix:
+If you see SQLite errors, the database may be corrupted. The safest fix (the paths are for an older install; see [Where your data lives](#where-your-data-lives) for a fresh one):
 
 ```bash
 # Back up first

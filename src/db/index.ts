@@ -1,6 +1,7 @@
 import { DatabaseSync } from 'node:sqlite'
 import fs from 'fs'
 import { WORKSCRIBE_DIR, DB_PATH } from '../utils/paths'
+import { ensurePrivateDirectory } from '../utils/private-directory'
 import type { EventRow, SessionRow, SessionSummaryRow } from './types'
 import { MIGRATIONS } from './migrations'
 import { applyMigrations } from './migrate'
@@ -9,6 +10,7 @@ import { BUSY_TIMEOUT_MS, withImmediateTransaction, type TransactionOptions } fr
 import type { StoredEngine } from '../ai/engine'
 import { insertEventRecord, type NewEvent } from './event-writer'
 import { saveAnchoredSummary } from './summary-store'
+import { countOtherEventsSince, countOtherEventTools, sinceIso } from './recent-events'
 import { agentSessionIdsOfDate, agentSessionIdsOfEvents, deleteEmptyAgentSessions } from './agent-sessions'
 import { THREAD_ANCHOR_SOURCE, type ThreadAnchor } from '../summary/anchors'
 export type { EventRow, SessionRow, SessionSummaryRow } from './types'
@@ -18,16 +20,14 @@ let _db: DatabaseSync | null = null
 export function getDb(): DatabaseSync {
   if (_db) return _db
 
-  // Ensure ~/.workscribe/ exists
-  if (!fs.existsSync(WORKSCRIBE_DIR)) {
-    try {
-      fs.mkdirSync(WORKSCRIBE_DIR, { recursive: true })
-    } catch (error) {
-      // Rethrown as a clean, actionable message — callers reaching this
-      // (explicit commands, or _capture/_hook's own try/catch) otherwise
-      // only see a raw native stack trace with the real cause buried in it.
-      throw new Error(`Could not create data directory ${WORKSCRIBE_DIR}: ${(error as Error).message}`)
-    }
+  // The data folder exists and is private before SQLite creates anything in it
+  try {
+    ensurePrivateDirectory(WORKSCRIBE_DIR)
+  } catch (error) {
+    // Rethrown as a clean, actionable message — callers reaching this
+    // (explicit commands, or _capture/_hook's own try/catch) otherwise
+    // only see a raw native stack trace with the real cause buried in it.
+    throw new Error(`Could not create data directory ${WORKSCRIBE_DIR}: ${(error as Error).message}`)
   }
 
   // Don't assign to _db until after migrations succeed — if applyMigrations
@@ -289,31 +289,11 @@ export function deleteEventsForDate(date: string): number {
 }
 
 export function getOtherEventToolCounts(days: number): { tool: string; count: number }[] {
-  const db = getDb()
-  return db
-    .prepare(
-      `SELECT json_extract(metadata, '$.tool') as tool, COUNT(*) as count
-       FROM events
-       WHERE category = 'other'
-         AND captured_at >= datetime('now', $offset)
-         AND json_extract(metadata, '$.tool') IS NOT NULL
-       GROUP BY tool
-       ORDER BY count DESC`
-    )
-    .all({ offset: `-${days} days` }) as { tool: string; count: number }[]
+  return countOtherEventTools(getDb(), sinceIso(days))
 }
 
 export function getRecentOtherRate(days: number): { total: number; otherCount: number } {
-  const db = getDb()
-  const row = db
-    .prepare(
-      `SELECT COUNT(*) as total,
-              SUM(CASE WHEN category = 'other' THEN 1 ELSE 0 END) as otherCount
-       FROM events
-       WHERE captured_at >= datetime('now', $offset)`
-    )
-    .get({ offset: `-${days} days` }) as { total: number; otherCount: number }
-  return row
+  return countOtherEventsSince(getDb(), sinceIso(days))
 }
 
 export function clearSessionsForDate(date: string): void {

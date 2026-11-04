@@ -2,6 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import { getDb } from './index'
 import { ALERTS_PENDING_PATH } from '../utils/paths'
+import { ensurePrivateDirectory } from '../utils/private-directory'
 
 export interface AlertRow {
   id: number
@@ -20,7 +21,7 @@ export function insertAlert(tool: string, sessionId: string | null, context: str
     )
     .run({ created_at: Date.now(), tool, session_id: sessionId ?? null, context })
 
-  fs.mkdirSync(path.dirname(ALERTS_PENDING_PATH), { recursive: true })
+  ensurePrivateDirectory(path.dirname(ALERTS_PENDING_PATH))
   fs.writeFileSync(ALERTS_PENDING_PATH, '', { flag: 'w' })
 }
 
