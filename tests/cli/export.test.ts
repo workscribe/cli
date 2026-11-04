@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach, onTestFinished } from 'vitest'
 
-vi.mock('../../src/sessions/detector', () => ({
-  getOrBuildSessions: vi.fn(),
+vi.mock('../../src/cli/thread-day', () => ({
+  requireThreadData: vi.fn(),
+  loadDayThreads: vi.fn(),
 }))
 
 vi.mock('../../src/summary/writer', () => ({
@@ -12,10 +13,8 @@ vi.mock('../../src/config', () => ({
   readConfig: vi.fn(),
 }))
 
-// export reads saved summaries like summary does; the db module would load node:sqlite
-vi.mock('../../src/db', () => ({
-  getSessionSummaries: vi.fn(() => []),
-}))
+// The db module would load node:sqlite
+vi.mock('../../src/db', () => ({}))
 
 vi.mock('../../src/summary/exclusions', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../src/summary/exclusions')>()),
@@ -24,7 +23,7 @@ vi.mock('../../src/summary/exclusions', async (importOriginal) => ({
 
 vi.mock('../../src/summary/day-commits', () => ({
   DAY_GIT_BUDGET_MS: 3000,
-  lookupDayCommits: vi.fn((sessions: unknown[]) => sessions.map(() => null)),
+  lookupDayCommits: vi.fn((windows: unknown[]) => windows.map(() => null)),
 }))
 
 vi.mock('fs', () => ({
@@ -39,49 +38,49 @@ vi.mock('../../src/utils/paths')
 
 import fs from 'fs'
 import { Command } from 'commander'
-import { getOrBuildSessions } from '../../src/sessions/detector'
+import { loadDayThreads, requireThreadData } from '../../src/cli/thread-day'
+import { block, row, thread } from '../summary/contract/fixtures'
 import { createSummaryWriter } from '../../src/summary/writer'
 import { readConfig } from '../../src/config'
-import { getSessionSummaries } from '../../src/db'
 import { countExcludedEvents } from '../../src/summary/exclusions'
 import { log } from '../../src/utils/logger'
 import { registerExport } from '../../src/cli/export'
 import { TemplateProvider } from '../../src/ai/engines/template/provider'
 
 const mockFs = fs as unknown as Record<string, ReturnType<typeof vi.fn>>
-const mockGetOrBuildSessions = getOrBuildSessions as ReturnType<typeof vi.fn>
+const mockLoadDayThreads = vi.mocked(loadDayThreads)
 const mockCreateSummaryWriter = createSummaryWriter as ReturnType<typeof vi.fn>
 const mockReadConfig = readConfig as ReturnType<typeof vi.fn>
 const mockLog = log as Record<string, ReturnType<typeof vi.fn>>
 
 const BASE_CONFIG = { session: { idleTimeout: 30 } }
 
-const SAMPLE_SESSIONS = [
-  {
-    id: 1,
-    date: '2026-05-28',
+const COMMIT_EVENT = row({
+  id: 1,
+  category: 'shipping',
+  captured_at: '2026-05-28T09:00:00Z',
+  command: 'git commit',
+  cwd: '/repo',
+  exit_code: 0,
+  duration_ms: 100,
+  repo_name: 'myapp',
+  branch: 'main',
+  metadata: null,
+})
+
+function dayOf(events = [COMMIT_EVENT], summaries: Parameters<typeof block>[1]['summaries'] = []) {
+  const myapp = thread(events, {
+    projectId: 4,
+    repoName: 'myapp',
+    key: 'myapp|2026-05-28T09:00:00Z',
     startedAt: '2026-05-28T09:00:00Z',
     endedAt: '2026-05-28T10:30:00Z',
-    repoName: 'myapp',
-    durationMinutes: 90,
-    eventCount: 1,
-    summary: null,
-    events: [
-      {
-        id: 1,
-        category: 'shipping',
-        captured_at: '2026-05-28T09:00:00Z',
-        command: 'git commit',
-        cwd: '/repo',
-        exit_code: 0,
-        duration_ms: 100,
-        repo_name: 'myapp',
-        branch: 'main',
-        metadata: null,
-      },
-    ],
-  },
-]
+    activeSlots: 18,
+  })
+  return [block([myapp], { date: '2026-05-28', activeSlots: 18, summaries })]
+}
+
+const SAMPLE_BLOCKS = dayOf()
 
 function makeProgram() {
   const program = new Command()
@@ -92,7 +91,6 @@ function makeProgram() {
 
 beforeEach(() => {
   mockReadConfig.mockReturnValue(BASE_CONFIG)
-  vi.mocked(getSessionSummaries).mockReturnValue([])
   mockFs.existsSync.mockReturnValue(true)
   mockFs.mkdirSync.mockReturnValue(undefined)
   mockFs.writeFileSync.mockReturnValue(undefined)
@@ -101,7 +99,7 @@ beforeEach(() => {
 describe('workscribe export', () => {
   describe('no sessions', () => {
     it('logs no-activity message and does not summarize', async () => {
-      mockGetOrBuildSessions.mockReturnValue([])
+      mockLoadDayThreads.mockReturnValue([])
       const mockProvider = { summarize: vi.fn() }
       mockCreateSummaryWriter.mockReturnValue(mockProvider)
 
@@ -115,7 +113,7 @@ describe('workscribe export', () => {
   describe('happy path', () => {
     it('summarizes the day and writes the output file', async () => {
       const mockProvider = { summarize: vi.fn().mockResolvedValue('## Summary\n\nDid some coding.') }
-      mockGetOrBuildSessions.mockReturnValue(SAMPLE_SESSIONS)
+      mockLoadDayThreads.mockReturnValue(SAMPLE_BLOCKS)
       mockCreateSummaryWriter.mockReturnValue(mockProvider)
 
       await makeProgram().parseAsync(['export', '--date', '2026-05-28'], { from: 'user' })
@@ -124,24 +122,22 @@ describe('workscribe export', () => {
       expect(mockFs.writeFileSync).toHaveBeenCalledOnce()
     })
 
-    it('exports offline with the template engine, every session under its heading', async () => {
-      mockGetOrBuildSessions.mockReturnValue([
-        { ...SAMPLE_SESSIONS[0], events: [{ ...SAMPLE_SESSIONS[0].events[0], metadata: '{"message":"fix: login"}' }] },
-      ])
+    it('exports offline with the template engine, every thread under its heading, then the time worked', async () => {
+      mockLoadDayThreads.mockReturnValue(dayOf([{ ...COMMIT_EVENT, metadata: '{"message":"fix: login"}' }]))
       mockCreateSummaryWriter.mockReturnValue(new TemplateProvider())
 
       await makeProgram().parseAsync(['export', '--date', '2026-05-28'], { from: 'user' })
 
       expect(mockFs.writeFileSync).toHaveBeenCalledWith(
         expect.any(String),
-        '# Work Summary — 2026-05-28\n\n## myapp (main) — 1h 30m\n- Committed: fix: login\n',
+        '# Work Summary — 2026-05-28\n\n## myapp (main) — 1h 30m\n- Committed: fix: login\n\nTime worked: 1h 30m\n',
         expect.any(Object)
       )
     })
 
     it('writes to the default exports directory path', async () => {
       const mockProvider = { summarize: vi.fn().mockResolvedValue('summary') }
-      mockGetOrBuildSessions.mockReturnValue(SAMPLE_SESSIONS)
+      mockLoadDayThreads.mockReturnValue(SAMPLE_BLOCKS)
       mockCreateSummaryWriter.mockReturnValue(mockProvider)
 
       await makeProgram().parseAsync(['export', '--date', '2026-05-28'], { from: 'user' })
@@ -152,7 +148,7 @@ describe('workscribe export', () => {
 
     it('logs a success message with the output path', async () => {
       const mockProvider = { summarize: vi.fn().mockResolvedValue('summary') }
-      mockGetOrBuildSessions.mockReturnValue(SAMPLE_SESSIONS)
+      mockLoadDayThreads.mockReturnValue(SAMPLE_BLOCKS)
       mockCreateSummaryWriter.mockReturnValue(mockProvider)
 
       await makeProgram().parseAsync(['export', '--date', '2026-05-28'], { from: 'user' })
@@ -161,10 +157,23 @@ describe('workscribe export', () => {
     })
   })
 
+  describe('the data upgrade', () => {
+    it("stops before reading the day while it isn't finished", async () => {
+      vi.mocked(requireThreadData).mockImplementationOnce(() => {
+        throw new Error('exit')
+      })
+
+      await expect(makeProgram().parseAsync(['export'], { from: 'user' })).rejects.toThrow('exit')
+
+      expect(mockLoadDayThreads).not.toHaveBeenCalled()
+      expect(mockFs.writeFileSync).not.toHaveBeenCalled()
+    })
+  })
+
   describe('--output', () => {
     it('writes to the custom path when --output is provided', async () => {
       const mockProvider = { summarize: vi.fn().mockResolvedValue('summary') }
-      mockGetOrBuildSessions.mockReturnValue(SAMPLE_SESSIONS)
+      mockLoadDayThreads.mockReturnValue(SAMPLE_BLOCKS)
       mockCreateSummaryWriter.mockReturnValue(mockProvider)
 
       await makeProgram().parseAsync(['export', '--output', '/tmp/my-summary.md'], { from: 'user' })
@@ -183,29 +192,37 @@ describe('workscribe export', () => {
 
   describe('the same day as workscribe summary', () => {
     const skillSummary = {
-      session_key: 'myapp|2026-05-28T09:00:00Z',
-      engine: 'skill',
+      id: 1,
+      scope: 'session',
+      project_id: 4,
+      first_event_id: 1,
+      last_event_id: 1,
+      engine: 'skill' as const,
       text: '## myapp (main) — 1h 30m\n- Shipped the login fix',
       created_at: '2026-05-28T11:00:00Z',
+      source_key: 'myapp|2026-05-28T09:00:00Z',
+      origin: 'saved' as const,
+      anchor_source: 'thread' as const,
+      is_mixed: 0,
     }
 
     it('writes the summary the agent skill saved, and says so on the console, not in the file', async () => {
-      vi.mocked(getSessionSummaries).mockReturnValue([skillSummary])
       const mockProvider = { summarize: vi.fn() }
-      mockGetOrBuildSessions.mockReturnValue(SAMPLE_SESSIONS)
+      mockLoadDayThreads.mockReturnValue(dayOf([COMMIT_EVENT], [skillSummary]))
       mockCreateSummaryWriter.mockReturnValue(mockProvider)
 
       await makeProgram().parseAsync(['export', '--date', '2026-05-28'], { from: 'user' })
 
       expect(mockProvider.summarize).not.toHaveBeenCalled()
       const [, content] = mockFs.writeFileSync.mock.calls[0] as [string, string]
-      expect(content).toBe('# Work Summary — 2026-05-28\n\n## myapp (main) — 1h 30m\n- Shipped the login fix\n')
+      expect(content).toBe(
+        '# Work Summary — 2026-05-28\n\n## myapp (main) — 1h 30m\n- Shipped the login fix\n\nTime worked: 1h 30m\n'
+      )
       expect(mockLog.plain).toHaveBeenCalledWith(expect.stringContaining('written by the Workscribe agent skill'))
     })
 
     it('renders the template instead with --fresh', async () => {
-      vi.mocked(getSessionSummaries).mockReturnValue([skillSummary])
-      mockGetOrBuildSessions.mockReturnValue(SAMPLE_SESSIONS)
+      mockLoadDayThreads.mockReturnValue(dayOf([COMMIT_EVENT], [skillSummary]))
       mockCreateSummaryWriter.mockReturnValue(new TemplateProvider())
 
       await makeProgram().parseAsync(['export', '--date', '2026-05-28', '--fresh'], { from: 'user' })
@@ -217,7 +234,7 @@ describe('workscribe export', () => {
 
     it('prints the left-out events on the console, not into the file', async () => {
       vi.mocked(countExcludedEvents).mockReturnValue(new Map([['exploring', 3]]))
-      mockGetOrBuildSessions.mockReturnValue(SAMPLE_SESSIONS)
+      mockLoadDayThreads.mockReturnValue(SAMPLE_BLOCKS)
       mockCreateSummaryWriter.mockReturnValue(new TemplateProvider())
 
       await makeProgram().parseAsync(['export', '--date', '2026-05-28'], { from: 'user' })
@@ -229,7 +246,7 @@ describe('workscribe export', () => {
 
     it('always writes markdown, even with summary.format set to json', async () => {
       mockReadConfig.mockReturnValue({ ...BASE_CONFIG, summary: { format: 'json' } })
-      mockGetOrBuildSessions.mockReturnValue(SAMPLE_SESSIONS)
+      mockLoadDayThreads.mockReturnValue(SAMPLE_BLOCKS)
       mockCreateSummaryWriter.mockReturnValue(new TemplateProvider())
 
       await makeProgram().parseAsync(['export', '--date', '2026-05-28'], { from: 'user' })
@@ -239,7 +256,7 @@ describe('workscribe export', () => {
     })
 
     it('says so and stops when the summary fails', async () => {
-      mockGetOrBuildSessions.mockReturnValue(SAMPLE_SESSIONS)
+      mockLoadDayThreads.mockReturnValue(SAMPLE_BLOCKS)
       mockCreateSummaryWriter.mockReturnValue({ summarize: vi.fn().mockRejectedValue(new Error('disk full')) })
       // A real exit stops the command here
       const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => {
@@ -257,13 +274,13 @@ describe('workscribe export', () => {
 
   describe('old AI settings', () => {
     beforeEach(() => {
-      mockGetOrBuildSessions.mockReturnValue(SAMPLE_SESSIONS)
+      mockLoadDayThreads.mockReturnValue(SAMPLE_BLOCKS)
       mockCreateSummaryWriter.mockReturnValue({ summarize: vi.fn().mockResolvedValue('- Did some coding') })
     })
 
     it('prints the 2.0 notice once for a 1.x config, even on a day with no activity', async () => {
       mockReadConfig.mockReturnValue({ ...BASE_CONFIG, ai: { provider: 'openai', apiKey: 'sk-old' } })
-      mockGetOrBuildSessions.mockReturnValue([])
+      mockLoadDayThreads.mockReturnValue([])
 
       await makeProgram().parseAsync(['export'], { from: 'user' })
 

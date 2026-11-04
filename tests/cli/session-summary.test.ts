@@ -74,7 +74,9 @@ describe('workscribe sessions summary set', () => {
       anchor: { projectId: 4, firstEventId: 7, lastEventId: 9, isMixed: false },
     })
     expect(mockLog.success).toHaveBeenCalledWith(expect.stringContaining('Saved the summary for api'))
-    expect(mockLog.success).toHaveBeenCalledWith(expect.stringContaining('workscribe context'))
+    expect(mockLog.success).toHaveBeenCalledWith(
+      expect.stringContaining('workscribe summary, workscribe context and the VS Code status bar')
+    )
   })
 
   it('saves for the "elsewhere" thread with no project', async () => {

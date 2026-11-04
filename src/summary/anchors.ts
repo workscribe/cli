@@ -5,6 +5,9 @@ import { parseSessionKey } from './store'
 // the first and last events of its range; the thread it attaches to is worked out when it's read, since threads are
 // rebuilt whenever a day changes.
 
+/** The `anchor_source` of a summary `sessions summary set` saved for a thread. */
+export const THREAD_ANCHOR_SOURCE = 'thread'
+
 /** A summary belongs to a project only when that project holds more than this share of its events. */
 export const MAJORITY_SHARE = 0.5
 
@@ -128,4 +131,29 @@ export function findSummaryThread(
   const rangeEvents = block.events.slice(start, end === -1 ? block.events.length : end + 1)
   const held = rangeEvents.filter((event) => event.threadId === thread.id).length
   return held / rangeEvents.length > MAJORITY_SHARE ? thread : null
+}
+
+/** What attaching a stored summary reads from its row — `summary` rows fit. */
+export interface AttachableSummary {
+  project_id: number | null
+  first_event_id: number | null
+  last_event_id: number | null
+  anchor_source: string
+}
+
+/** The stored summaries that belong to this thread of the block, by `findSummaryThread`. */
+export function summariesOfThread<Summary extends AttachableSummary>(
+  threadId: number,
+  block: { threads: CandidateThread[]; events: BlockEvent[] },
+  summaries: Summary[]
+): Summary[] {
+  return summaries.filter((summary) => {
+    const anchor = {
+      projectId: summary.project_id,
+      firstEventId: summary.first_event_id,
+      lastEventId: summary.last_event_id,
+      isThreadSaved: summary.anchor_source === THREAD_ANCHOR_SOURCE,
+    }
+    return findSummaryThread(anchor, block)?.id === threadId
+  })
 }

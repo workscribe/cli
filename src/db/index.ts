@@ -8,9 +8,9 @@ import { findRecentSessionsForRepo, type RepoLookup } from './session-lookup'
 import { BUSY_TIMEOUT_MS, withImmediateTransaction, type TransactionOptions } from './transaction'
 import type { StoredEngine } from '../ai/engine'
 import { insertEventRecord, type NewEvent } from './event-writer'
-import { saveAnchoredSummary, THREAD_ANCHOR_SOURCE } from './summary-store'
+import { saveAnchoredSummary } from './summary-store'
 import { agentSessionIdsOfDate, agentSessionIdsOfEvents, deleteEmptyAgentSessions } from './agent-sessions'
-import type { ThreadAnchor } from '../summary/anchors'
+import { THREAD_ANCHOR_SOURCE, type ThreadAnchor } from '../summary/anchors'
 export type { EventRow, SessionRow, SessionSummaryRow } from './types'
 
 let _db: DatabaseSync | null = null

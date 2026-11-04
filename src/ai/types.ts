@@ -25,6 +25,10 @@ export interface SessionPayload {
   startTime: string
   endTime: string
   durationMinutes: number
+  /** A thread's own active time (its 5-minute slots) — shown in its heading instead of `durationMinutes` */
+  activeMinutes?: number
+  /** For a thread: the names of the other projects worked in its block, in block order */
+  alongside?: string[]
   events: EventPayload[]
   /** The session's commits, each under the branch it was made on — captured ones, plus git's when it was asked */
   commits: StoryCommit[]

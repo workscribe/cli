@@ -92,11 +92,14 @@ In `json` mode, `workscribe summary` outputs structured data instead of markdown
 ```json
 {
   "date": "2026-05-28",
+  "activeMinutes": 150,
   "sessions": [
     {
       "project": "api-service",
       "branch": "feature/auth",
       "durationMinutes": 135,
+      "activeMinutes": 110,
+      "alongside": ["web"],
       "bullets": [
         "On main:",
         "Committed: fix: token refresh race",
@@ -110,7 +113,7 @@ In `json` mode, `workscribe summary` outputs structured data instead of markdown
 }
 ```
 
-`bullets` holds every line of the session's summary under its heading, the `On <branch>:` lines and the closing activity line included, and `branch` is the latest branch the session was on. For a structured view of each session (commits, events, every branch), use [`workscribe sessions --json`](/commands#json-output-contract).
+Each entry is one project thread. `bullets` holds every line of its summary under its heading, the `On <branch>:` lines and the closing activity line included, and `branch` is the latest branch it was on. `durationMinutes` is its span from first to last event; `activeMinutes` is its own active time and `alongside` names the other projects worked in the same stretch. The top-level `activeMinutes` is the day's time worked, counted once across projects. For a structured view of each session (commits, events, every branch), use [`workscribe sessions --json`](/commands#json-output-contract).
 
 Weekly summaries (`--week`) always output markdown regardless of this setting.
 

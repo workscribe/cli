@@ -1,6 +1,5 @@
 import { Command } from 'commander'
 import chalk from 'chalk'
-import { getOrBuildSessions } from '../sessions/detector'
 import { readConfig } from '../config'
 import { log } from '../utils/logger'
 import { todayDate, parseDate } from '../utils/format'
@@ -13,11 +12,17 @@ import { postSummary } from '../summary/webhook'
 import { runWeeklySummary } from '../summary/weekly'
 import { renderDay, type RenderedDay } from '../summary/day'
 import { printExcludedFooter, printSavedNote } from './day-notes'
+import { loadDayThreads, requireThreadData } from './thread-day'
 
 interface SessionSummaryJson {
   project: string | null
   branch: string | null
+  /** The thread's span, first event to last */
   durationMinutes: number
+  /** The thread's own active time */
+  activeMinutes: number | null
+  /** The other projects worked in its block */
+  alongside: string[]
   bullets: string[]
 }
 
@@ -33,14 +38,16 @@ function stripHeading(summary: string): string {
   return summary.replace(/^## .+\n/, '')
 }
 
-function toJsonOutput(date: string, sessionPayloads: SessionPayload[], bulletsPerSession: string[]): string {
-  const sessions: SessionSummaryJson[] = sessionPayloads.map((sessionPayload, index) => ({
+function toJsonOutput(day: RenderedDay, date: string): string {
+  const sessions: SessionSummaryJson[] = day.sessionPayloads.map((sessionPayload, index) => ({
     project: sessionPayload.project,
     branch: sessionPayload.branch,
     durationMinutes: sessionPayload.durationMinutes,
-    bullets: parseBullets(bulletsPerSession[index]),
+    activeMinutes: sessionPayload.activeMinutes ?? null,
+    alongside: sessionPayload.alongside ?? [],
+    bullets: parseBullets(stripHeading(day.summaries[index])),
   }))
-  return JSON.stringify({ date, sessions }, null, 2)
+  return JSON.stringify({ date, activeMinutes: day.activeMinutes, sessions }, null, 2)
 }
 
 function printCapturedEvents(sessionPayloads: SessionPayload[], excluded: Set<string>): void {
@@ -95,9 +102,10 @@ export function registerSummary(program: Command): void {
         }
       }
 
-      const sessions = getOrBuildSessions(date)
+      requireThreadData()
+      const blocks = loadDayThreads(date)
 
-      if (sessions.length === 0) {
+      if (blocks.length === 0) {
         log.plain(`No activity captured for ${date}`)
         return
       }
@@ -105,12 +113,12 @@ export function registerSummary(program: Command): void {
       const jsonMode = config.summary?.format === 'json'
       let day: RenderedDay
       try {
-        day = await renderDay({ date, sessions, config, provider, fresh: options.fresh })
+        day = await renderDay({ date, blocks, config, provider, fresh: options.fresh })
       } catch (error) {
         log.error(`Summary failed: ${(error as Error).message}`)
         process.exit(1)
       }
-      const { sessionPayloads, saved, summaries, fullSummary, needsGeneration } = day
+      const { sessionPayloads, saved, fullSummary, needsGeneration } = day
       const excluded = buildExcludedSet(config.summary?.includeCategories ?? [])
       if (needsGeneration && options.verbose) {
         if (jsonMode) log.notice('--verbose is skipped when summary.format is json, to keep the JSON output clean')
@@ -119,7 +127,7 @@ export function registerSummary(program: Command): void {
 
       if (jsonMode) {
         // Only the JSON on stdout, so it can be piped straight into another tool
-        log.plain(toJsonOutput(date, sessionPayloads, summaries.map(stripHeading)))
+        log.plain(toJsonOutput(day, date))
       } else {
         log.plain('')
         log.plain(fullSummary)

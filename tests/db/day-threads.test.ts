@@ -83,6 +83,25 @@ describe('readDayThreads', () => {
     expect(block.threads[1].agentSessions).toEqual([])
   })
 
+  it('reads the anchored summaries whose range starts in each block', () => {
+    const db = database()
+    insertEvent(db, { capturedAt: '2026-10-28T12:09:00.000Z', projectId: CLI })
+    insertEvent(db, { capturedAt: '2026-10-28T12:30:00.000Z', projectId: SITE })
+    insertEvent(db, { capturedAt: '2026-10-28T18:00:00.000Z', projectId: CLI })
+    build(db)
+    const insertSummary = db.prepare(
+      `INSERT INTO summary (scope, project_id, first_event_id, last_event_id, engine, text, created_at, source_key, origin, anchor_source)
+       VALUES ('session', ?, ?, ?, 'skill', ?, '2026-10-28T20:00:00.000Z', ?, 'saved', 'thread')`
+    )
+    insertSummary.run(SITE, 2, 2, 'the README', 'a')
+    insertSummary.run(CLI, 3, 3, 'the evening', 'b')
+
+    const [morning, evening] = readDayThreads(db, DATE)
+
+    expect(morning.summaries.map((summary) => summary.text)).toEqual(['the README'])
+    expect(evening.summaries.map((summary) => summary.text)).toEqual(['the evening'])
+  })
+
   it('reads nothing for a day not built yet', () => {
     expect(readDayThreads(database(), DATE)).toEqual([])
   })

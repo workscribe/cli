@@ -5,7 +5,7 @@ description: Summarize the developer's recent work from Workscribe's captured te
 
 # Workscribe work summaries
 
-Workscribe records the developer's commands, IDE saves, AI-tool sessions and commits on their machine. This skill reads that record, writes a short outcome-focused summary per work session, and saves it back — after which `workscribe context` and the VS Code status bar show your summary instead of Workscribe's built-in one.
+Workscribe records the developer's commands, IDE saves, AI-tool sessions and commits on their machine. This skill reads that record, writes a short outcome-focused summary per work session, and saves it back — after which `workscribe summary`, `workscribe context` and the VS Code status bar show your summary instead of Workscribe's built-in one.
 
 ## Rules that keep the record clean
 
@@ -38,7 +38,7 @@ Follow [references/summary-format.md](references/summary-format.md). In short:
 - Up to **7 bullets**, most important first: what was built, fixed, shipped or decided.
 - Build bullets from `commits` (cite the short hash, e.g. `(a1b2c3d)`), test and build results (`exitCode` 0 vs non-zero; `null` means unknown, never "failed"), `notes` (always include them), and `hint`s on unclassified events.
 - Describe outcomes, not commands or tools. Never name the AI tool used. Don't invent anything the data doesn't show.
-- When a session has others `alongside`, you may end with one bullet naming the projects worked alongside it — never repeat their work.
+- Don't name the projects worked `alongside` — Workscribe adds that line under each saved summary itself. Never repeat their work.
 - Skip a session with nothing notable rather than padding it.
 
 ## 3. Save each block
@@ -59,7 +59,7 @@ If it reports that **no session matches the key**, new activity regrouped the da
 
 ## 4. Tell the user
 
-Show the summaries, then say they were saved to Workscribe: `workscribe context` and the VS Code status bar now use them for those sessions.
+Show the summaries, then say they were saved to Workscribe: `workscribe summary` (including `--slack`), `workscribe context` and the VS Code status bar now use them for those sessions. `workscribe summary --fresh` shows Workscribe's own summary for that run without removing yours.
 
 ## Privacy
 

@@ -50,7 +50,7 @@ export interface SavedSummary {
  * What `workscribe summary` can show for a session instead of rendering the template: a summary the agent
  * skill saved wins (it was written with more context), else one a 1.x AI provider wrote for that session.
  */
-export function pickSavedSummary(rows: SessionSummaryRow[]): SavedSummary | null {
+export function pickSavedSummary(rows: RankableSummary[]): SavedSummary | null {
   const [newestSkill] = rows.filter((row) => row.engine === SKILL_ENGINE).sort(newestFirst)
   if (newestSkill) return { text: newestSkill.text, fromSkill: true }
   const [newestLegacy] = rows.filter((row) => LEGACY_AI_ENGINES.has(row.engine)).sort(newestFirst)

@@ -1,6 +1,6 @@
 # Summary format
 
-One block per session, in exactly the shape Workscribe uses everywhere else, so saved summaries look native in `workscribe context`, the VS Code status bar and `workscribe summary`.
+One block per session, in exactly the shape Workscribe uses everywhere else, so saved summaries look native in `workscribe summary`, `workscribe context` and the VS Code status bar.
 
 ## Heading
 

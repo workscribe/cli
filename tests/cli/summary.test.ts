@@ -8,6 +8,11 @@ vi.mock('../../src/db', () => ({
   saveThreadSummary: vi.fn(),
 }))
 
+vi.mock('../../src/cli/thread-day', () => ({
+  requireThreadData: vi.fn(),
+  loadDayThreads: vi.fn(),
+}))
+
 vi.mock('../../src/sessions/detector', () => ({
   getOrBuildSessions: vi.fn(),
 }))
@@ -51,7 +56,7 @@ vi.mock('../../src/utils/format', () => ({
 
 vi.mock('../../src/summary/day-commits', () => ({
   DAY_GIT_BUDGET_MS: 3000,
-  lookupDayCommits: vi.fn((sessions: unknown[]) => sessions.map(() => [])),
+  lookupDayCommits: vi.fn((windows: unknown[]) => windows.map(() => [])),
 }))
 
 vi.mock('../../src/summary/exclusions', () => ({
@@ -64,7 +69,8 @@ import fs from 'fs'
 import { getOrBuildSessions } from '../../src/sessions/detector'
 import { createSummaryWriter } from '../../src/summary/writer'
 import { readConfig } from '../../src/config'
-import { getSessionSummaries, saveThreadSummary } from '../../src/db'
+import { saveThreadSummary } from '../../src/db'
+import { loadDayThreads, requireThreadData } from '../../src/cli/thread-day'
 import { postToWebhook } from '../../src/integrations/webhook'
 import { isSlackWebhookUrl } from '../../src/integrations/slack'
 import { log } from '../../src/utils/logger'
@@ -72,12 +78,13 @@ import { parseBullets, registerSummary } from '../../src/cli/summary'
 import { lookupDayCommits } from '../../src/summary/day-commits'
 import { formatSessionHeading } from '../../src/summary/heading'
 import type { DaySummaryPayload } from '../../src/ai/types'
+import type { SummaryRow } from '../../src/db/summary-store'
+import { block, row, thread } from '../summary/contract/fixtures'
 
 const mockFs = fs as unknown as Record<string, ReturnType<typeof vi.fn>>
 const mockGetOrBuildSessions = getOrBuildSessions as ReturnType<typeof vi.fn>
 const mockCreateSummaryWriter = createSummaryWriter as ReturnType<typeof vi.fn>
 const mockReadConfig = readConfig as ReturnType<typeof vi.fn>
-const mockGetSessionSummaries = getSessionSummaries as ReturnType<typeof vi.fn>
 const mockSaveThreadSummary = saveThreadSummary as ReturnType<typeof vi.fn>
 const mockPostToWebhook = postToWebhook as ReturnType<typeof vi.fn>
 const mockIsSlackWebhookUrl = isSlackWebhookUrl as ReturnType<typeof vi.fn>
@@ -177,20 +184,73 @@ describe('workscribe summary --week', () => {
 })
 
 describe('workscribe summary (daily)', () => {
-  const OTHER_EVENT = {
+  const SHIPPING_EVENT = row({
+    id: 1,
+    category: 'shipping',
+    command: 'git commit -m "fix: bug"',
+    metadata: '{"message":"fix: bug"}',
+    exit_code: 0,
+    duration_ms: null,
+    branch: 'main',
+    captured_at: '2026-08-17T09:00:00.000Z',
+    cwd: '/Users/dev/my-app',
+    repo_name: 'my-app',
+  })
+  const OTHER_EVENT = row({
+    id: 1,
     category: 'other',
     metadata: '{"hint":"make deploy","tool":"make","target":"deploy"}',
     exit_code: 0,
     duration_ms: 1200,
     branch: 'main',
     captured_at: '2026-08-17T09:30:00.000Z',
+  })
+  const MY_APP = thread([SHIPPING_EVENT], {
+    id: 1,
+    projectId: 4,
+    repoName: 'my-app',
+    key: 'my-app|2026-08-17T09:00:00.000Z',
+    startedAt: '2026-08-17T09:00:00.000Z',
+    endedAt: '2026-08-17T10:00:00.000Z',
+  })
+  const API = thread([{ ...SHIPPING_EVENT, id: 2, cwd: '/Users/dev/api', repo_name: 'api' }], {
+    id: 2,
+    projectId: 5,
+    repoName: 'api',
+    key: 'api|2026-08-17T09:00:00.000Z',
+    startedAt: '2026-08-17T09:00:00.000Z',
+    endedAt: '2026-08-17T10:00:00.000Z',
+  })
+
+  /** A stored summary anchored to the my-app thread. */
+  function savedRow(engine: string, text: string): SummaryRow {
+    return {
+      id: 1,
+      scope: 'session',
+      project_id: 4,
+      first_event_id: 1,
+      last_event_id: 1,
+      engine: engine as SummaryRow['engine'],
+      text,
+      created_at: '2026-08-17T10:00:00.000Z',
+      source_key: MY_APP.key,
+      origin: 'saved',
+      anchor_source: 'thread',
+      is_mixed: 0,
+    }
   }
 
-  function cachedRow(engine: string, text: string) {
-    return { session_key: 'my-app|2026-08-17T09:00:00.000Z', engine, text, created_at: '2026-08-17T10:00:00.000Z' }
+  /** Each thread in a block of its own, unless `together`. */
+  function dayOf(threads = [MY_APP], { summaries = [] as SummaryRow[], together = false } = {}) {
+    const blocks = together
+      ? [block(threads, { date: '2026-08-17', summaries })]
+      : threads.map((member, index) =>
+          block([member], { id: index + 1, date: '2026-08-17', summaries: index === 0 ? summaries : [] })
+        )
+    vi.mocked(loadDayThreads).mockReturnValue(blocks)
   }
 
-  // The writer returns each session's finished story, heading included
+  // The writer returns each thread's finished story, heading included
   function mockSummarize(bullets = '- Shipped a fix') {
     const summarize = vi.fn(
       async (payload: DaySummaryPayload) => `${formatSessionHeading(payload.sessions[0])}\n${bullets}`
@@ -201,19 +261,16 @@ describe('workscribe summary (daily)', () => {
 
   beforeEach(() => {
     mockReadConfig.mockReturnValue(BASE_CONFIG)
-    mockGetOrBuildSessions.mockReturnValue([{ ...FAKE_SESSION, id: 1 }])
-    mockGetSessionSummaries.mockReturnValue([])
+    dayOf()
   })
 
-  it('summarizes each session separately and saves nothing', async () => {
-    mockGetOrBuildSessions.mockReturnValue([
-      { ...FAKE_SESSION, id: 1 },
-      { ...FAKE_SESSION, id: 2, repoName: 'api' },
-    ])
+  it('summarizes each thread separately and saves nothing', async () => {
+    dayOf([MY_APP, API])
     const summarize = mockSummarize()
 
     await makeProgram().parseAsync(['summary'], { from: 'user' })
 
+    expect(loadDayThreads).toHaveBeenCalledWith('2026-08-17')
     expect(summarize).toHaveBeenCalledTimes(2)
     expect(summarize.mock.calls.map(([payload]) => payload.sessions.map((session) => session.project))).toEqual([
       ['my-app'],
@@ -230,6 +287,8 @@ describe('workscribe summary (daily)', () => {
           startTime: '09:00',
           endTime: '09:00',
           durationMinutes: 60,
+          activeMinutes: 30,
+          alongside: [],
           events: [
             {
               category: 'shipping',
@@ -238,6 +297,7 @@ describe('workscribe summary (daily)', () => {
               durationMs: null,
               branch: 'main',
               capturedAt: '2026-08-17T09:00:00.000Z',
+              source: 'shell',
             },
           ],
           commits: [{ hash: null, subject: 'fix: bug', committedAt: '2026-08-17T09:00:00.000Z', branch: 'main' }],
@@ -248,8 +308,44 @@ describe('workscribe summary (daily)', () => {
     expect(mockLog.plain).toHaveBeenCalledWith(expect.stringContaining('## my-app (main) — 1h'))
   })
 
+  it('names the projects worked alongside under each section, and ends with the time worked', async () => {
+    dayOf([MY_APP, API], { together: true })
+    mockSummarize()
+
+    await makeProgram().parseAsync(['summary'], { from: 'user' })
+
+    expect(mockLog.plain).toHaveBeenCalledWith(
+      [
+        '## my-app (main) — 1h\n- Shipped a fix\nAlongside: api',
+        '## api (main) — 1h\n- Shipped a fix\nAlongside: my-app',
+        'Time worked: 1h',
+      ].join('\n\n')
+    )
+  })
+
+  it('says there was no activity for a day with no blocks', async () => {
+    vi.mocked(loadDayThreads).mockReturnValue([])
+    const summarize = mockSummarize()
+
+    await makeProgram().parseAsync(['summary'], { from: 'user' })
+
+    expect(mockLog.plain).toHaveBeenCalledWith('No activity captured for 2026-08-17')
+    expect(summarize).not.toHaveBeenCalled()
+  })
+
+  it("stops before reading the day while the data upgrade isn't finished", async () => {
+    vi.mocked(requireThreadData).mockImplementationOnce(() => {
+      throw new Error('exit')
+    })
+    mockSummarize()
+
+    await expect(makeProgram().parseAsync(['summary'], { from: 'user' })).rejects.toThrow('exit')
+
+    expect(loadDayThreads).not.toHaveBeenCalled()
+  })
+
   it('lifts the hint out of other events and strips hint/tool from metadata', async () => {
-    mockGetOrBuildSessions.mockReturnValue([{ ...FAKE_SESSION, id: 1, events: [OTHER_EVENT] }])
+    dayOf([{ ...MY_APP, events: [OTHER_EVENT] }])
     const summarize = mockSummarize()
 
     await makeProgram().parseAsync(['summary'], { from: 'user' })
@@ -263,22 +359,23 @@ describe('workscribe summary (daily)', () => {
       durationMs: 1200,
       branch: 'main',
       capturedAt: '2026-08-17T09:30:00.000Z',
+      source: 'shell',
     })
   })
 
-  it('still shows a summary a 1.x AI provider wrote for the session, and says where it came from', async () => {
-    mockGetSessionSummaries.mockReturnValue([cachedRow('provider', '## my-app — 1h\n- Cached work')])
+  it('still shows a summary a 1.x AI provider wrote for the thread, and says where it came from', async () => {
+    dayOf([MY_APP], { summaries: [savedRow('provider', '## my-app — 1h\n- Cached work')] })
     const summarize = mockSummarize()
 
     await makeProgram().parseAsync(['summary'], { from: 'user' })
 
     expect(summarize).not.toHaveBeenCalled()
-    expect(mockLog.plain).toHaveBeenCalledWith('## my-app — 1h\n- Cached work')
+    expect(mockLog.plain).toHaveBeenCalledWith('## my-app — 1h\n- Cached work\n\nTime worked: 1h')
     expect(mockLog.plain).toHaveBeenCalledWith(expect.stringContaining('1 written by an AI provider in Workscribe 1.x'))
   })
 
   it('renders the template instead of a 1.x summary when --fresh is passed', async () => {
-    mockGetSessionSummaries.mockReturnValue([cachedRow('provider', '## my-app — 1h\n- Cached work')])
+    dayOf([MY_APP], { summaries: [savedRow('provider', '## my-app — 1h\n- Cached work')] })
     const summarize = mockSummarize()
 
     await makeProgram().parseAsync(['summary', '--fresh'], { from: 'user' })
@@ -286,7 +383,7 @@ describe('workscribe summary (daily)', () => {
     expect(summarize).toHaveBeenCalledTimes(1)
   })
 
-  it('prints JSON when summary.format is json', async () => {
+  it('prints JSON when summary.format is json, with active time and the projects alongside', async () => {
     mockReadConfig.mockReturnValue({ ...BASE_CONFIG, summary: { format: 'json' } })
     mockSummarize('- First thing\n- Second thing')
 
@@ -294,14 +391,36 @@ describe('workscribe summary (daily)', () => {
 
     const expected = {
       date: '2026-08-17',
-      sessions: [{ project: 'my-app', branch: 'main', durationMinutes: 60, bullets: ['First thing', 'Second thing'] }],
+      activeMinutes: 40,
+      sessions: [
+        {
+          project: 'my-app',
+          branch: 'main',
+          durationMinutes: 60,
+          activeMinutes: 30,
+          alongside: [],
+          bullets: ['First thing', 'Second thing'],
+        },
+      ],
     }
     expect(mockLog.plain).toHaveBeenCalledWith(JSON.stringify(expected, null, 2))
   })
 
+  it('keeps the alongside and time-worked lines out of the JSON bullets', async () => {
+    mockReadConfig.mockReturnValue({ ...BASE_CONFIG, summary: { format: 'json' } })
+    dayOf([MY_APP, API], { together: true })
+    mockSummarize()
+
+    await makeProgram().parseAsync(['summary'], { from: 'user' })
+
+    const json = JSON.parse(mockLog.plain.mock.calls[0][0])
+    expect(json.sessions.map((session: { alongside: string[] }) => session.alongside)).toEqual([['api'], ['my-app']])
+    expect(json.sessions[0].bullets).toEqual(['Shipped a fix'])
+  })
+
   it('prints only the JSON in JSON mode — no saved-summary note or footer', async () => {
     mockReadConfig.mockReturnValue({ ...BASE_CONFIG, summary: { format: 'json' } })
-    mockGetSessionSummaries.mockReturnValue([cachedRow('skill', '## my-app — 1h\n- From the skill')])
+    dayOf([MY_APP], { summaries: [savedRow('skill', '## my-app — 1h\n- From the skill')] })
     mockSummarize()
 
     await makeProgram().parseAsync(['summary'], { from: 'user' })
@@ -335,27 +454,30 @@ describe('workscribe summary (daily)', () => {
     expect(mockLog.notice).toHaveBeenCalledWith(expect.stringContaining('--verbose is skipped'))
   })
 
-  it('posts the full summary to --webhook', async () => {
+  it('posts the full summary, time worked included, to --webhook', async () => {
     mockSummarize()
     mockIsSlackWebhookUrl.mockReturnValue(false)
 
     await makeProgram().parseAsync(['summary', '--webhook', 'https://example.com/hook'], { from: 'user' })
 
-    expect(mockPostToWebhook).toHaveBeenCalledWith('https://example.com/hook', '## my-app (main) — 1h\n- Shipped a fix')
+    expect(mockPostToWebhook).toHaveBeenCalledWith(
+      'https://example.com/hook',
+      '## my-app (main) — 1h\n- Shipped a fix\n\nTime worked: 1h'
+    )
   })
 
   it('serves a summary migrated from the 1.x sessions table', async () => {
-    mockGetSessionSummaries.mockReturnValue([cachedRow('legacy', '## my-app — 1h\n- From 1.x')])
+    dayOf([MY_APP], { summaries: [savedRow('legacy', '## my-app — 1h\n- From 1.x')] })
     const summarize = mockSummarize()
 
     await makeProgram().parseAsync(['summary'], { from: 'user' })
 
     expect(summarize).not.toHaveBeenCalled()
-    expect(mockLog.plain).toHaveBeenCalledWith('## my-app — 1h\n- From 1.x')
+    expect(mockLog.plain).toHaveBeenCalledWith('## my-app — 1h\n- From 1.x\n\nTime worked: 1h')
   })
 
   it('never serves a stored template summary — the template always renders fresh', async () => {
-    mockGetSessionSummaries.mockReturnValue([cachedRow('template', '## my-app — 1h\n- Template text')])
+    dayOf([MY_APP], { summaries: [savedRow('template', '## my-app — 1h\n- Template text')] })
     const summarize = mockSummarize()
 
     await makeProgram().parseAsync(['summary'], { from: 'user' })
@@ -363,55 +485,50 @@ describe('workscribe summary (daily)', () => {
     expect(summarize).toHaveBeenCalledTimes(1)
   })
 
-  it('shows a summary the agent skill saved instead of rendering the template', async () => {
-    mockGetSessionSummaries.mockReturnValue([cachedRow('skill', '## my-app (main) — 1h\n- Written by the agent')])
+  it('shows a summary the agent skill saved for the thread instead of rendering the template', async () => {
+    dayOf([MY_APP], { summaries: [savedRow('skill', '## my-app (main) — 1h\n- Written by the agent')] })
     const summarize = mockSummarize()
 
     await makeProgram().parseAsync(['summary'], { from: 'user' })
 
     expect(summarize).not.toHaveBeenCalled()
-    expect(mockLog.plain).toHaveBeenCalledWith('## my-app (main) — 1h\n- Written by the agent')
+    expect(mockLog.plain).toHaveBeenCalledWith('## my-app (main) — 1h\n- Written by the agent\n\nTime worked: 1h')
     expect(mockLog.plain).toHaveBeenCalledWith(expect.stringContaining('1 written by the Workscribe agent skill'))
   })
 
   it('prefers the skill summary over a 1.x AI summary', async () => {
-    mockGetSessionSummaries.mockReturnValue([
-      cachedRow('provider', '## my-app — 1h\n- Provider text'),
-      cachedRow('skill', '## my-app — 1h\n- Skill text'),
-    ])
+    dayOf([MY_APP], {
+      summaries: [
+        savedRow('provider', '## my-app — 1h\n- Provider text'),
+        { ...savedRow('skill', '## my-app — 1h\n- Skill text'), id: 2 },
+      ],
+    })
     mockSummarize()
 
     await makeProgram().parseAsync(['summary'], { from: 'user' })
 
-    expect(mockLog.plain).toHaveBeenCalledWith('## my-app — 1h\n- Skill text')
+    expect(mockLog.plain).toHaveBeenCalledWith('## my-app — 1h\n- Skill text\n\nTime worked: 1h')
   })
 
-  it('asks git only about the sessions the template tells, and hands their commits to the writer', async () => {
-    const api = { ...FAKE_SESSION, id: 2, repoName: 'api' }
-    mockGetOrBuildSessions.mockReturnValue([{ ...FAKE_SESSION, id: 1 }, api])
-    mockGetSessionSummaries.mockImplementation((key: string) =>
-      key.startsWith('my-app|') ? [cachedRow('skill', '## my-app — 1h\n- From the skill')] : []
-    )
+  it('asks git only about the threads the template tells, and hands their commits to the writer', async () => {
+    dayOf([MY_APP, API], { summaries: [savedRow('skill', '## my-app — 1h\n- From the skill')] })
     const gitCommit = { hash: 'a1b2c3d', subject: 'feat: refresh tokens', committedAt: '2026-08-17T09:30:00.000Z' }
     vi.mocked(lookupDayCommits).mockReturnValue([[gitCommit]])
     const summarize = mockSummarize()
 
     await makeProgram().parseAsync(['summary'], { from: 'user' })
 
-    expect(lookupDayCommits).toHaveBeenCalledWith([api], { budgetMs: 3000 })
+    expect(lookupDayCommits).toHaveBeenCalledWith(
+      [{ cwd: '/Users/dev/api', startedAt: API.startedAt, endedAt: API.endedAt }],
+      { budgetMs: 3000 }
+    )
     expect(summarize.mock.calls[0][0].sessions[0].commits).toContainEqual(
       expect.objectContaining({ hash: 'a1b2c3d', subject: 'feat: refresh tokens' })
     )
   })
 
-  it('generates only the sessions without a saved summary', async () => {
-    mockGetOrBuildSessions.mockReturnValue([
-      { ...FAKE_SESSION, id: 1 },
-      { ...FAKE_SESSION, id: 2, repoName: 'api' },
-    ])
-    mockGetSessionSummaries.mockImplementation((key: string) =>
-      key.startsWith('my-app|') ? [cachedRow('skill', '## my-app — 1h\n- From the skill')] : []
-    )
+  it('generates only the threads without a saved summary', async () => {
+    dayOf([MY_APP, API], { summaries: [savedRow('skill', '## my-app — 1h\n- From the skill')] })
     const summarize = mockSummarize()
 
     await makeProgram().parseAsync(['summary'], { from: 'user' })
@@ -419,30 +536,23 @@ describe('workscribe summary (daily)', () => {
     expect(summarize).toHaveBeenCalledTimes(1)
     expect(summarize.mock.calls[0][0].sessions[0].project).toBe('api')
     expect(mockLog.plain).toHaveBeenCalledWith(
-      '## my-app — 1h\n- From the skill\n\n## api (main) — 1h\n- Shipped a fix'
+      '## my-app — 1h\n- From the skill\n\n## api (main) — 1h\n- Shipped a fix\n\nTime worked: 1h'
     )
   })
 
   it('turns a saved skill summary into bullets in JSON mode', async () => {
     mockReadConfig.mockReturnValue({ ...BASE_CONFIG, summary: { format: 'json' } })
-    mockGetSessionSummaries.mockReturnValue([
-      cachedRow('skill', '## my-app (main) — 1h\n- First outcome\n- Second outcome'),
-    ])
+    dayOf([MY_APP], { summaries: [savedRow('skill', '## my-app (main) — 1h\n- First outcome\n- Second outcome')] })
     mockSummarize()
 
     await makeProgram().parseAsync(['summary'], { from: 'user' })
 
-    const expected = {
-      date: '2026-08-17',
-      sessions: [
-        { project: 'my-app', branch: 'main', durationMinutes: 60, bullets: ['First outcome', 'Second outcome'] },
-      ],
-    }
-    expect(mockLog.plain).toHaveBeenCalledWith(JSON.stringify(expected, null, 2))
+    const [entry] = JSON.parse(mockLog.plain.mock.calls[0][0]).sessions
+    expect(entry.bullets).toEqual(['First outcome', 'Second outcome'])
   })
 
   it('renders the template instead of the skill summary with --fresh', async () => {
-    mockGetSessionSummaries.mockReturnValue([cachedRow('skill', '## my-app — 1h\n- From the skill')])
+    dayOf([MY_APP], { summaries: [savedRow('skill', '## my-app — 1h\n- From the skill')] })
     const summarize = mockSummarize()
 
     await makeProgram().parseAsync(['summary', '--fresh'], { from: 'user' })
@@ -450,14 +560,15 @@ describe('workscribe summary (daily)', () => {
     expect(summarize).toHaveBeenCalledTimes(1)
   })
 
-  it('names the session by its directory when it is outside a git repo', async () => {
-    const session = {
-      ...FAKE_SESSION,
-      id: 1,
-      repoName: null,
-      events: [{ ...FAKE_SESSION.events[0], cwd: '/tmp/scripts' }],
-    }
-    mockGetOrBuildSessions.mockReturnValue([session])
+  it('names the "elsewhere" thread by its directory', async () => {
+    dayOf([
+      {
+        ...MY_APP,
+        projectId: null,
+        repoName: null,
+        events: [{ ...SHIPPING_EVENT, cwd: '/tmp/scripts', repo_name: null }],
+      },
+    ])
     mockSummarize()
 
     await makeProgram().parseAsync(['summary'], { from: 'user' })

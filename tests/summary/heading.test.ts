@@ -21,4 +21,8 @@ describe('formatSessionHeading', () => {
   it('names no branch outside a repo, and an unknown location as such', () => {
     expect(formatSessionLabel({ project: null, branch: null, branches: [], durationMinutes: 5 })).toBe('unknown — 5m')
   })
+
+  it("shows a thread's own active time rather than its span, which can include other projects' work", () => {
+    expect(formatSessionLabel({ ...SESSION, activeMinutes: 25 })).toBe('api (main) — 25m')
+  })
 })

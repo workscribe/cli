@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { anchorOfSession, anchorOfThread, findSummaryThread } from '../../src/summary/anchors'
+import { anchorOfSession, anchorOfThread, findSummaryThread, summariesOfThread } from '../../src/summary/anchors'
 import type { EventRow } from '../../src/db/types'
 
 const CLI = 1
@@ -175,5 +175,38 @@ describe('anchorOfThread', () => {
     const events = [event(4, 30, 'landing-page', SITE), event(9, 100, 'landing-page', SITE)]
 
     expect(anchorOfThread(events, SITE)).toEqual({ projectId: SITE, firstEventId: 4, lastEventId: 9, isMixed: false })
+  })
+})
+
+describe('summariesOfThread', () => {
+  const threads = [
+    { id: 10, projectId: CLI },
+    { id: 11, projectId: SITE },
+  ]
+  const events = [
+    { id: 1, threadId: 10 },
+    { id: 2, threadId: 11 },
+    { id: 3, threadId: 10 },
+    { id: 4, threadId: 10 },
+    { id: 5, threadId: 11 },
+  ]
+  const stored = (id: number, overrides: object) => ({
+    id,
+    project_id: SITE,
+    first_event_id: 2,
+    last_event_id: 5,
+    anchor_source: 'cached',
+    ...overrides,
+  })
+
+  it('keeps the summaries that belong to the thread: its own saved ones, and mapped ones it holds most of', () => {
+    const savedForSite = stored(1, { anchor_source: 'thread' })
+    const mappedMixed = stored(2, {})
+    const mappedCli = stored(3, { project_id: CLI, first_event_id: 3, last_event_id: 4 })
+
+    const block = { threads, events }
+    const summaries = [savedForSite, mappedMixed, mappedCli]
+    expect(summariesOfThread(11, block, summaries)).toEqual([savedForSite])
+    expect(summariesOfThread(10, block, summaries)).toEqual([mappedCli])
   })
 })
