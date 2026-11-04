@@ -1,63 +1,19 @@
 import { describe, it, expect, vi, onTestFinished } from 'vitest'
 
-vi.mock('../../src/db', () => ({ getLatestFileSaveAt: vi.fn() }))
-vi.mock('../../src/sessions/detector', () => ({ ensureDayGrouped: vi.fn() }))
 vi.mock('../../src/summary/git-commits', () => ({ getFileCommits: vi.fn() }))
 
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
-import * as db from '../../src/db'
-import { ensureDayGrouped } from '../../src/sessions/detector'
 import { getFileCommits } from '../../src/summary/git-commits'
-import { localDateOf } from '../../src/utils/format'
-import { GIT_BUDGET_MS, LOCK_WAIT_MS, getFileDetails, groupDayOfLatestSave } from '../../src/cli/context-file'
+import { GIT_BUDGET_MS, getFileDetails } from '../../src/cli/context-file'
 import type { EventRow } from '../../src/db/types'
 
-const mocked = vi.mocked(db)
 const spanOf = (events: EventRow[]) => ({
   events,
   branch: 'main',
   startedAt: '2026-10-28T09:00:00.000Z',
   endedAt: '2026-10-28T10:00:00.000Z',
-})
-
-function lockedError(): Error {
-  return Object.assign(new Error('database is locked'), { code: 'ERR_SQLITE_ERROR', errcode: 5 })
-}
-
-describe('groupDayOfLatestSave', () => {
-  it("groups the local day of the file's latest save, with the short lock wait", () => {
-    mocked.getLatestFileSaveAt.mockReturnValue('2026-10-28T09:40:00.000Z')
-
-    groupDayOfLatestSave('/repo/README.md')
-
-    expect(ensureDayGrouped).toHaveBeenCalledWith(localDateOf('2026-10-28T09:40:00.000Z'), { lockWaitMs: LOCK_WAIT_MS })
-  })
-
-  it('does nothing for a file never saved in an editor', () => {
-    mocked.getLatestFileSaveAt.mockReturnValue(null)
-    groupDayOfLatestSave('/repo/README.md')
-    expect(ensureDayGrouped).not.toHaveBeenCalled()
-  })
-
-  it('answers from the sessions as they are when another process holds the lock', () => {
-    mocked.getLatestFileSaveAt.mockReturnValue('2026-10-28T09:40:00.000Z')
-    vi.mocked(ensureDayGrouped).mockImplementation(() => {
-      throw lockedError()
-    })
-
-    expect(() => groupDayOfLatestSave('/repo/README.md')).not.toThrow()
-  })
-
-  it('still reports any other database error', () => {
-    mocked.getLatestFileSaveAt.mockReturnValue('2026-10-28T09:40:00.000Z')
-    vi.mocked(ensureDayGrouped).mockImplementation(() => {
-      throw new Error('no such table: sessions')
-    })
-
-    expect(() => groupDayOfLatestSave('/repo/README.md')).toThrow('no such table')
-  })
 })
 
 describe('getFileDetails — a repo opened through a symlink', () => {

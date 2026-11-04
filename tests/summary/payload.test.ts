@@ -8,14 +8,12 @@ import {
   branchesOf,
   eventRowToPayload,
   sessionBranch,
-  sessionToPayload,
-  buildDayPayload,
+  spanToPayload,
   sessionLocation,
-  repoCwd,
   threadRepoCwd,
+  type PayloadSpan,
 } from '../../src/summary/payload'
 import type { EventRow } from '../../src/db/types'
-import type { Session } from '../../src/sessions/detector'
 
 function makeEvent(overrides: Partial<EventRow> = {}): EventRow {
   return {
@@ -35,16 +33,12 @@ function makeEvent(overrides: Partial<EventRow> = {}): EventRow {
   }
 }
 
-function makeSession(overrides: Partial<Session> = {}): Session {
+function makeSpan(overrides: Partial<PayloadSpan> = {}): PayloadSpan {
   return {
-    id: 1,
-    date: '2026-08-17',
     startedAt: '2026-08-17T09:00:00.000Z',
     endedAt: '2026-08-17T10:00:00.000Z',
     repoName: 'my-app',
     durationMinutes: 60,
-    eventCount: 1,
-    summary: null,
     events: [makeEvent()],
     ...overrides,
   }
@@ -133,9 +127,9 @@ describe('eventRowToPayload', () => {
   })
 })
 
-describe('sessionToPayload', () => {
+describe('spanToPayload', () => {
   it('maps the session for the given date', () => {
-    expect(sessionToPayload(makeSession(), '2026-08-17')).toEqual({
+    expect(spanToPayload(makeSpan(), '2026-08-17')).toEqual({
       date: '2026-08-17',
       project: 'my-app',
       branch: 'main',
@@ -159,7 +153,7 @@ describe('sessionToPayload', () => {
   })
 
   it('has a null branch and no branches when the session has no events', () => {
-    const payload = sessionToPayload(makeSession({ events: [] }), '2026-08-17')
+    const payload = spanToPayload(makeSpan({ events: [] }), '2026-08-17')
 
     expect(payload.branch).toBeNull()
     expect(payload.branches).toEqual([])
@@ -183,7 +177,7 @@ describe('sessionBranch', () => {
   })
 })
 
-describe('sessionToPayload — branch and commits', () => {
+describe('spanToPayload — branch and commits', () => {
   it('takes the latest branch, and git commits passed in, each under its branch', () => {
     const events = [
       makeEvent({ id: 1, branch: 'main', captured_at: '2026-08-17T09:00:00.000Z' }),
@@ -197,7 +191,7 @@ describe('sessionToPayload — branch and commits', () => {
     ]
     const gitCommits = [{ hash: 'a1b2c3d', subject: 'feat: add login', committedAt: '2026-08-17T10:40:00+01:00' }]
 
-    const payload = sessionToPayload(makeSession({ events }), '2026-08-17', { gitCommits })
+    const payload = spanToPayload(makeSpan({ events }), '2026-08-17', { gitCommits })
 
     expect(payload.branch).toBe('feat/auth')
     expect(payload.commits).toEqual([
@@ -225,25 +219,16 @@ describe('branchesOf', () => {
   })
 })
 
-describe('buildDayPayload', () => {
-  it('maps every session under the given date', () => {
-    const payload = buildDayPayload('2026-08-17', [makeSession(), makeSession({ repoName: 'api' })])
-
-    expect(payload.date).toBe('2026-08-17')
-    expect(payload.sessions.map((session) => session.project)).toEqual(['my-app', 'api'])
-  })
-})
-
 describe('sessionLocation', () => {
   const HOME = '/Users/dev'
   const NO_OVERRIDES = { projects: {}, homeDir: HOME }
 
   it('uses the repo name for sessions in a git repo', () => {
-    expect(sessionLocation(makeSession(), NO_OVERRIDES)).toBe('my-app')
+    expect(sessionLocation(makeSpan(), NO_OVERRIDES)).toBe('my-app')
   })
 
   it('falls back to the home-relative directory outside a git repo', () => {
-    const session = makeSession({
+    const session = makeSpan({
       repoName: null,
       events: [makeEvent({ repo_name: null, cwd: '/Users/dev/Downloads/scripts' })],
     })
@@ -252,19 +237,19 @@ describe('sessionLocation', () => {
   })
 
   it('shows the home directory itself as ~', () => {
-    const session = makeSession({ repoName: null, events: [makeEvent({ repo_name: null, cwd: HOME })] })
+    const session = makeSpan({ repoName: null, events: [makeEvent({ repo_name: null, cwd: HOME })] })
 
     expect(sessionLocation(session, NO_OVERRIDES)).toBe('~')
   })
 
   it('keeps directories outside home absolute', () => {
-    const session = makeSession({ repoName: null, events: [makeEvent({ repo_name: null, cwd: '/tmp/build' })] })
+    const session = makeSpan({ repoName: null, events: [makeEvent({ repo_name: null, cwd: '/tmp/build' })] })
 
     expect(sessionLocation(session, NO_OVERRIDES)).toBe('/tmp/build')
   })
 
   it('names the directory most of the commands ran in', () => {
-    const session = makeSession({
+    const session = makeSpan({
       repoName: null,
       events: [
         makeEvent({ repo_name: null, cwd: '/Users/dev/notes' }),
@@ -277,7 +262,7 @@ describe('sessionLocation', () => {
   })
 
   it('prefers a config.projects display name for that directory', () => {
-    const session = makeSession({ repoName: null, events: [makeEvent({ repo_name: null, cwd: '/Users/dev/scripts' })] })
+    const session = makeSpan({ repoName: null, events: [makeEvent({ repo_name: null, cwd: '/Users/dev/scripts' })] })
 
     expect(sessionLocation(session, { projects: { '/Users/dev/scripts': 'Shell scripts' }, homeDir: HOME })).toBe(
       'Shell scripts'
@@ -285,34 +270,13 @@ describe('sessionLocation', () => {
   })
 
   it('is null for a session with no repo and no events', () => {
-    expect(sessionLocation(makeSession({ repoName: null, events: [] }), NO_OVERRIDES)).toBeNull()
+    expect(sessionLocation(makeSpan({ repoName: null, events: [] }), NO_OVERRIDES)).toBeNull()
   })
 
   it('becomes the payload project', () => {
-    const session = makeSession({ repoName: null, events: [makeEvent({ repo_name: null, cwd: '/Users/dev/scripts' })] })
+    const session = makeSpan({ repoName: null, events: [makeEvent({ repo_name: null, cwd: '/Users/dev/scripts' })] })
 
-    expect(sessionToPayload(session, '2026-08-17', { context: NO_OVERRIDES }).project).toBe('~/scripts')
-  })
-})
-
-describe('repoCwd', () => {
-  it("uses a directory inside the session's repo even when most commands ran from a parent directory", () => {
-    const session = makeSession({
-      repoName: 'movies',
-      events: [
-        makeEvent({ repo_name: null, cwd: '/Users/dev' }),
-        makeEvent({ repo_name: null, cwd: '/Users/dev' }),
-        makeEvent({ repo_name: 'movies', cwd: '/Users/dev/movies' }),
-      ],
-    })
-
-    expect(repoCwd(session)).toBe('/Users/dev/movies')
-  })
-
-  it('falls back to the most-used directory for a session without a repo', () => {
-    const session = makeSession({ repoName: null, events: [makeEvent({ repo_name: null, cwd: '/tmp/scripts' })] })
-
-    expect(repoCwd(session)).toBe('/tmp/scripts')
+    expect(spanToPayload(session, '2026-08-17', { context: NO_OVERRIDES }).project).toBe('~/scripts')
   })
 })
 

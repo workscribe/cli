@@ -4,6 +4,7 @@ import { log } from '../utils/logger'
 import { runWeeklySummary } from '../summary/weekly'
 import { createSummaryWriter } from '../summary/writer'
 import { printLegacyAiNotice } from './notices'
+import { loadDayThreads, requireThreadData } from './thread-day'
 
 export function registerWeek(program: Command): void {
   program
@@ -15,8 +16,9 @@ export function registerWeek(program: Command): void {
     .action(async (options) => {
       const config = readConfig()
       printLegacyAiNotice(config)
+      requireThreadData()
       try {
-        await runWeeklySummary({ options, config, provider: createSummaryWriter(config) })
+        await runWeeklySummary({ options, config, provider: createSummaryWriter(config), loadDay: loadDayThreads })
       } catch (error) {
         log.error((error as Error).message)
         process.exit(1)

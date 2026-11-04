@@ -1,11 +1,7 @@
-// The I/O behind `context --file`: grouping the day the file was last saved, and the file details for --json.
-import { getLatestFileSaveAt } from '../db'
+// The I/O behind `context --file --json`'s file details, and the time limits the whole command answers within.
 import type { EventRow } from '../db/types'
-import { isDatabaseLocked } from '../db/transaction'
-import { ensureDayGrouped } from '../sessions/detector'
 import { buildFileDetails, displayPath, savesOf, type FileDetails, type FileMatcher } from '../summary/file-details'
 import { getFileCommits } from '../summary/git-commits'
-import { localDateOf } from '../utils/format'
 import { resolvedPath } from '../utils/working-directory'
 
 // The VS Code extension gives up on `context --file` after 5 s and then shows nothing, so the whole command has to
@@ -13,22 +9,7 @@ import { resolvedPath } from '../utils/working-directory'
 export const LOCK_WAIT_MS = 1000
 export const GIT_BUDGET_MS = 2000
 
-/**
- * Groups the day this file was last saved, if that day isn't up to date — so today's work shows without running
- * `summary` first. If another process holds the lock past LOCK_WAIT_MS, the answer comes from the sessions as they
- * are; the next call catches up.
- */
-export function groupDayOfLatestSave(filePath: string): void {
-  const latestSave = getLatestFileSaveAt(filePath)
-  if (!latestSave) return
-  try {
-    ensureDayGrouped(localDateOf(latestSave), { lockWaitMs: LOCK_WAIT_MS })
-  } catch (error) {
-    if (!isDatabaseLocked(error)) throw error
-  }
-}
-
-/** The stretch of work `context --file` answers with: an old session or a thread, as its events and span. */
+/** The stretch of work `context --file` answers with: the thread's events and span. */
 export interface FileSpan {
   events: EventRow[]
   branch: string | null

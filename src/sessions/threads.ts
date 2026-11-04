@@ -15,8 +15,9 @@ import { readConfig } from '../config'
 import { localDayBounds } from '../utils/format'
 import { buildDayBlocks, GROUPING_VERSION, MS_PER_MINUTE } from './blocks'
 
-// Builds a day's work blocks, threads and slots next to its old sessions (src/sessions/detector.ts), the same
-// locked, rechecked way. `sessions`, `summary`, `export` and `context` read them; the week moves onto them in WOR-130.
+// Builds a day's work blocks, threads and slots, under the write lock and rechecked first, so two processes never
+// build the same day twice. Every reader of a day's work — `sessions`, `summary`, `export`, the week and `context` —
+// reads them.
 
 export interface ThreadGroupingOptions {
   /** Wait at most this long for another process's write lock (default: the connection's 5 s). */
@@ -45,7 +46,6 @@ function rebuildDay(date: string, range: DayRange, basis: GroupingBasis): void {
  * Builds the day's blocks and threads unless they're up to date with its events, their project links, the idle
  * timeout and `GROUPING_VERSION`. The rebuild holds the write lock and rechecks first, so two processes never build
  * the same day twice. Throws a locked error (`isDatabaseLocked`) if another process keeps the lock past `lockWaitMs`.
- * Never touches the old sessions.
  */
 export function ensureDayThreads(date: string, options: ThreadGroupingOptions = {}): void {
   const range = localDayBounds(date)

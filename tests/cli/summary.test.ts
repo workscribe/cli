@@ -1,20 +1,14 @@
 import { describe, it, expect, vi, beforeEach, onTestFinished } from 'vitest'
 
-// summary.ts imports from '../db' and '../sessions/detector', both of which
-// transitively load node:sqlite (Node 22+ only). Mock them before importing
-// the module under test so the import chain never reaches node:sqlite.
+// summary.ts imports from '../db', which loads node:sqlite (Node 22+ only). Mock it before importing the module under
+// test so the import chain never reaches node:sqlite.
 vi.mock('../../src/db', () => ({
-  getSessionSummaries: vi.fn(() => []),
   saveThreadSummary: vi.fn(),
 }))
 
 vi.mock('../../src/cli/thread-day', () => ({
   requireThreadData: vi.fn(),
   loadDayThreads: vi.fn(),
-}))
-
-vi.mock('../../src/sessions/detector', () => ({
-  getOrBuildSessions: vi.fn(),
 }))
 
 vi.mock('../../src/summary/writer', () => ({
@@ -66,7 +60,6 @@ vi.mock('../../src/summary/exclusions', () => ({
 
 import { Command } from 'commander'
 import fs from 'fs'
-import { getOrBuildSessions } from '../../src/sessions/detector'
 import { createSummaryWriter } from '../../src/summary/writer'
 import { readConfig } from '../../src/config'
 import { saveThreadSummary } from '../../src/db'
@@ -82,31 +75,12 @@ import type { SummaryRow } from '../../src/db/summary-store'
 import { block, row, thread } from '../summary/contract/fixtures'
 
 const mockFs = fs as unknown as Record<string, ReturnType<typeof vi.fn>>
-const mockGetOrBuildSessions = getOrBuildSessions as ReturnType<typeof vi.fn>
 const mockCreateSummaryWriter = createSummaryWriter as ReturnType<typeof vi.fn>
 const mockReadConfig = readConfig as ReturnType<typeof vi.fn>
 const mockSaveThreadSummary = saveThreadSummary as ReturnType<typeof vi.fn>
 const mockPostToWebhook = postToWebhook as ReturnType<typeof vi.fn>
 const mockIsSlackWebhookUrl = isSlackWebhookUrl as ReturnType<typeof vi.fn>
 const mockLog = log as Record<string, ReturnType<typeof vi.fn>>
-
-const FAKE_SESSION = {
-  repoName: 'my-app',
-  durationMinutes: 60,
-  startedAt: '2026-08-17T09:00:00.000Z',
-  endedAt: '2026-08-17T10:00:00.000Z',
-  summary: null,
-  events: [
-    {
-      category: 'shipping',
-      metadata: '{"message":"fix: bug"}',
-      exit_code: 0,
-      duration_ms: null,
-      branch: 'main',
-      captured_at: '2026-08-17T09:00:00.000Z',
-    },
-  ],
-}
 
 const BASE_CONFIG = { integrations: {} }
 
@@ -152,7 +126,11 @@ describe('parseBullets', () => {
 describe('workscribe summary --week', () => {
   beforeEach(() => {
     mockReadConfig.mockReturnValue(BASE_CONFIG)
-    mockGetOrBuildSessions.mockReturnValue([FAKE_SESSION])
+    vi.mocked(loadDayThreads).mockReturnValue([
+      block([thread([row({ category: 'shipping', repo_name: 'my-app' })], { repoName: 'my-app' })], {
+        date: '2026-08-17',
+      }),
+    ])
     mockCreateSummaryWriter.mockReturnValue({
       summarizeWeek: vi.fn().mockResolvedValue('# Week summary\n- Shipped a fix'),
     })

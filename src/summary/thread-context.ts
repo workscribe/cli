@@ -18,7 +18,7 @@ export interface ThreadSpanJson {
   activeMinutes: number
 }
 
-/** The fields every `context` answer has, from an old session or a thread. */
+/** The fields every `context` answer has. */
 export interface WorkSpan {
   repoName: string | null
   date: string
