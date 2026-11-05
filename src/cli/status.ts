@@ -9,6 +9,7 @@ import { getEventsForDate } from '../db'
 import { PAUSE_FLAG_PATH } from '../utils/paths'
 import { getPendingAlerts } from '../db/alerts'
 import { checkHookHealth } from '../capture/hooks/claude-code'
+import { detectShell, shellHookHealth } from '../capture/shell-hook'
 import { detectAgents } from '../skills/detect'
 import { formatAgentSkillLine } from '../skills/actions'
 import { printLegacyAiNotice } from './notices'
@@ -41,6 +42,25 @@ export function formatDataLines(status: DataStatus): string[] {
   }
   if (status.latestBackup) lines.push(chalk.dim(`               backup: ${status.latestBackup}`))
   return lines
+}
+
+/** An old shell hook (one that can drop terminal commands), or a leftover 0.2.1 Chronicle hook in the rc file. */
+function printShellHookWarnings(): void {
+  const shell = detectShell()
+  if (!shell) return
+  const health = shellHookHealth(shell)
+  if (health.isOutdated) {
+    log.plain('')
+    log.plain(
+      `  ${chalk.yellow('⚠')}  Your ${shell.name} hook is from an older version and may not record terminal commands.`
+    )
+    log.plain(chalk.dim('     Run workscribe init to update it, then open a new terminal'))
+  }
+  if (health.hasChronicleHook) {
+    log.plain('')
+    log.plain(`  ${chalk.yellow('⚠')}  An old Chronicle hook in ${shell.rcFile} errors at every prompt.`)
+    log.plain(chalk.dim('     Run workscribe init to remove it'))
+  }
 }
 
 export function registerStatus(program: Command): void {
@@ -97,6 +117,8 @@ export function registerStatus(program: Command): void {
             chalk.dim('  (run: workscribe alerts)')
         )
       }
+
+      printShellHookWarnings()
 
       const hookHealth = checkHookHealth()
       if (hookHealth.installed && !hookHealth.pinned) {

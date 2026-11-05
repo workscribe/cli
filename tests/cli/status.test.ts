@@ -34,6 +34,10 @@ vi.mock('../../src/capture/hooks/claude-code', () => ({
 }))
 
 // fs is mocked above, so the skill modules must be too — by default no coding agents are detected
+vi.mock('../../src/capture/shell-hook', () => ({
+  detectShell: vi.fn(() => ({ name: 'zsh', rcFile: '/home/dev/.zshrc' })),
+  shellHookHealth: vi.fn(() => ({ isOutdated: false, hasChronicleHook: false })),
+}))
 vi.mock('../../src/skills/detect', () => ({ detectAgents: vi.fn().mockReturnValue([]) }))
 vi.mock('../../src/skills/installer', () => ({
   readInstallState: vi.fn(),
@@ -51,6 +55,7 @@ import { readConfig } from '../../src/config'
 import { log } from '../../src/utils/logger'
 import { registerStatus } from '../../src/cli/status'
 import { checkHookHealth } from '../../src/capture/hooks/claude-code'
+import { detectShell, shellHookHealth } from '../../src/capture/shell-hook'
 import { getDataStatus } from '../../src/cli/data-jobs'
 
 const mockFs = fs as unknown as Record<string, ReturnType<typeof vi.fn>>
@@ -339,5 +344,40 @@ describe('workscribe status — data', () => {
     expect(printedLines()).toContainEqual(
       expect.stringContaining('backup: /home/user/.workscribe/backups/workscribe-2.2.0-x.db')
     )
+  })
+
+  describe('shell hook', () => {
+    const printed = () => (mockLog.plain as ReturnType<typeof vi.fn>).mock.calls.flat().join(' ')
+
+    beforeEach(() => {
+      vi.mocked(detectShell).mockReturnValue({ name: 'zsh', rcFile: '/home/dev/.zshrc' })
+      vi.mocked(shellHookHealth).mockReturnValue({ isOutdated: false, hasChronicleHook: false })
+    })
+
+    it('says to run init when the zsh hook is from an older version, which may not record commands', async () => {
+      vi.mocked(shellHookHealth).mockReturnValue({ isOutdated: true, hasChronicleHook: false })
+
+      await makeProgram().parseAsync(['status'], { from: 'user' })
+
+      expect(printed()).toContain('Your zsh hook is from an older version and may not record terminal commands.')
+      expect(printed()).toContain('Run workscribe init to update it, then open a new terminal')
+    })
+
+    it('says to run init when a Chronicle hook is left in the rc file', async () => {
+      vi.mocked(shellHookHealth).mockReturnValue({ isOutdated: false, hasChronicleHook: true })
+
+      await makeProgram().parseAsync(['status'], { from: 'user' })
+
+      expect(printed()).toContain('An old Chronicle hook in /home/dev/.zshrc errors at every prompt.')
+    })
+
+    it('says nothing about the shell hook when it is current, or the shell is unknown', async () => {
+      await makeProgram().parseAsync(['status'], { from: 'user' })
+      vi.mocked(detectShell).mockReturnValue(null)
+      await makeProgram().parseAsync(['status'], { from: 'user' })
+
+      expect(printed()).not.toContain('hook is from an older version and may not record')
+      expect(printed()).not.toContain('Chronicle')
+    })
   })
 })

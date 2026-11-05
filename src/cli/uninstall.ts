@@ -5,7 +5,13 @@ import os from 'os'
 import prompts from 'prompts'
 import chalk from 'chalk'
 import { WORKSCRIBE_DIR, REQUIRED_DIRS } from '../utils/paths'
-import { isHookInstalled, removeCompletions, removeFishCompletions, removeHook } from '../capture/shell-hook'
+import {
+  isHookInstalled,
+  removeChronicleHook,
+  removeCompletions,
+  removeFishCompletions,
+  removeHook,
+} from '../capture/shell-hook'
 import { claudeCodeIntegration } from '../capture/hooks/claude-code'
 import { log } from '../utils/logger'
 import { SKILL_AGENTS } from '../skills/agents'
@@ -17,10 +23,16 @@ function completionRcFiles(): string[] {
   return ['.zshrc', '.bashrc', '.bash_profile'].map((file) => path.join(os.homedir(), file))
 }
 
+const CHRONICLE_RC_FILES = ['.zshrc', '.bashrc']
+
 /** Removes everything else `init` adds to your shell and tools: completions and the Claude Code session hook. */
 function removeCompletionsAndToolHooks(): void {
   for (const rcFile of completionRcFiles()) {
     if (removeCompletions(rcFile)) log.success(`Shell completions removed from ${rcFile}`)
+  }
+  // 0.2.1's `chronicle init` wrote only these two
+  for (const rcFile of CHRONICLE_RC_FILES.map((file) => path.join(os.homedir(), file))) {
+    if (removeChronicleHook(rcFile)) log.success(`Old Chronicle hook removed from ${rcFile}`)
   }
   if (removeFishCompletions()) log.success('Fish completions removed')
 

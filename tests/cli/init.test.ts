@@ -27,7 +27,11 @@ vi.mock('../../src/utils/paths', () => ({
   REQUIRED_DIRS: ['/home/user/.workscribe'],
 }))
 
-vi.mock('../../src/capture/shell-hook', () => ({
+vi.mock('../../src/capture/shell-hook', async (importOriginal) => ({
+  // The real one: it only reads $SHELL
+  detectShell: (await importOriginal<typeof import('../../src/capture/shell-hook')>()).detectShell,
+  hasChronicleHook: vi.fn(() => false),
+  removeChronicleHook: vi.fn(),
   isHookInstalled: vi.fn(),
   isHookOutdated: vi.fn(),
   installHook: vi.fn(),
@@ -88,6 +92,8 @@ import { Command } from 'commander'
 import prompts from 'prompts'
 import { readConfig, ensureInstallId } from '../../src/config'
 import {
+  hasChronicleHook,
+  removeChronicleHook,
   isHookInstalled,
   installHook,
   isCompletionsInstalled,
@@ -145,6 +151,7 @@ function mockPromptAnswers(overrides: Record<string, unknown[]> = {}) {
     install: [false],
     installSkill: [false],
     removeLegacyAi: [true],
+    removeChronicle: [true],
   }
   const queues: Record<string, unknown[]> = {}
   for (const name of Object.keys(defaults)) {
@@ -559,5 +566,28 @@ describe('workscribe init — outdated AI tool hook (WOR-120)', () => {
     await makeProgram().parseAsync(['init'], { from: 'user' })
 
     expect(mockPrompts).toHaveBeenCalledWith(expect.objectContaining({ name: 'install', initial: false }))
+  })
+})
+
+describe('workscribe init — a leftover Chronicle hook (WOR-153)', () => {
+  it('offers to remove it, defaulting to yes, and removes it', async () => {
+    vi.mocked(hasChronicleHook).mockReturnValue(true)
+
+    await makeProgram().parseAsync(['init'], { from: 'user' })
+
+    expect(mockPrompts).toHaveBeenCalledWith(expect.objectContaining({ name: 'removeChronicle', initial: true }))
+    expect(removeChronicleHook).toHaveBeenCalledWith(expect.stringMatching(/\.(zshrc|bashrc)$/))
+  })
+
+  it('leaves it when the user declines, and never asks when there is none', async () => {
+    vi.mocked(hasChronicleHook).mockReturnValue(true)
+    mockPromptAnswers({ removeChronicle: [false] })
+    await makeProgram().parseAsync(['init'], { from: 'user' })
+    expect(removeChronicleHook).not.toHaveBeenCalled()
+
+    vi.mocked(hasChronicleHook).mockReturnValue(false)
+    mockPrompts.mockClear()
+    await makeProgram().parseAsync(['init'], { from: 'user' })
+    expect(mockPrompts).not.toHaveBeenCalledWith(expect.objectContaining({ name: 'removeChronicle' }))
   })
 })

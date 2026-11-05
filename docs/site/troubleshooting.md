@@ -13,6 +13,21 @@ description: Common issues and how to fix them.
 workscribe status
 ```
 
+**Terminal commands not recorded in zsh or bash (Workscribe 3.0.0 and earlier):** the shell hook those versions installed drops commands in three cases:
+- zsh, for anything run inside a git repo
+- zsh, everywhere, unless something else in your setup (oh-my-zsh, powerlevel10k, a terminal's shell integration) loads `zsh/datetime`
+- bash on macOS, everywhere
+
+`workscribe status` warns about it ("Your zsh hook is from an older version…"). To fix it, update the hook, then open a new terminal:
+
+```bash
+workscribe init
+```
+
+Accept "Shell hook … is outdated. Update?". Your rc file is backed up first. Commands run before the update weren't recorded and can't be recovered. Fish isn't affected.
+
+**"An old Chronicle hook … errors at every prompt"** (or `_chronicle_precmd: unknown function: int` in your terminal): Workscribe 0.2.1, from before it was renamed, left a hook in your `~/.zshrc` or `~/.bashrc`. Run `workscribe init` and accept removing it.
+
 If it shows `Capture active` but no events are appearing, the shell hook may not be loaded.
 
 **Reload your shell:**

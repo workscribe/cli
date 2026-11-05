@@ -18,7 +18,8 @@ Safe to re-run at any time — installs missing hooks, updates outdated ones, an
 **What it does:**
 - Creates `~/.workscribe/` with owner-only permissions
 - Initialises the SQLite database
-- Installs or updates the shell hook in `~/.zshrc` or `~/.bashrc`
+- Installs or updates the shell hook in `~/.zshrc` or `~/.bashrc`. An update keeps one header above the hook, removing copies earlier updates stacked up
+- Offers to remove a leftover Chronicle hook (from Workscribe 0.2.1, before the rename), which errors at every prompt — defaults to yes. Your rc file is backed up first
 - Installs shell completions, and rewrites the completion script on every run, so deleting the data folder doesn't break them. If your rc file has completions from Workscribe 2.0.0 or earlier, which print an error once the script is gone, offers to update them — defaults to yes
 - Detects installed AI coding tools (Claude Code, Aider, etc.) and offers to install a session capture hook for each — opt-in, defaults to no. If a hook is already there but outdated (from an older version, or pinned to a Node.js version that's since been removed), offers to update it instead — defaults to yes, since you opted in before
 - Detects coding agents (Claude Code, Codex, GitHub Copilot, Cursor) and offers to install the [Workscribe agent skill](#agent-skill) for each — defaults to yes, and only asks when the skill is missing or outdated
@@ -533,6 +534,7 @@ workscribe status
 - A "Data" line: whether your stored data is up to date, has upgrades pending, or an upgrade failed — with rows a data upgrade couldn't resolve and the latest backup, when there are any
 - An "Agent skill" line for each detected coding agent: installed (with version), outdated, or not installed — with the command to fix it
 - Pending security alerts count (if any)
+- A warning when your zsh or bash hook is from an older version — one that may not record terminal commands — or a leftover Chronicle hook is in your rc file, with `workscribe init` to fix it
 
 ---
 

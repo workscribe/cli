@@ -26,6 +26,12 @@ import {
   removeHook,
   resolveWorkscribeBinary,
   injectBinaryPath,
+  SHELL_HOOK_VERSIONS,
+  findChronicleHook,
+  hookBlockOf,
+  installedHookVersion,
+  removeChronicleHook,
+  shellHookHealth,
 } from '../../src/capture/shell-hook'
 
 const mockFs = fs as unknown as Record<string, ReturnType<typeof vi.fn>>
@@ -332,5 +338,124 @@ end
   it('leaves hook content unchanged when no matching patterns are present', () => {
     const unrecognised = `# workscribe:hook:start\n_some_other_hook() {}\n# workscribe:hook:end`
     expect(injectBinaryPath(unrecognised, BIN, NODE)).toBe(unrecognised)
+  })
+})
+
+// fs is mocked above, so the real templates are read through the actual module
+const realFs = await vi.importActual<typeof import('fs')>('fs')
+const template = (shell: string) => realFs.readFileSync(new URL(`../../shell/hook.${shell}`, import.meta.url), 'utf-8')
+const ZSH_TEMPLATE = template('zsh')
+const PREAMBLE =
+  '# Workscribe — developer work journal\n# Do not edit this block manually. Managed by `workscribe init`.'
+const CHRONICLE_BLOCK = [
+  '# Chronicle — developer work journal',
+  '# Do not edit this block manually. Managed by `chronicle init`.',
+  '# chronicle:hook:start',
+  '_chronicle_precmd() { local duration_ms=$(( int(1) )); }',
+  '# chronicle:hook:end',
+].join('\n')
+
+describe('the real hook templates (WOR-153)', () => {
+  it.each(['zsh', 'bash', 'fish'])('%s: the version it declares is SHELL_HOOK_VERSIONS', (shell) => {
+    expect(installedHookVersion(hookBlockOf(template(shell)))).toBe(SHELL_HOOK_VERSIONS[shell])
+  })
+
+  it('is not outdated when the installed hook is the template itself, header and all', () => {
+    mockFs.existsSync.mockReturnValue(true)
+    mockFs.readFileSync.mockReturnValue(`# mine\n${ZSH_TEMPLATE}\n# more`)
+
+    expect(isHookOutdated('/home/user/.zshrc', ZSH_TEMPLATE)).toBe(false)
+  })
+
+  it('is outdated when the binary path or the version changed', () => {
+    mockFs.existsSync.mockReturnValue(true)
+    mockFs.readFileSync.mockReturnValue(ZSH_TEMPLATE)
+
+    expect(isHookOutdated('/home/user/.zshrc', injectBinaryPath(ZSH_TEMPLATE, '/bin/ws', '/bin/node'))).toBe(true)
+    expect(isHookOutdated('/home/user/.zshrc', ZSH_TEMPLATE.replace('hook-version 2', 'hook-version 3'))).toBe(true)
+  })
+
+  it('updating an rc with 11 stacked headers leaves exactly one, and the rest of the file as it was', () => {
+    const stacked = Array.from({ length: 11 }, () => PREAMBLE).join('\n')
+    const oldBlock = '# workscribe:hook:start\n_old() { :; }\n# workscribe:hook:end'
+    mockFs.readFileSync.mockReturnValue(`export A=1\n\n${stacked}\n${oldBlock}\n\nexport B=2\n`)
+
+    updateHook('/home/user/.zshrc', ZSH_TEMPLATE)
+
+    const written = mockFs.writeFileSync.mock.calls[0][1] as string
+    expect(written.match(/developer work journal/g)).toHaveLength(1)
+    expect(written).toBe(`export A=1\n\n${ZSH_TEMPLATE.trimEnd()}\n\nexport B=2\n`)
+  })
+
+  it('removing the hook removes every stacked header too', () => {
+    mockFs.readFileSync.mockReturnValue(`export A=1\n${PREAMBLE}\n${PREAMBLE}\n${HOOK_BLOCK}\nexport B=2`)
+
+    removeHook('/home/user/.zshrc')
+
+    expect(mockFs.writeFileSync.mock.calls[0][1]).toBe('export A=1\nexport B=2')
+  })
+
+  it('reads a block without a version line as version 1', () => {
+    expect(installedHookVersion(HOOK_BLOCK)).toBe(1)
+  })
+})
+
+describe('a leftover Chronicle hook (WOR-153)', () => {
+  const rc = `export A=1\n\n${CHRONICLE_BLOCK}\n\n${ZSH_TEMPLATE}`
+
+  it('is found with its header lines', () => {
+    const region = findChronicleHook(rc)
+
+    expect(region && rc.slice(region.start, region.end)).toBe(CHRONICLE_BLOCK)
+    expect(findChronicleHook(ZSH_TEMPLATE)).toBeNull()
+  })
+
+  it('is removed after a backup, leaving the Workscribe hook and everything else', () => {
+    mockFs.readFileSync.mockReturnValue(rc)
+
+    expect(removeChronicleHook('/home/user/.zshrc')).toBe(true)
+
+    expect(mockFs.copyFileSync).toHaveBeenCalled()
+    expect(mockFs.writeFileSync.mock.calls[0][1]).toBe(`export A=1\n\n${ZSH_TEMPLATE}`)
+  })
+
+  it('is left alone, with no backup, when there is none', () => {
+    mockFs.readFileSync.mockReturnValue(ZSH_TEMPLATE)
+
+    expect(removeChronicleHook('/home/user/.zshrc')).toBe(false)
+    expect(mockFs.copyFileSync).not.toHaveBeenCalled()
+  })
+})
+
+describe('shellHookHealth', () => {
+  it('flags a zsh hook from before versions as outdated, and a Chronicle hook beside it', () => {
+    mockFs.existsSync.mockReturnValue(true)
+    mockFs.readFileSync.mockReturnValue(`${CHRONICLE_BLOCK}\n${HOOK_BLOCK}`)
+
+    expect(shellHookHealth({ name: 'zsh', rcFile: '/home/user/.zshrc' })).toEqual({
+      isOutdated: true,
+      hasChronicleHook: true,
+    })
+  })
+
+  it('flags nothing for the current template, nor for fish, whose hook has not changed', () => {
+    mockFs.existsSync.mockReturnValue(true)
+    mockFs.readFileSync.mockReturnValue(ZSH_TEMPLATE)
+    expect(shellHookHealth({ name: 'zsh', rcFile: '/home/user/.zshrc' }).isOutdated).toBe(false)
+
+    mockFs.readFileSync.mockReturnValue(template('fish'))
+    expect(shellHookHealth({ name: 'fish', rcFile: '/home/user/workscribe.fish' }).isOutdated).toBe(false)
+  })
+
+  it('flags nothing when the hook is not installed', () => {
+    mockFs.existsSync.mockReturnValue(false)
+    mockFs.readFileSync.mockImplementation(() => {
+      throw new Error('ENOENT')
+    })
+
+    expect(shellHookHealth({ name: 'zsh', rcFile: '/home/user/.zshrc' })).toEqual({
+      isOutdated: false,
+      hasChronicleHook: false,
+    })
   })
 })
