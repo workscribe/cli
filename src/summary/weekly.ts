@@ -3,6 +3,8 @@ import { todayDate, startOfWeek, eachDayOfRange } from '../utils/format'
 import { locationContextFrom, threadRepoCwd, threadToPayload, type LocationContext } from './payload'
 import { postSummary, type WebhookOptions } from './webhook'
 import { DAY_GIT_BUDGET_MS, lookupDayCommits } from './day-commits'
+import { keepsStdoutClean, type SummaryFormat } from './output-format'
+import { toPlainText } from './plain-text'
 import { weekLayoutOf } from '../ai/engines/template/week'
 import type { AIProvider, WeekLayout, WeekSummaryPayload } from '../ai/types'
 import type { WorkscribeConfig } from '../config'
@@ -16,6 +18,8 @@ export interface WeeklySummaryOptions extends WebhookOptions {
   fresh?: boolean
   /** Each project then each branch (the default), or day by day */
   by?: WeekLayout
+  /** `--format`; `summary.format` decides without it */
+  format?: SummaryFormat
 }
 
 interface RunWeeklySummaryInput {
@@ -94,9 +98,10 @@ export async function runWeeklySummary({ options, config, provider, loadDay }: R
 
   const payload: WeekSummaryPayload = { weekStart, weekEnd: today, by: options.by ?? 'project', days }
   const summary = await writeWeeklySummary(provider, payload)
-  const isJson = config.summary?.format === 'json'
-  // Only the JSON on stdout, so it can be piped; posting still sends the text, its status on stderr
-  if (isJson) log.plain(weekJson(payload, config.summary?.includeCategories ?? []))
+  const format = options.format ?? config.summary?.format
+  // Only the JSON or the plain text on stdout, so it can be piped; posting still sends the markdown, its status on stderr
+  if (format === 'json') log.plain(weekJson(payload, config.summary?.includeCategories ?? []))
+  else if (format === 'text') log.plain(toPlainText(summary))
   else printSummary(summary)
-  await postSummary({ options, config, summary, statusToStderr: isJson })
+  await postSummary({ options, config, summary, statusToStderr: keepsStdoutClean(format) })
 }

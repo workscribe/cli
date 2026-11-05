@@ -215,6 +215,49 @@ describe('workscribe week', () => {
     })
   })
 
+  it.each(['project', 'day'])('prints only plain text with --format text, laid out by %s', async (layout) => {
+    await makeProgram().parseAsync(['week', '--by', layout, '--format', 'text'], { from: 'user' })
+
+    expect(mockLog.plain).toHaveBeenCalledTimes(1)
+    expect(mockLog.plain).toHaveBeenCalledWith('Week summary\n- Shipped a fix')
+  })
+
+  it('prints plain text when summary.format is text, and --format markdown overrides it', async () => {
+    mockReadConfig.mockReturnValue({ ...BASE_CONFIG, summary: { format: 'text' } })
+
+    await makeProgram().parseAsync(['week'], { from: 'user' })
+
+    expect(mockLog.plain).toHaveBeenCalledWith('Week summary\n- Shipped a fix')
+
+    mockLog.plain.mockClear()
+
+    await makeProgram().parseAsync(['week', '--format', 'markdown'], { from: 'user' })
+
+    expect(mockLog.plain).toHaveBeenCalledWith('# Week summary\n- Shipped a fix')
+  })
+
+  it('still posts the markdown in text mode, with its status on stderr', async () => {
+    await makeProgram().parseAsync(['week', '--format', 'text', '--webhook', 'https://hooks.example.com/abc'], {
+      from: 'user',
+    })
+
+    expect(mockPostToWebhook).toHaveBeenCalledWith('https://hooks.example.com/abc', '# Week summary\n- Shipped a fix')
+    expect(mockLog.plain).toHaveBeenCalledTimes(1)
+    expect(mockLog.notice).toHaveBeenCalledWith('Posted.')
+  })
+
+  it('rejects an unknown --format before reading anything', async () => {
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => {
+      throw new Error('exit')
+    })
+    onTestFinished(() => exitSpy.mockRestore())
+
+    await expect(makeProgram().parseAsync(['week', '--format', 'xml'], { from: 'user' })).rejects.toThrow('exit')
+
+    expect(mockLog.error).toHaveBeenCalledWith('--format must be markdown, json or text')
+    expect(requireThreadData).not.toHaveBeenCalled()
+  })
+
   it('prints the week as one JSON document with summary.format json, and still posts the text', async () => {
     mockReadConfig.mockReturnValue({ ...BASE_CONFIG, summary: { format: 'json' } })
     mockCreateSummaryWriter.mockReturnValue({ summarizeWeek: vi.fn().mockResolvedValue('# Week summary') })

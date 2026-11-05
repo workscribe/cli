@@ -13,7 +13,7 @@ interface PostSummaryInput {
   options: WebhookOptions
   config: WorkscribeConfig
   summary: string
-  /** True when stdout carries JSON (summary.format=json): status lines then go to stderr so the JSON can be piped. */
+  /** True when stdout carries only JSON or plain text: status lines then go to stderr so the output can be piped. */
   statusToStderr?: boolean
 }
 

@@ -1,5 +1,6 @@
 import { Command } from 'commander'
 import { readConfig } from '../config'
+import { SUMMARY_FORMATS, type SummaryFormat } from '../summary/output-format'
 import { runWeeklySummary, type WeeklySummaryOptions } from '../summary/weekly'
 import { createSummaryWriter } from '../summary/writer'
 import { printLegacyAiNotice } from './notices'
@@ -21,15 +22,31 @@ function parseWeekLayout(value: string | undefined): WeekLayout {
   return layout
 }
 
+/** `--format`, which both `week` and `summary` take. */
+export function addSummaryFormatOption(command: Command): Command {
+  return command.option('--format <format>', 'print as markdown, json or text, overriding summary.format')
+}
+
+/** The flag's format, or undefined when it wasn't passed and `summary.format` decides. */
+export function parseSummaryFormat(value: string | undefined): SummaryFormat | undefined {
+  if (value === undefined) return undefined
+  const format = SUMMARY_FORMATS.find((candidate) => candidate === value)
+  if (!format) fail('--format must be markdown, json or text')
+  return format
+}
+
 /** `week` and `summary --week`: one handler, so both print the same thing for the same options. */
-export async function runWeekCommand(options: Omit<WeeklySummaryOptions, 'by'> & { by?: string }): Promise<void> {
+export async function runWeekCommand(
+  options: Omit<WeeklySummaryOptions, 'by' | 'format'> & { by?: string; format?: string }
+): Promise<void> {
   const by = parseWeekLayout(options.by)
+  const format = parseSummaryFormat(options.format)
   const config = readConfig()
   printLegacyAiNotice(config)
   requireThreadData()
   try {
     await runWeeklySummary({
-      options: { ...options, by },
+      options: { ...options, by, format },
       config,
       provider: createSummaryWriter(config),
       loadDay: loadDayThreads,
@@ -46,5 +63,5 @@ export function registerWeek(program: Command): void {
     .option('--fresh', 'accepted for 1.x scripts — the week is always rendered fresh')
     .option('--slack', 'post to Slack webhook from config')
     .option('--webhook <url>', 'post to a custom webhook URL')
-  addWeekLayoutOption(weekCommand).action(runWeekCommand)
+  addSummaryFormatOption(addWeekLayoutOption(weekCommand)).action(runWeekCommand)
 }
