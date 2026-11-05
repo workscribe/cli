@@ -1,5 +1,11 @@
 # Changelog
 
+## [3.0.1](https://github.com/workscribe/cli/compare/v3.0.0...v3.0.1) (2026-11-05)
+
+### Bug Fixes
+
+* **shell:** capture every terminal command in zsh and bash ([71a8b94](https://github.com/workscribe/cli/commit/71a8b94812afefbc001e7aaa91f6001d59490414))
+
 ## [3.0.0](https://github.com/workscribe/cli/compare/v2.1.0...v3.0.0) (2026-11-05)
 
 ### ⚠ BREAKING CHANGES
