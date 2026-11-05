@@ -19,6 +19,7 @@ vi.mock('../../src/capture/shell-hook', () => ({
   removeHook: vi.fn(),
   removeCompletions: vi.fn(() => false),
   removeFishCompletions: vi.fn(() => false),
+  removeChronicleHook: vi.fn(() => false),
 }))
 
 // Mocked whole: the real module imports child_process and reads ~/.claude/settings.json
@@ -38,7 +39,13 @@ import prompts from 'prompts'
 import os from 'os'
 import { uninstallSkill } from '../../src/skills/installer'
 import { log } from '../../src/utils/logger'
-import { isHookInstalled, removeHook, removeCompletions, removeFishCompletions } from '../../src/capture/shell-hook'
+import {
+  isHookInstalled,
+  removeChronicleHook,
+  removeHook,
+  removeCompletions,
+  removeFishCompletions,
+} from '../../src/capture/shell-hook'
 import { claudeCodeIntegration } from '../../src/capture/hooks/claude-code'
 import { Command } from 'commander'
 import { registerUninstall } from '../../src/cli/uninstall'
@@ -200,6 +207,19 @@ describe('workscribe uninstall — completions and the Claude Code hook (WOR-120
     vi.mocked(removeCompletions).mockReturnValue(false)
     vi.mocked(claudeCodeIntegration.uninstall!).mockReturnValue('not-installed')
   }
+
+  it('removes a leftover Chronicle hook from the rc files 0.2.1 wrote it to', async () => {
+    prepare()
+    vi.mocked(removeChronicleHook).mockImplementation((rcFile: string) => rcFile.endsWith('.zshrc'))
+
+    await makeProgram().parseAsync(['uninstall'], { from: 'user' })
+
+    expect(vi.mocked(removeChronicleHook).mock.calls.map(([rcFile]) => rcFile)).toEqual([
+      '/Users/dev/.zshrc',
+      '/Users/dev/.bashrc',
+    ])
+    expect(mockLog.success).toHaveBeenCalledWith('Old Chronicle hook removed from /Users/dev/.zshrc')
+  })
 
   it('removes the completions block from every rc file that has one, even without the shell hook', async () => {
     prepare()

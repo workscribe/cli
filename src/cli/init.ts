@@ -1,7 +1,6 @@
 import { Command } from 'commander'
 import fs from 'fs'
 import path from 'path'
-import os from 'os'
 import prompts from 'prompts'
 import chalk from 'chalk'
 import { CONFIG_PATH, PROFILES_DIR, REQUIRED_DIRS } from '../utils/paths'
@@ -12,6 +11,9 @@ import { getDb } from '../db'
 import { log } from '../utils/logger'
 import { loadAIToolRegistry } from '../config/registry'
 import {
+  detectShell,
+  hasChronicleHook,
+  removeChronicleHook,
   isHookInstalled,
   isHookOutdated,
   installHook,
@@ -41,17 +43,6 @@ declare const __WORKSCRIBE_VERSION__: string
 type Shell = ShellTarget
 
 const TOTAL_STEPS = 5
-
-function detectShell(): Shell | null {
-  const shell = process.env.SHELL ?? ''
-  if (shell.includes('zsh')) return { name: 'zsh', rcFile: path.join(os.homedir(), '.zshrc') }
-  if (shell.includes('bash')) return { name: 'bash', rcFile: path.join(os.homedir(), '.bashrc') }
-  if (shell.includes('fish')) {
-    const confDir = path.join(os.homedir(), '.config', 'fish', 'conf.d')
-    return { name: 'fish', rcFile: path.join(confDir, 'workscribe.fish') }
-  }
-  return null
-}
 
 function step(current: number, total: number, label: string): void {
   log.plain(chalk.bold(`\n  [${current}/${total}] ${label}`))
@@ -105,6 +96,23 @@ async function runTelemetryStep(config: WorkscribeConfig): Promise<void> {
   })
   config.telemetry.enabled = telemetryEnabled
   config.telemetry.installId = ensureInstallId(config)
+}
+
+/** 0.2.1, before the rename to Workscribe, wrote a `chronicle` hook that nothing removes and that errors at every prompt. */
+async function offerChronicleCleanup(shell: Shell): Promise<void> {
+  if (!hasChronicleHook(shell.rcFile)) return
+  const { removeChronicle } = await prompts({
+    type: 'confirm',
+    name: 'removeChronicle',
+    message: `An old Chronicle hook in ${shell.rcFile} errors at every prompt. Remove it?`,
+    initial: true,
+  })
+  if (!removeChronicle) {
+    log.info('Chronicle hook left in place')
+    return
+  }
+  removeChronicleHook(shell.rcFile)
+  log.success(`Removed the old Chronicle hook from ${shell.rcFile}`)
 }
 
 // ── Step 3: Shell hook + completions ──────────────────────────────────────
@@ -163,6 +171,8 @@ async function runShellHookStep(program: Command): Promise<Shell | null> {
   } else {
     log.info(`Shell hook up to date in ${shell.rcFile}`)
   }
+
+  await offerChronicleCleanup(shell)
 
   // Offer completions install — or repair: refresh the script, and guard an older unguarded rc block
   if (isCompletionsInstalled(shell)) {

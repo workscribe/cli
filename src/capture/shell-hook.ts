@@ -20,10 +20,87 @@ const FISH_COMPLETIONS_DIR = path.join(os.homedir(), '.config', 'fish', 'complet
 
 const HOOK_START = '# workscribe:hook:start'
 const HOOK_END = '# workscribe:hook:end'
-const HOOK_PREAMBLE = '# Workscribe — developer work journal'
+// The two lines every template starts with, above HOOK_START. Updates before WOR-153 stacked a copy per update.
+const PREAMBLE_LINE =
+  /^# (?:Workscribe — developer work journal|Do not edit this (?:block|file) manually\. Managed by `workscribe init`\.)$/
+const HOOK_VERSION_LINE = /^# workscribe:hook-version (\d+)$/m
+
+/**
+ * The version of each shell's hook template (`# workscribe:hook-version N` inside the block; none means 1). Bump it
+ * whenever that template changes, so `status` can tell users whose rc file still holds the old one.
+ */
+export const SHELL_HOOK_VERSIONS: Readonly<Record<string, number>> = Object.freeze({ zsh: 2, bash: 2, fish: 1 })
+
+// The block 0.2.1's `chronicle init` wrote — the app's name before 1.0. Nothing reads it any more, and it errors at
+// every prompt.
+const CHRONICLE_START = '# chronicle:hook:start'
+const CHRONICLE_END = '# chronicle:hook:end'
+const CHRONICLE_PREAMBLE_LINE =
+  /^# (?:Chronicle — developer work journal|Do not edit this block manually\. Managed by `chronicle init`\.)$/
 
 /** A shell and the rc file `init` writes its hook (and completions) into. */
 export type ShellTarget = { name: string; rcFile: string }
+
+/** The shell `$SHELL` names, and its rc file — what `init` installs into and `status` checks. */
+export function detectShell(): ShellTarget | null {
+  const shell = process.env.SHELL ?? ''
+  if (shell.includes('zsh')) return { name: 'zsh', rcFile: path.join(os.homedir(), '.zshrc') }
+  if (shell.includes('bash')) return { name: 'bash', rcFile: path.join(os.homedir(), '.bashrc') }
+  if (shell.includes('fish')) {
+    return { name: 'fish', rcFile: path.join(os.homedir(), '.config', 'fish', 'conf.d', 'workscribe.fish') }
+  }
+  return null
+}
+
+/** Where a marked block sits in an rc file: from the first of the header lines right above it, to its end marker. */
+interface BlockRegion {
+  start: number
+  end: number
+}
+
+/** The marked block with every header line directly above it (blank lines between them included), or null. */
+function blockRegion(content: string, markers: { start: string; end: string; preamble: RegExp }): BlockRegion | null {
+  const blockStart = content.indexOf(markers.start)
+  const blockEnd = content.indexOf(markers.end, blockStart)
+  if (blockStart === -1 || blockEnd === -1) return null
+  const lines = content.slice(0, blockStart).split('\n')
+  lines.pop() // the start marker's own line, empty before it
+  let headerLines = 0
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    const line = lines[index]
+    if (!markers.preamble.test(line) && line.trim() !== '') break
+    headerLines = lines.length - index
+  }
+  // Blank lines above the topmost header line stay where they were
+  while (headerLines > 0 && lines[lines.length - headerLines].trim() === '') headerLines -= 1
+  const header = lines.slice(lines.length - headerLines)
+  const headerLength = header.reduce((length, line) => length + line.length + 1, 0)
+  return { start: blockStart - headerLength, end: blockEnd + markers.end.length }
+}
+
+/** The Workscribe hook in an rc file, header lines included — what an update replaces and a removal deletes. */
+export function hookRegion(content: string): BlockRegion | null {
+  return blockRegion(content, { start: HOOK_START, end: HOOK_END, preamble: PREAMBLE_LINE })
+}
+
+/** A leftover 0.2.1 `chronicle` hook in an rc file, header lines included, or null. */
+export function findChronicleHook(content: string): BlockRegion | null {
+  return blockRegion(content, { start: CHRONICLE_START, end: CHRONICLE_END, preamble: CHRONICLE_PREAMBLE_LINE })
+}
+
+/** A template's own block, start marker to end marker — what's compared with an installed one. */
+export function hookBlockOf(hookContent: string): string {
+  const startIndex = hookContent.indexOf(HOOK_START)
+  const endIndex = hookContent.indexOf(HOOK_END)
+  if (startIndex === -1 || endIndex === -1) return hookContent.trim()
+  return hookContent.slice(startIndex, endIndex + HOOK_END.length)
+}
+
+/** The version an installed block declares; a block from before versions were declared is 1. */
+export function installedHookVersion(block: string): number {
+  const match = HOOK_VERSION_LINE.exec(block)
+  return match ? Number(match[1]) : 1
+}
 
 /** Backs up an rc file before editing it, never overwriting an earlier backup, and says where it went. */
 function backUp(rcFile: string): void {
@@ -31,22 +108,24 @@ function backUp(rcFile: string): void {
 }
 
 export function getInstalledHookBlock(rcFile: string): string | null {
-  if (!fs.existsSync(rcFile)) return null
-  const content = fs.readFileSync(rcFile, 'utf-8')
-  const startIdx = content.indexOf(HOOK_START)
-  const endIdx = content.indexOf(HOOK_END)
-  if (startIdx === -1 || endIdx === -1) return null
-  return content.slice(startIdx, endIdx + HOOK_END.length)
+  // An rc file that's missing or can't be read has no hook — never a crash in `status`
+  const content = fs.existsSync(rcFile) ? readRcFile(rcFile) : null
+  if (content === null) return null
+  const startIndex = content.indexOf(HOOK_START)
+  const endIndex = content.indexOf(HOOK_END)
+  if (startIndex === -1 || endIndex === -1) return null
+  return content.slice(startIndex, endIndex + HOOK_END.length)
 }
 
 export function isHookInstalled(rcFile: string): boolean {
   return getInstalledHookBlock(rcFile) !== null
 }
 
+/** The installed block differs from the template's — the template's header lines don't count. */
 export function isHookOutdated(rcFile: string, hookContent: string): boolean {
   const installed = getInstalledHookBlock(rcFile)
   if (!installed) return false
-  return installed.trim() !== hookContent.trim()
+  return installed.trim() !== hookBlockOf(hookContent).trim()
 }
 
 export function installHook(rcFile: string, hookContent: string): void {
@@ -54,25 +133,61 @@ export function installHook(rcFile: string, hookContent: string): void {
   fs.appendFileSync(rcFile, `\n${hookContent}\n`)
 }
 
+/** Replaces the hook and every header line above it with the template — one header, however many there were. */
 export function updateHook(rcFile: string, hookContent: string): void {
   backUp(rcFile)
   const content = fs.readFileSync(rcFile, 'utf-8')
-  const startIdx = content.indexOf(HOOK_START)
-  const endIdx = content.indexOf(HOOK_END) + HOOK_END.length
-  fs.writeFileSync(rcFile, content.slice(0, startIdx) + hookContent + content.slice(endIdx))
+  const region = hookRegion(content)
+  if (!region) return
+  fs.writeFileSync(rcFile, content.slice(0, region.start) + hookContent.trimEnd() + content.slice(region.end))
+}
+
+/** Cuts a region out of an rc file's content without leaving extra blank lines where it was. */
+function withoutRegion(content: string, region: BlockRegion): string {
+  const before = content.slice(0, region.start).replace(/\n+$/, '\n')
+  const after = content.slice(region.end).replace(/^\n/, '')
+  return before + after
 }
 
 export function removeHook(rcFile: string): void {
   backUp(rcFile)
   const content = fs.readFileSync(rcFile, 'utf-8')
-  const startIdx = content.indexOf(HOOK_START)
-  const endIdx = content.indexOf(HOOK_END) + HOOK_END.length
-  // Also remove the preamble comment lines that installHook writes before HOOK_START
-  const preambleIdx = content.lastIndexOf(HOOK_PREAMBLE, startIdx)
-  const blockStart = preambleIdx !== -1 ? preambleIdx : startIdx
-  const before = content.slice(0, blockStart).replace(/\n+$/, '\n')
-  const after = content.slice(endIdx).replace(/^\n/, '')
-  fs.writeFileSync(rcFile, before + after)
+  const region = hookRegion(content)
+  if (!region) return
+  fs.writeFileSync(rcFile, withoutRegion(content, region))
+}
+
+/** Whether an rc file still holds a 0.2.1 `chronicle` hook. */
+export function hasChronicleHook(rcFile: string): boolean {
+  const content = readRcFile(rcFile)
+  return content !== null && findChronicleHook(content) !== null
+}
+
+/** Removes a leftover `chronicle` hook, after backing the file up. Returns whether there was one. */
+export function removeChronicleHook(rcFile: string): boolean {
+  const content = readRcFile(rcFile)
+  const region = content === null ? null : findChronicleHook(content)
+  if (content === null || !region) return false
+  backUp(rcFile)
+  fs.writeFileSync(rcFile, withoutRegion(content, region))
+  return true
+}
+
+export interface ShellHookHealth {
+  /** The hook is in the rc file but older than this version's template */
+  isOutdated: boolean
+  /** The rc file still holds a 0.2.1 `chronicle` hook */
+  hasChronicleHook: boolean
+}
+
+/** What `status` warns about for the user's shell: an old hook, or a leftover Chronicle one. */
+export function shellHookHealth(shell: ShellTarget): ShellHookHealth {
+  const installed = getInstalledHookBlock(shell.rcFile)
+  const currentVersion = SHELL_HOOK_VERSIONS[shell.name] ?? 1
+  return {
+    isOutdated: installed !== null && installedHookVersion(installed) < currentVersion,
+    hasChronicleHook: hasChronicleHook(shell.rcFile),
+  }
 }
 
 export function resolveWorkscribeBinary(): string | null {
