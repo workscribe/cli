@@ -3,6 +3,33 @@ import chalk from 'chalk'
 import { readConfig, writeConfig, getConfigValue, setConfigValue } from '../config'
 import { REMOVED_AI_SETTING_MESSAGE, isRemovedAiSetting } from '../summary/legacy-ai'
 import { log } from '../utils/logger'
+import { getDb } from '../db'
+import { requestTicketRelink } from '../db/jobs/ticket-refs'
+import { ticketPatternProblem } from '../capture/tickets'
+
+const TICKET_PATTERN_KEY = 'tickets.pattern'
+
+/**
+ * Sets the ticket pattern: the database first — the pattern the history is linked with, and a restart of the
+ * `ticket-refs` job — so a locked database refuses before config.json changes. Stored as the string it is: going
+ * through setConfigValue would turn a pattern like `123` into a number.
+ */
+function setTicketPattern(pattern: string): void {
+  const problem = ticketPatternProblem(pattern)
+  if (problem) {
+    log.error(`That ticket pattern can't be used: ${problem}.`)
+    process.exit(1)
+  }
+  requestTicketRelink(getDb(), pattern)
+  const config = readConfig()
+  writeConfig({ ...config, tickets: { ...config.tickets, pattern } })
+  log.success(`Set ${chalk.cyan(TICKET_PATTERN_KEY)} = ${chalk.yellow(pattern)}`)
+  log.plain(
+    chalk.dim(
+      '  New captures use it now; your history is re-linked the next time a data command runs (or: workscribe upgrade).'
+    )
+  )
+}
 
 export function registerConfig(program: Command): void {
   const configCmd = program
@@ -25,6 +52,10 @@ export function registerConfig(program: Command): void {
       if (isRemovedAiSetting(key)) {
         log.error(REMOVED_AI_SETTING_MESSAGE)
         process.exit(1)
+      }
+      if (key === TICKET_PATTERN_KEY) {
+        setTicketPattern(value)
+        return
       }
       const config = readConfig()
       const updated = setConfigValue(config, key, value)

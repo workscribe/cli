@@ -33,6 +33,7 @@ const SESSION_KEYS = [
   'repoName',
   'repoPath',
   'startedAt',
+  'tickets',
 ]
 const BLOCK_KEYS = ['activeMinutes', 'endedAt', 'eventCount', 'id', 'startedAt', 'threadKeys']
 
@@ -119,6 +120,7 @@ describe('threadToJson', () => {
       blockId: 1,
       alongside: [],
       agentSessions: [],
+      tickets: [],
     })
   })
 

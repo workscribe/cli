@@ -138,6 +138,21 @@ See [Privacy & Security](/privacy) for exactly what's sent and when.
 
 ---
 
+## Tickets
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `tickets.pattern` | string | `[A-Z][A-Z0-9]+-\d+` | A regular expression for your ticket keys. Workscribe links a branch whose name contains one (`feat/WOR-123-login`) and a commit whose message does (`WOR-123 fix the redirect`) to that ticket, and `sessions --json` lists each thread's `tickets`. Matched case-sensitively, on the first 200 characters of a branch name or commit subject. |
+
+```bash
+workscribe config set tickets.pattern '#\d+'          # GitHub-style issue numbers
+workscribe config set tickets.pattern '[A-Z]{2,}-\d+'  # JIRA-style keys
+```
+
+Set it with `workscribe config set`: that also re-links your history the next time a command reads your data (or right away with `workscribe upgrade`). A pattern edited by hand in `config.json` applies to new activity only. Workscribe refuses a pattern that isn't a valid regular expression, matches empty text, or repeats a group that itself repeats or has alternatives (like `(A+)+` or `(A|AA)+`), because that can hang on a near miss. The check is cautious, so it also refuses some safe patterns such as `(?:-[A-Z]+)*`; write those without the repeated group. An unusable pattern in `config.json` falls back to the default.
+
+---
+
 ## Projects
 
 Override the display name for a repository whose local folder name differs from the actual project name.

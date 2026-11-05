@@ -102,6 +102,25 @@ describe('readDayThreads', () => {
     expect(evening.summaries.map((summary) => summary.text)).toEqual(['the evening'])
   })
 
+  it("lists the tickets a thread's events and their branches name", () => {
+    const db = database()
+    db.prepare("INSERT INTO branch (id, project_id, name) VALUES (1, ?, 'feat/WOR-123-x')").run(CLI)
+    insertEvent(db, { capturedAt: '2026-10-28T12:09:00.000Z', projectId: CLI })
+    insertEvent(db, { capturedAt: '2026-10-28T12:30:00.000Z', projectId: SITE })
+    db.exec('UPDATE events SET branch_id = 1 WHERE id = 1')
+    db.exec("INSERT INTO ticket (id, key) VALUES (1, 'WOR-123'), (2, 'WOR-9')")
+    db.exec('INSERT INTO ticket_ref (ticket_id, branch_id) VALUES (1, 1)')
+    db.exec('INSERT INTO ticket_ref (ticket_id, event_id) VALUES (2, 1)')
+    build(db)
+
+    const [block] = readDayThreads(db, DATE)
+
+    expect(block.threads.map((thread) => [thread.repoName, thread.tickets])).toEqual([
+      ['cli', ['WOR-9', 'WOR-123']],
+      ['landing-page', []],
+    ])
+  })
+
   it('reads nothing for a day not built yet', () => {
     expect(readDayThreads(database(), DATE)).toEqual([])
   })

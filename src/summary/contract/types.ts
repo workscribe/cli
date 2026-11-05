@@ -51,6 +51,9 @@ export interface SessionJson {
   /** The `key`s of the block's other threads, in block order */
   alongside: string[]
   agentSessions: AgentSessionJson[]
+  /** Ticket keys the thread's branches and commits name (`tickets.pattern`), sorted; may be incomplete for history
+   * until the `ticket-refs` upgrade has run */
+  tickets: string[]
   notes: string[]
   commits: CommitJson[]
   events: EventJson[]

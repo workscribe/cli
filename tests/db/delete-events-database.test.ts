@@ -75,7 +75,9 @@ if (!fs.realpathSync(path.dirname(DB_PATH)).startsWith(fs.realpathSync(os.tmpdir
 beforeEach(() => {
   // A test may have dropped the old tables, as the data job does: bring them back as migration 001 made them
   getDb().exec(initialSchema.sql)
-  getDb().exec('DELETE FROM session_events; DELETE FROM sessions; DELETE FROM events; DELETE FROM agent_sessions')
+  getDb().exec(
+    'DELETE FROM session_events; DELETE FROM sessions; DELETE FROM ticket_ref; DELETE FROM ticket; DELETE FROM events; DELETE FROM agent_sessions'
+  )
 })
 
 afterAll(async () => {
@@ -123,6 +125,39 @@ describe('deleting events on a real database', () => {
 
     expect(deleteEventsForDate(DATE)).toBe(1)
     expect(sessionIds()).toEqual([])
+  })
+})
+
+describe('deleting events with their ticket links', () => {
+  it("undo removes an event's commit tickets with it, and keeps its branch's", () => {
+    insertEvent({
+      captured_at: at(0),
+      command: 'git commit -m "WOR-7 fix"',
+      cwd: '/repo',
+      exit_code: 0,
+      duration_ms: 10,
+      repo_name: 'api',
+      branch: 'feat/WOR-123-x',
+      category: 'shipping',
+      metadata: JSON.stringify({ message: 'WOR-7 fix' }),
+      source: null,
+      file_path: null,
+      dimensions: {
+        project: { identity: 'remote:github.com/acme/api', kind: 'remote', name: 'api', root: '/repo' },
+        branch: 'feat/WOR-123-x',
+        file: null,
+      },
+      tickets: { branch: ['WOR-123'], commits: ['WOR-7'] },
+    })
+    const links = () =>
+      getDb().prepare('SELECT branch_id IS NOT NULL AS onBranch FROM ticket_ref ORDER BY onBranch').all() as {
+        onBranch: number
+      }[]
+    expect(links()).toHaveLength(2)
+
+    deleteEventsByIds(eventIds())
+
+    expect(links()).toEqual([{ onBranch: 1 }])
   })
 })
 

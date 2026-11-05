@@ -3,6 +3,7 @@ import fs from 'fs'
 import path from 'path'
 import { CONFIG_PATH } from '../utils/paths'
 import { debugLog } from '../utils/logger'
+import { DEFAULT_TICKET_PATTERN } from '../capture/tickets'
 
 /**
  * AI provider settings from Workscribe 1.x. 2.0 removed AI providers, so nothing writes these any more — they're
@@ -56,6 +57,11 @@ export interface WorkscribeConfig {
     enabled: boolean
     installId: string
   }
+  tickets: {
+    // What a ticket key looks like in branch names and commit messages (a regular expression). Change it with
+    // `workscribe config set tickets.pattern`, which also re-links the history.
+    pattern: string
+  }
 }
 
 const DEFAULTS: WorkscribeConfig = {
@@ -80,6 +86,9 @@ const DEFAULTS: WorkscribeConfig = {
   telemetry: {
     enabled: true,
     installId: '',
+  },
+  tickets: {
+    pattern: DEFAULT_TICKET_PATTERN,
   },
 }
 

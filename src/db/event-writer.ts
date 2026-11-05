@@ -2,6 +2,7 @@ import type { MigrationDatabase } from './migration-types'
 import { isDatabaseLocked, withImmediateTransaction } from './transaction'
 import { writeEventDimensions, type EventDimensions } from './dimensions'
 import { upsertAgentSession, type AgentSessionRef } from './agent-sessions'
+import { linkEventTickets, type TicketKeys } from './tickets'
 import { debugLog } from '../utils/logger'
 
 export interface NewEvent {
@@ -20,10 +21,12 @@ export interface NewEvent {
   dimensions?: EventDimensions
   /** The agent conversation a hook event came from */
   agentSession?: AgentSessionRef
+  /** The ticket keys it names, linked along with its project (`ticketKeysOf`) */
+  tickets?: TicketKeys
 }
 
 function insertEventRow(db: MigrationDatabase, event: NewEvent, agentSessionId: number | null = null): number {
-  const { dimensions: _dimensions, agentSession: _agentSession, ...columns } = event
+  const { dimensions: _dimensions, agentSession: _agentSession, tickets: _tickets, ...columns } = event
   const result = db
     .prepare(
       `INSERT INTO events (captured_at, command, cwd, exit_code, duration_ms, repo_name, branch, category, metadata, source, file_path, agent_session_id)
@@ -33,17 +36,18 @@ function insertEventRow(db: MigrationDatabase, event: NewEvent, agentSessionId: 
   return Number(result.lastInsertRowid)
 }
 
-/** The event, its agent session and its project links, written in order inside the caller's transaction. */
+/** The event, its agent session, its project links and its tickets, written in order inside the caller's transaction. */
 function insertLinkedEvent(db: MigrationDatabase, event: NewEvent): void {
   const agentSessionId = event.agentSession
     ? upsertAgentSession(db, { ...event.agentSession, cwd: event.cwd, capturedAt: event.captured_at })
     : null
   const eventId = insertEventRow(db, event, agentSessionId)
-  if (event.dimensions?.project) writeEventDimensions(db, eventId, event.dimensions)
+  const links = event.dimensions?.project ? writeEventDimensions(db, eventId, event.dimensions) : null
+  if (links && event.tickets) linkEventTickets(db, { eventId, branchId: links.branchId, keys: event.tickets })
 }
 
 /**
- * Stores an event and its links — its project and its agent session — in one transaction. If linking fails, the
+ * Stores an event and its links — its project, its tickets and its agent session — in one transaction. If linking fails, the
  * event is stored without links rather than lost. A lock that never came free is thrown, as a plain insert would
  * have been: no second wait. An event with nothing to link is one plain insert.
  */

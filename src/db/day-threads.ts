@@ -4,6 +4,7 @@ import { withReadTransaction } from './transaction'
 import { getThreadEvents, readBlocksForDate, type StoredBlock, type StoredThread } from './thread-store'
 import { getAnchoredSummariesInBlock, getProjectNames } from './context-lookup'
 import { getAgentSessionsOfEvents, type AgentSessionInfo } from './agent-sessions'
+import { ticketsOfEvents } from './tickets'
 import { sessionKey } from '../summary/store'
 import { areJobsDone } from './jobs/state'
 import type { DataJob } from './jobs/types'
@@ -35,6 +36,8 @@ export interface DayThread extends StoredThread {
   /** In grouping order */
   events: EventRow[]
   agentSessions: AgentSessionInfo[]
+  /** The ticket keys its events' branches and commits name, sorted (WOR-9 before WOR-10) */
+  tickets: string[]
 }
 
 export interface DayBlock extends Omit<StoredBlock, 'threads'> {
@@ -52,15 +55,14 @@ function projectIdsOf(blocks: StoredBlock[]): number[] {
 function toDayThread(db: MigrationDatabase, thread: StoredThread, projectNames: Map<number, string | null>): DayThread {
   const repoName = thread.projectId === null ? null : (projectNames.get(thread.projectId) ?? null)
   const events = getThreadEvents(db, thread.id)
+  const eventIds = events.map((event) => event.id)
   return {
     ...thread,
     key: sessionKey(repoName, thread.startedAt),
     repoName,
     events,
-    agentSessions: getAgentSessionsOfEvents(
-      db,
-      events.map((event) => event.id)
-    ),
+    agentSessions: getAgentSessionsOfEvents(db, eventIds),
+    tickets: ticketsOfEvents(db, eventIds),
   }
 }
 

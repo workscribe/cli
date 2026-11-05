@@ -1,4 +1,5 @@
 import type { WorkscribeConfig } from '../../src/config'
+import { DEFAULT_TICKET_PATTERN } from '../../src/capture/tickets'
 
 // Single source of truth for a full, valid WorkscribeConfig test fixture.
 // Mirrors src/config/index.ts's DEFAULTS — when the schema grows, update
@@ -17,6 +18,7 @@ export function createTestConfig(overrides: Partial<WorkscribeConfig> = {}): Wor
     redact: { extra: [] },
     summary: { format: 'markdown' },
     telemetry: { enabled: true, installId: 'existing-install-id' },
+    tickets: { pattern: DEFAULT_TICKET_PATTERN },
     ...overrides,
   }
 }

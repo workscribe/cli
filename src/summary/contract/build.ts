@@ -58,6 +58,7 @@ export function threadToJson(
       startedAt,
       lastSeenAt,
     })),
+    tickets: thread.tickets,
     notes: collectNotes(thread.events),
     commits: mergeCommits(collectCapturedCommits(thread.events), git.commits, git.othersSubjects),
     events: contractEvents(thread.events, includeCategories).map(eventToJson),

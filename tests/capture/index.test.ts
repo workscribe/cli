@@ -67,6 +67,7 @@ const BASE_CONFIG = {
   redact: { extra: [] },
   git: { qualifyRepoName: false },
   projects: {},
+  tickets: { pattern: '[A-Z][A-Z0-9]+-\\d+' },
 }
 
 beforeEach(() => {
@@ -285,6 +286,53 @@ describe('captureCommand — project links', () => {
         file_path: '/repo/src/a.ts',
         dimensions: expect.objectContaining({ file: { relativePath: 'src/a.ts', action: 'save' } }),
       })
+    )
+  })
+})
+
+// WOR-144: the tickets an event names go with it to the writer, which links them with its project
+describe('captureCommand — tickets', () => {
+  const CLI_PROJECT = { identity: 'remote:github.com/workscribe/cli', kind: 'remote' }
+
+  beforeEach(() => {
+    mockGetRepoContext.mockReturnValue({
+      repoName: 'cli',
+      branch: 'feat/WOR-123-context-file-details',
+      root: '/repo',
+      remote: null,
+      project: CLI_PROJECT,
+    })
+  })
+
+  it("passes a shell commit's tickets from its branch and its message", () => {
+    mockNormalize.mockReturnValue({ category: 'shipping', metadata: { message: 'WOR-7 fix the redirect' } })
+
+    captureCommand({ command: 'git commit -m "WOR-7 fix the redirect"', cwd: '/repo', exitCode: 0, durationMs: 10 })
+
+    expect(mockInsertEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ tickets: { branch: ['WOR-123'], commits: ['WOR-7'] } })
+    )
+  })
+
+  it("passes an editor save's branch ticket, and none for a save in another repo", () => {
+    captureCommand({ cwd: '/repo', exitCode: null, durationMs: null, type: 'code_edit', file: '/repo/src/a.ts' })
+    expect(mockInsertEvent).toHaveBeenLastCalledWith(
+      expect.objectContaining({ tickets: { branch: ['WOR-123'], commits: [] } })
+    )
+
+    // A file outside the open folder's repo: its branch isn't linked, so it names no ticket
+    mockGetRepoContext.mockReturnValue({ repoName: null, branch: 'feat/WOR-123-x', root: null, remote: null })
+    captureCommand({ cwd: '/elsewhere', exitCode: null, durationMs: null, type: 'code_edit', file: '/other/b.ts' })
+    expect(mockInsertEvent).toHaveBeenLastCalledWith(expect.objectContaining({ tickets: { branch: [], commits: [] } }))
+  })
+
+  it('uses the default pattern when config.json has no tickets section', () => {
+    mockReadConfig.mockReturnValue({ ...BASE_CONFIG, tickets: undefined })
+
+    captureCommand({ command: 'npm test', cwd: '/repo', exitCode: 0, durationMs: 10 })
+
+    expect(mockInsertEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ tickets: { branch: ['WOR-123'], commits: [] } })
     )
   })
 })

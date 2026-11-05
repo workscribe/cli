@@ -7,8 +7,12 @@ vi.mock('../../src/config', () => ({
   setConfigValue: vi.fn(),
 }))
 
+vi.mock('../../src/db', () => ({ getDb: vi.fn(() => ({})) }))
+vi.mock('../../src/db/jobs/ticket-refs', () => ({ requestTicketRelink: vi.fn() }))
+
 import { Command } from 'commander'
 import { readConfig, writeConfig, getConfigValue, setConfigValue } from '../../src/config'
+import { requestTicketRelink } from '../../src/db/jobs/ticket-refs'
 import { log } from '../../src/utils/logger'
 import { registerConfig } from '../../src/cli/config'
 
@@ -109,6 +113,60 @@ describe('workscribe config', () => {
       const calls = mockLog.success.mock.calls.map((call: unknown[]) => call[0] as string)
       expect(calls.some((call) => call.includes('[set]'))).toBe(true)
       expect(calls.some((call) => call.includes('tok-secret'))).toBe(false)
+    })
+  })
+
+  describe('config set tickets.pattern', () => {
+    function stubExit() {
+      const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+        throw new Error('exit')
+      }) as never)
+      onTestFinished(() => exitSpy.mockRestore())
+    }
+
+    it('stores the pattern in the database first, then as a string in config.json — never coerced', async () => {
+      const order: string[] = []
+      vi.mocked(requestTicketRelink).mockImplementationOnce(() => {
+        order.push('database')
+      })
+      mockWriteConfig.mockImplementationOnce(() => {
+        order.push('config')
+      })
+
+      await makeProgram().parseAsync(['config', 'set', 'tickets.pattern', '123'], { from: 'user' })
+
+      expect(order).toEqual(['database', 'config'])
+      expect(requestTicketRelink).toHaveBeenCalledWith({}, '123')
+      expect(mockWriteConfig).toHaveBeenCalledWith(expect.objectContaining({ tickets: { pattern: '123' } }))
+      expect(mockSetConfigValue).not.toHaveBeenCalled()
+      expect(mockLog.plain).toHaveBeenCalledWith(expect.stringContaining('re-linked'))
+    })
+
+    it.each([['('], ['.*'], ['(A+)+-\\d+']])(
+      'refuses %s without touching the database or config.json',
+      async (pattern) => {
+        stubExit()
+
+        await expect(
+          makeProgram().parseAsync(['config', 'set', 'tickets.pattern', pattern], { from: 'user' })
+        ).rejects.toThrow('exit')
+
+        expect(mockLog.error).toHaveBeenCalledWith(expect.stringContaining("That ticket pattern can't be used"))
+        expect(requestTicketRelink).not.toHaveBeenCalled()
+        expect(mockWriteConfig).not.toHaveBeenCalled()
+      }
+    )
+
+    it('leaves config.json alone when the database refuses, as a held lock would', async () => {
+      vi.mocked(requestTicketRelink).mockImplementationOnce(() => {
+        throw new Error('database is locked')
+      })
+
+      await expect(
+        makeProgram().parseAsync(['config', 'set', 'tickets.pattern', '[A-Z]+-\\d+'], { from: 'user' })
+      ).rejects.toThrow('database is locked')
+
+      expect(mockWriteConfig).not.toHaveBeenCalled()
     })
   })
 })
