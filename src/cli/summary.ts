@@ -10,9 +10,11 @@ import { createSummaryWriter } from '../summary/writer'
 import { printLegacyAiNotice } from './notices'
 import { postSummary } from '../summary/webhook'
 import { renderDay, type RenderedDay } from '../summary/day'
+import { keepsStdoutClean } from '../summary/output-format'
+import { toPlainText } from '../summary/plain-text'
 import { printExcludedFooter, printSavedNote } from './day-notes'
 import { loadDayThreads, requireThreadData } from './thread-day'
-import { addWeekLayoutOption, runWeekCommand } from './week'
+import { addSummaryFormatOption, addWeekLayoutOption, parseSummaryFormat, runWeekCommand } from './week'
 import { fail } from './fail'
 
 interface SessionSummaryJson {
@@ -76,8 +78,9 @@ export function registerSummary(program: Command): void {
     .option('--verbose', 'show all captured events, including those left out of the summary')
     .option('--slack', 'post summary to Slack webhook from config')
     .option('--webhook <url>', 'post summary to a custom webhook URL')
-  addWeekLayoutOption(summaryCommand).action(async (options) => {
+  addSummaryFormatOption(addWeekLayoutOption(summaryCommand)).action(async (options) => {
     if (options.by !== undefined && !options.week) fail('--by only applies to --week')
+    const formatOption = parseSummaryFormat(options.format)
     // ── Weekly branch: the same handler as `workscribe week` ──────────────────
     if (options.week) {
       await runWeekCommand(options)
@@ -108,7 +111,8 @@ export function registerSummary(program: Command): void {
       return
     }
 
-    const jsonMode = config.summary?.format === 'json'
+    const format = formatOption ?? config.summary?.format
+    const keepsStdoutToOutput = keepsStdoutClean(format)
     let day: RenderedDay
     try {
       day = await renderDay({ date, blocks, config, provider, fresh: options.fresh })
@@ -119,13 +123,16 @@ export function registerSummary(program: Command): void {
     const { sessionPayloads, saved, fullSummary, needsGeneration } = day
     const excluded = buildExcludedSet(config.summary?.includeCategories ?? [])
     if (needsGeneration && options.verbose) {
-      if (jsonMode) log.notice('--verbose is skipped when summary.format is json, to keep the JSON output clean')
+      if (keepsStdoutToOutput) log.notice(`--verbose is skipped with the ${format} format, to keep the output clean`)
       else printCapturedEvents(sessionPayloads, excluded)
     }
 
-    if (jsonMode) {
+    if (format === 'json') {
       // Only the JSON on stdout, so it can be piped straight into another tool
       log.plain(toJsonOutput(day, date))
+    } else if (format === 'text') {
+      // Only the text on stdout, so it can be pasted with nothing to clean up
+      log.plain(toPlainText(fullSummary))
     } else {
       log.plain('')
       log.plain(fullSummary)
@@ -134,6 +141,6 @@ export function registerSummary(program: Command): void {
       if (needsGeneration) printExcludedFooter(sessionPayloads, excluded)
     }
 
-    await postSummary({ options, config, summary: fullSummary, statusToStderr: jsonMode })
+    await postSummary({ options, config, summary: fullSummary, statusToStderr: keepsStdoutToOutput })
   })
 }

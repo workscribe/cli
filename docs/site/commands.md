@@ -41,6 +41,7 @@ workscribe summary --date 2026-05-20
 workscribe summary --week
 workscribe summary --week --by day
 workscribe summary --fresh
+workscribe summary --format text
 workscribe summary --slack
 workscribe summary --webhook <url>
 ```
@@ -51,7 +52,8 @@ workscribe summary --webhook <url>
 | `--week` | Summarise Mon–today for the current week — the same as [`workscribe week`](#workscribe-week) |
 | `--by <project\|day>` | With `--week`: lay the week out by project then branch (the default), or day by day |
 | `--fresh` | Ignore saved summaries and render the template for every session |
-| `--verbose` | Show all captured events, including those left out of the summary |
+| `--format <markdown\|json\|text>` | Print in this format, overriding `summary.format`. `text` is ready to paste: see [Plain text](#plain-text) |
+| `--verbose` | Show all captured events, including those left out of the summary. Skipped with `json` and `text` |
 | `--slack` | Post the summary to your configured Slack webhook |
 | `--webhook <url>` | Post the summary to a custom webhook URL |
 
@@ -97,6 +99,21 @@ Time worked: 2h 30m
 
 The day is told one section per project thread: each project's work inside a stretch of work between idle gaps, however you switched between repos (see [`workscribe sessions`](#workscribe-sessions)). Each gets its own heading, always generated from your captured data: the project, every branch it touched (in the order you worked on them), and its active time — the 5-minute slots with that project's activity, since its start-to-end span can include other projects' work. When you worked on several projects in the same stretch, each section ends with an `Alongside:` line naming the others, and the day ends with `Time worked:` — counted once across projects, never their sum. When a session spans several branches, its work is grouped under a plain `On <branch>:` line for each, so you can see what happened where. Commits come from what Workscribe captured and from `git log` in the session's repo (your commits only, looked up within 3 seconds per run). The last line sums up how you worked: commands your coding agent ran, and files saved in the editor.
 
+**Plain text:**
+
+`--format text` prints the summary with nothing to clean up, ready to paste into a form or report. Headings become plain lines and bullets `- ` lines. Bold, inline code and links lose their markdown, with a link's address kept in brackets. There's no footer or note, and only the summary goes to stdout:
+
+```
+api (main, feat/auth) — 2h 15m
+- Committed: fix: token refresh race
+On feat/auth:
+- Pushed to origin/feat/auth
+
+Time worked: 2h 30m
+```
+
+It works for the day and the week. `--slack` and `--webhook` still send the markdown text.
+
 **Saved summaries:**
 - A summary the agent skill saved for a session is shown instead of the template
 - Summaries an AI provider wrote in Workscribe 1.x are still shown for their sessions
@@ -113,6 +130,7 @@ Summarise Monday through today with the offline template engine, the way a weekl
 workscribe week
 workscribe week --by day
 workscribe week --fresh
+workscribe week --format text
 workscribe week --slack
 workscribe week --webhook <url>
 ```
@@ -120,6 +138,7 @@ workscribe week --webhook <url>
 | Option | Description |
 |---|---|
 | `--by <project\|day>` | Each project then each branch (the default), or day by day |
+| `--format <markdown\|json\|text>` | Print in this format, overriding `summary.format`. See [Plain text](#plain-text) |
 | `--fresh` | Accepted for 1.x scripts — the week is always rendered fresh |
 | `--slack` | Post the week to your configured Slack webhook |
 | `--webhook <url>` | Post the week to a custom webhook URL |
@@ -136,7 +155,7 @@ With an AI coding assistant (164 commands) · 3 file saves in the editor
 
 Each branch is told like a day's story (notes, commits from git and from capture, test and build results, dependencies, releases, pushes and branch moves), with up to 6 bullets and then a count of the rest; the activity line closes it. Work on no branch goes under `(no branch)`. A stretch of work that moved between branches shows under each of them.
 
-`--by day` gives the day-by-day digest instead: a section per day, up to 5 bullets each, each prefixed with the project it happened in. With `summary.format` set to `json`, the week prints as one JSON document (see [Configuration](/configuration#summary)).
+`--by day` gives the day-by-day digest instead: a section per day, up to 5 bullets each, each prefixed with the project it happened in. With `summary.format` or `--format` set to `json`, the week prints as one JSON document (see [Configuration](/configuration#summary)); with `text`, it prints as [plain text](#plain-text).
 
 **Slack:**
 

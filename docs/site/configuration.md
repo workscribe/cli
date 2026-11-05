@@ -78,7 +78,7 @@ workscribe config set redact.extra '["MY_INTERNAL_TOKEN"]'
 
 | Key | Type | Default | Description |
 |---|---|---|---|
-| `summary.format` | `"markdown"` \| `"json"` | `"markdown"` | Output format for summaries, daily and weekly |
+| `summary.format` | `"markdown"` \| `"json"` \| `"text"` | `"markdown"` | Output format for `summary` and `week`, daily and weekly. `--format` overrides it for one run, and `export` is always markdown |
 | `summary.includeCategories` | string[] | `[]` | Event categories to re-include in summaries (overrides built-in exclusions). Excluded by default: `exploring`, `linting`. Example: `["linting"]` to include lint pass/fail results. |
 
 Summaries come from Workscribe's offline template engine. Each session is told branch by branch from your captured activity (notes, commits, test and build results, dependencies, releases, pushes and branch moves), with nothing cut, and the week tells each branch the same way, up to 6 bullets each. There's no engine to choose: for AI-written summaries, use the agent skill. See [Summaries](/summaries).

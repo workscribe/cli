@@ -39,7 +39,7 @@ export interface WorkscribeConfig {
     extra: string[]
   }
   summary: {
-    format: 'markdown' | 'json'
+    format: 'markdown' | 'json' | 'text'
     // Categories re-included in summaries (overrides built-in exclusions).
     // Excluded by default: exploring, other, linting.
     // Example: ["linting"] to include lint pass/fail in summaries.

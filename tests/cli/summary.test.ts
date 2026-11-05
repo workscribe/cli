@@ -183,6 +183,15 @@ describe('workscribe summary --week', () => {
     expect(requireThreadData).not.toHaveBeenCalled()
   })
 
+  it('passes --format through to the week', async () => {
+    mockCreateSummaryWriter.mockReturnValue({ summarizeWeek: vi.fn().mockResolvedValue('## my-app\n- Shipped') })
+
+    await makeProgram().parseAsync(['summary', '--week', '--format', 'text'], { from: 'user' })
+
+    expect(mockLog.plain).toHaveBeenCalledTimes(1)
+    expect(mockLog.plain).toHaveBeenCalledWith('my-app\n- Shipped')
+  })
+
   it('renders the digest fresh every time and writes no weekly cache', async () => {
     await makeProgram().parseAsync(['summary', '--week'], { from: 'user' })
 
@@ -461,6 +470,80 @@ describe('workscribe summary (daily)', () => {
 
     expect(mockLog.plain).toHaveBeenCalledTimes(1)
     expect(mockLog.notice).toHaveBeenCalledWith(expect.stringContaining('--verbose is skipped'))
+  })
+
+  it('prints only plain text with --format text: no markdown, saved note or footer', async () => {
+    dayOf([MY_APP], { summaries: [savedRow('skill', '## my-app — 1h\n* **From** the `skill`')] })
+    mockSummarize()
+
+    await makeProgram().parseAsync(['summary', '--format', 'text'], { from: 'user' })
+
+    expect(mockLog.plain).toHaveBeenCalledTimes(1)
+    const text = mockLog.plain.mock.calls[0][0]
+    expect(text).toContain('my-app — 1h\n- From the skill')
+    expect(text).toContain('Time worked:')
+    expect(text).not.toMatch(/##|\*\*|`/)
+  })
+
+  it('prints plain text when summary.format is text', async () => {
+    mockReadConfig.mockReturnValue({ ...BASE_CONFIG, summary: { format: 'text' } })
+    mockSummarize()
+
+    await makeProgram().parseAsync(['summary'], { from: 'user' })
+
+    expect(mockLog.plain).toHaveBeenCalledTimes(1)
+    expect(mockLog.plain.mock.calls[0][0]).not.toContain('##')
+  })
+
+  it('lets --format override summary.format, in both directions', async () => {
+    mockSummarize()
+    mockReadConfig.mockReturnValue({ ...BASE_CONFIG, summary: { format: 'text' } })
+
+    await makeProgram().parseAsync(['summary', '--format', 'markdown'], { from: 'user' })
+
+    expect(mockLog.plain).toHaveBeenCalledWith(expect.stringContaining('## '))
+
+    mockLog.plain.mockClear()
+    mockReadConfig.mockReturnValue({ ...BASE_CONFIG, summary: { format: 'json' } })
+
+    await makeProgram().parseAsync(['summary', '--format', 'text'], { from: 'user' })
+
+    expect(mockLog.plain).toHaveBeenCalledTimes(1)
+    expect(() => JSON.parse(mockLog.plain.mock.calls[0][0])).toThrow()
+  })
+
+  it('skips --verbose in text mode, saying why on stderr', async () => {
+    mockSummarize()
+
+    await makeProgram().parseAsync(['summary', '--format', 'text', '--verbose'], { from: 'user' })
+
+    expect(mockLog.plain).toHaveBeenCalledTimes(1)
+    expect(mockLog.notice).toHaveBeenCalledWith(expect.stringContaining('--verbose is skipped with the text format'))
+  })
+
+  it('still posts the markdown in text mode, with its status on stderr', async () => {
+    mockSummarize()
+    mockIsSlackWebhookUrl.mockReturnValue(false)
+
+    await makeProgram().parseAsync(['summary', '--format', 'text', '--webhook', 'https://example.com/hook'], {
+      from: 'user',
+    })
+
+    expect(mockPostToWebhook).toHaveBeenCalledWith('https://example.com/hook', expect.stringContaining('## my-app'))
+    expect(mockLog.plain).toHaveBeenCalledTimes(1)
+    expect(mockLog.notice).toHaveBeenCalledWith('Posted.')
+  })
+
+  it('rejects an unknown --format before reading anything', async () => {
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => {
+      throw new Error('exit')
+    })
+    onTestFinished(() => exitSpy.mockRestore())
+
+    await expect(makeProgram().parseAsync(['summary', '--format', 'xml'], { from: 'user' })).rejects.toThrow('exit')
+
+    expect(mockLog.error).toHaveBeenCalledWith('--format must be markdown, json or text')
+    expect(requireThreadData).not.toHaveBeenCalled()
   })
 
   it('posts the full summary, time worked included, to --webhook', async () => {
