@@ -17,7 +17,8 @@ import type { EventPayload, SessionPayload } from '../../types'
 import type { StoryCommit } from '../../../summary/story-commits'
 import type { OutcomeWording } from './types'
 
-interface BranchGroup {
+/** One branch's share of a session: its events, the commits made on it and the branch moves that happened on it. */
+export interface BranchGroup {
   branch: string | null
   events: EventPayload[]
   commits: StoryCommit[]
@@ -71,9 +72,12 @@ function branchBullets(group: BranchGroup): string[] {
   ].filter((bullet): bullet is string => bullet !== null)
 }
 
-/** "With an AI coding assistant (126 commands) · 3 file saves in the editor" — how, not what, so it comes last. */
-function describeActivityLine(session: SessionPayload, events: EventPayload[]): string | null {
-  const agentCommands = session.events.filter(
+/**
+ * "With an AI coding assistant (126 commands) · 3 file saves in the editor" — how, not what, so it comes last. Agent
+ * commands are counted over every event (`allEvents`), excluded categories too; saves over the included `events`.
+ */
+function describeActivityLine(allEvents: EventPayload[], events: EventPayload[]): string | null {
+  const agentCommands = allEvents.filter(
     (event) => event.source !== undefined && AGENT_SOURCES.includes(event.source)
   ).length
   const saves = eventsOf(events, 'code_edit').length
@@ -105,7 +109,7 @@ export function storyLines(session: SessionPayload, includeCategories: string[] 
   const groups = groupByBranch(session, events)
     .map((group) => ({ branch: group.branch, bullets: branchBullets(group) }))
     .filter((group) => group.bullets.length > 0)
-  const activityLine = describeActivityLine(session, events)
+  const activityLine = describeActivityLine(session.events, events)
   const closing = activityLine === null ? [] : [activityLine]
 
   if (notes.length === 0 && groups.length === 0) {
@@ -121,4 +125,25 @@ export function storyLines(session: SessionPayload, includeCategories: string[] 
  */
 export function renderSessionStory(session: SessionPayload, includeCategories: string[] = []): string {
   return [formatSessionHeading(session), ...storyLines(session, includeCategories)].join('\n')
+}
+
+/**
+ * A session's branches with what happened on each — every event, included or not, so a branch's activity can be
+ * counted like a day's. The week splits each thread this way before merging its branches across days, so a thread's
+ * events with no branch stay with that thread's branch.
+ */
+export function branchGroupsOf(session: SessionPayload): BranchGroup[] {
+  return groupByBranch(session, session.events)
+}
+
+/** What one branch's story says: its notes, then what was done on it, and how — told like a day's branch. */
+export function storyOfBranch(
+  group: BranchGroup,
+  includeCategories: string[] = []
+): { bullets: string[]; activity: string | null } {
+  const events = includedEvents(group.events, includeCategories)
+  return {
+    bullets: [...describeNotes(events), ...branchBullets({ ...group, events })],
+    activity: describeActivityLine(group.events, events),
+  }
 }

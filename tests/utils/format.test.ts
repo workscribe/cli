@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { todayDate, startOfWeek, eachDayOfRange, localDateOf } from '../../src/utils/format'
+import { todayDate, startOfWeek, eachDayOfRange, localDateOf, formatWeekday } from '../../src/utils/format'
 
 describe('todayDate', () => {
   it('returns a YYYY-MM-DD string', () => {
@@ -61,5 +61,12 @@ describe('localDateOf', () => {
     const local = new Date(2026, 9, 25, 23, 30)
 
     expect(localDateOf(local.toISOString())).toBe('2026-10-25')
+  })
+})
+
+describe('formatWeekday', () => {
+  it('writes a local date as the week shows it, the same day in any time zone', () => {
+    expect(formatWeekday('2026-11-03')).toBe('Tue 3 Nov')
+    expect(formatWeekday('2026-01-01')).toBe('Thu 1 Jan')
   })
 })

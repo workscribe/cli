@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { TemplateProvider, mergeByLocation } from '../../../../src/ai/engines/template/provider'
+import { TemplateProvider } from '../../../../src/ai/engines/template/provider'
+import { mergeByLocation } from '../../../../src/ai/engines/template/week'
 import { commit, event, session } from './fixtures'
 
 describe('TemplateProvider.summarize', () => {
@@ -39,8 +40,22 @@ describe('TemplateProvider.summarize', () => {
 })
 
 describe('TemplateProvider.summarizeWeek', () => {
+  it('lays the week out by project then branch by default', async () => {
+    const payload = {
+      by: 'project' as const,
+      weekStart: '2026-10-19',
+      weekEnd: '2026-10-20',
+      days: [{ date: '2026-10-20', sessions: [session([event('testing')], { commits: [commit('fix: token')] })] }],
+    }
+
+    expect(await new TemplateProvider().summarizeWeek(payload)).toBe(
+      '## api-service\n\n### feature/auth — Tue 20 Oct\n- Committed: fix: token\n- Tests passing'
+    )
+  })
+
   it('writes one section per day, prefixing bullets with where the work happened', async () => {
     const payload = {
+      by: 'day' as const,
       weekStart: '2026-10-19',
       weekEnd: '2026-10-20',
       days: [
@@ -56,6 +71,7 @@ describe('TemplateProvider.summarizeWeek', () => {
 
   it("merges a day's sessions in the same location and does not repeat the location", async () => {
     const payload = {
+      by: 'day' as const,
       weekStart: '2026-10-20',
       weekEnd: '2026-10-20',
       days: [
@@ -75,6 +91,7 @@ describe('TemplateProvider.summarizeWeek', () => {
   it('caps a day at 5 bullets, taking turns across sessions', async () => {
     const busy = ['one', 'two', 'three'].map((message) => event('shipping', { message }))
     const payload = {
+      by: 'day' as const,
       weekStart: '2026-10-20',
       weekEnd: '2026-10-20',
       days: [

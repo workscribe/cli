@@ -9,7 +9,8 @@
  * can tell who sent the summary in shared channels.
  */
 export function formatForSlack(markdown: string, username?: string): string {
-  const body = markdown.replace(/^## (.+)$/gm, '*$1*').replace(/^- /gm, '• ')
+  // Slack has no headings: the day's `## ` and the week's `### ` both become bold lines
+  const body = markdown.replace(/^#{2,3} (.+)$/gm, '*$1*').replace(/^- /gm, '• ')
   return username ? `_${username}_\n${body}` : body
 }
 

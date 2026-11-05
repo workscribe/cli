@@ -39,7 +39,8 @@ vi.mock('fs', () => ({
 
 vi.mock('../../src/utils/paths')
 
-vi.mock('../../src/utils/format', () => ({
+vi.mock('../../src/utils/format', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../src/utils/format')>()),
   todayDate: vi.fn(() => '2026-08-17'),
   parseDate: vi.fn((value: string) => value),
   formatDate: vi.fn(() => '09:00'),
@@ -68,6 +69,7 @@ import { postToWebhook } from '../../src/integrations/webhook'
 import { isSlackWebhookUrl } from '../../src/integrations/slack'
 import { log } from '../../src/utils/logger'
 import { parseBullets, registerSummary } from '../../src/cli/summary'
+import { registerWeek } from '../../src/cli/week'
 import { lookupDayCommits } from '../../src/summary/day-commits'
 import { formatSessionHeading } from '../../src/summary/heading'
 import type { DaySummaryPayload } from '../../src/ai/types'
@@ -151,6 +153,34 @@ describe('workscribe summary --week', () => {
 
     expect(mockLog.error).toHaveBeenCalledWith('disk full')
     expect(exitSpy).toHaveBeenCalledWith(1)
+  })
+
+  it('prints exactly what `week` prints, through the same handler, and takes --by', async () => {
+    const summarizeWeek = vi.fn().mockResolvedValue('## my-app\n\n### main — Mon 17 Aug\n- Shipped a fix')
+    mockCreateSummaryWriter.mockReturnValue({ summarizeWeek })
+    const program = makeProgram()
+    registerWeek(program)
+
+    await program.parseAsync(['summary', '--week', '--by', 'day'], { from: 'user' })
+    const fromSummary = mockLog.plain.mock.calls.slice()
+    mockLog.plain.mockClear()
+    await program.parseAsync(['week', '--by', 'day'], { from: 'user' })
+
+    expect(mockLog.plain.mock.calls).toEqual(fromSummary)
+    expect(summarizeWeek.mock.calls[0]).toEqual(summarizeWeek.mock.calls[1])
+    expect(summarizeWeek.mock.calls[0][0].by).toBe('day')
+  })
+
+  it('refuses --by without --week, before reading anything', async () => {
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+      throw new Error('exit')
+    }) as never)
+    onTestFinished(() => exitSpy.mockRestore())
+
+    await expect(makeProgram().parseAsync(['summary', '--by', 'day'], { from: 'user' })).rejects.toThrow('exit')
+
+    expect(mockLog.error).toHaveBeenCalledWith('--by only applies to --week')
+    expect(requireThreadData).not.toHaveBeenCalled()
   })
 
   it('renders the digest fresh every time and writes no weekly cache', async () => {
@@ -266,6 +296,7 @@ describe('workscribe summary (daily)', () => {
           endTime: '09:00',
           durationMinutes: 60,
           activeMinutes: 30,
+          projectId: 4,
           alongside: [],
           events: [
             {

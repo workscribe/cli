@@ -52,9 +52,9 @@ describe('formatForSlack', () => {
     expect(formatForSlack('No activity captured for today')).toBe('No activity captured for today')
   })
 
-  it('does not convert ### or # headings', () => {
+  it("bolds the week's ### branch headings like ## ones, and leaves a # line alone", () => {
+    expect(formatForSlack('### feat/x — Tue 3 Nov')).toBe('*feat/x — Tue 3 Nov*')
     expect(formatForSlack('# top level')).toBe('# top level')
-    expect(formatForSlack('### sub heading')).toBe('### sub heading')
   })
 
   it('does not convert mid-line hyphens', () => {
