@@ -1,5 +1,55 @@
 # Changelog
 
+## [3.0.0](https://github.com/workscribe/cli/compare/v2.1.0...v3.0.0) (2026-11-05)
+
+### ⚠ BREAKING CHANGES
+
+* **sessions:** once the upgrade has dropped the old session tables,
+Workscribe 2.1 and earlier can't use the database (undo, clear, the
+week and context fail). To downgrade, restore the backup taken before
+the upgrade first.
+
+Closes WOR-151
+* **sessions:** sessions --json is at schemaVersion 2. Sessions are
+project threads that overlap within a block, repoName is the project's
+name, and a key a previous version listed may match no thread in
+sessions summary set.
+
+Closes WOR-147
+
+### Features
+
+* **capture:** link agent commands to the conversation they came from ([2330140](https://github.com/workscribe/cli/commit/23301409034f2c0c2ba59c8b33e03c4c97f060b9))
+* **capture:** link new events to their project, branch and file ([b529c29](https://github.com/workscribe/cli/commit/b529c29fc3b4793ffe71a8ad8b4b3292d5d33efd))
+* **context:** answer from the file's own project thread ([8885931](https://github.com/workscribe/cli/commit/888593172474a27d84300d726a89f5915e819eaa))
+* **db:** anchor existing summaries in a one-time upgrade ([fb8d237](https://github.com/workscribe/cli/commit/fb8d237813bdf9347710d742c423f6b5a2632e49))
+* **db:** back up and upgrade stored data with resumable jobs ([8383276](https://github.com/workscribe/cli/commit/838327671bcc787d2b03f4f6a31361f379132144))
+* **db:** index events by project and time ([a793792](https://github.com/workscribe/cli/commit/a793792def02b5e9ab8e77c4dd9eaeab540b2a9b))
+* **db:** let a data job gather outside the write lock ([1e42637](https://github.com/workscribe/cli/commit/1e426376239a16b66069f4d212bf9dabf684ad36))
+* **db:** link stored history to projects in a one-time upgrade ([3363269](https://github.com/workscribe/cli/commit/3363269aef2c0af34e2ce119c46928392085a850))
+* **sessions:** build work blocks and project threads for each day ([3eb7bea](https://github.com/workscribe/cli/commit/3eb7bea77295b723c14e39bcd03049ccfd436b1c))
+* **sessions:** find the work block that holds an event ([f8d066e](https://github.com/workscribe/cli/commit/f8d066e977d0e684992c2903eb9a6e38aa85d19c))
+* **sessions:** list and save summaries by project thread ([5b6488b](https://github.com/workscribe/cli/commit/5b6488b01900f68905bfa5a8716266e3ae5971bc))
+* **summary:** add branches and commit times to the summary data ([93b7c31](https://github.com/workscribe/cli/commit/93b7c31af42b8f0f8ea05d92dee8445bbfe0e4ac))
+* **summary:** anchor saved summaries to the events they describe ([bf7089c](https://github.com/workscribe/cli/commit/bf7089cc2345f3dd0d563508d61776f0c5b27bde))
+* **summary:** tell branch moves and export the same day as summary ([f9d5a47](https://github.com/workscribe/cli/commit/f9d5a47d2969a294e3c418e4b862b0d186de5283))
+* **summary:** tell each session as a story, branch by branch ([6793442](https://github.com/workscribe/cli/commit/67934425ac9ea48f13b3dad6495999e51162810e))
+* **summary:** tell the day by project thread in summary and export ([d043d97](https://github.com/workscribe/cli/commit/d043d97485a95de5d7c9b5071f1cd72970c225f9))
+* **tickets:** link work to the tickets its branches and commits name ([ac40ccb](https://github.com/workscribe/cli/commit/ac40ccb68d02889a04e9ac9c81539f6010d4f41c))
+* **week:** tell the week by project, then branch ([5e88dd3](https://github.com/workscribe/cli/commit/5e88dd31890108e5568a07590ef9f87b4e6e5272))
+
+### Bug Fixes
+
+* **capture:** record commit repo and message, packages, agent outcomes ([06eb501](https://github.com/workscribe/cli/commit/06eb50146e06f561e9635c855aa249ba0d9e94ea))
+* **db:** count the last N days from an exact cutoff ([385100a](https://github.com/workscribe/cli/commit/385100a87b2dda0bedffb92dd8af768af5279603))
+* **db:** keep the data folder private however it was created ([5219d85](https://github.com/workscribe/cli/commit/5219d8515752929eac85c68c1e46d689bc51dec9))
+* **db:** let undo and clear delete events already grouped into sessions ([2a4757b](https://github.com/workscribe/cli/commit/2a4757b4bc8e595872e37f588543556c218b08a7))
+* **paths:** stop fresh installs switching to a new data folder ([a659a03](https://github.com/workscribe/cli/commit/a659a0350215b8cc4d87833c5f195e4a2193e337))
+
+### Code Refactoring
+
+* **sessions:** drop the old linear sessions ([ebcbf71](https://github.com/workscribe/cli/commit/ebcbf71650a35db5f7bac614f2f2c1797992573f))
+
 ## [2.1.0](https://github.com/workscribe/cli/compare/v2.0.1...v2.1.0) (2026-10-28)
 
 ### Features
