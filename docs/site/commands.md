@@ -357,7 +357,7 @@ The file holds the same day `workscribe summary` shows: a summary the agent skil
 
 **Stability:** every document carries its own `schemaVersion`: `sessions --json` is at `2`, `events --json` at `1`. Within a version, fields may be **added** but are never renamed, removed, retyped or given a new meaning — those changes bump that document's `schemaVersion`. Ignore fields you don't recognise.
 
-**What changed in `sessions` version 2:** each session is now a project's thread inside a work block, not a stretch of one repo cut at every repo switch. Threads of one block overlap in time, so add up `activeMinutes` per block (or use the block's), never `durationMinutes` across sessions. `repoName` is the project's name (it can differ from the folder name the events were captured under), and `null` for the "elsewhere" thread. `blocks`, `blockId`, `activeMinutes`, `alongside` and `agentSessions` are new.
+**What changed in `sessions` version 2:** each session is now a project's thread inside a work block, not a stretch of one repo cut at every repo switch. Threads of one block overlap in time, so add up `activeMinutes` per block (or use the block's), never `durationMinutes` across sessions. `repoName` is the project's name (it can differ from the folder name the events were captured under), and `null` for the "elsewhere" thread. `blocks`, `blockId`, `activeMinutes`, `alongside` and `agentSessions` are new. `tickets` was added later in version 2: right after an update, or after `config set tickets.pattern`, it can be incomplete for earlier activity until a command that reads your data (or `workscribe upgrade`) has linked it.
 
 ```ts
 // workscribe sessions --json
@@ -388,6 +388,7 @@ Session = {                // one project's thread inside a block
   blockId: number          // the Block it belongs to
   alongside: string[]      // the keys of the block's other sessions, in block order
   agentSessions: AgentSession[]
+  tickets: string[]        // ticket keys its branches and commits name (tickets.pattern), sorted
   notes: string[]          // workscribe note texts
   commits: Commit[]
   events: Event[]

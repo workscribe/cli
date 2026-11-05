@@ -23,13 +23,16 @@ export interface CapturedCommit {
   branch: string | null
 }
 
+/** What finding an event's commits reads — a stored row, or an event about to be stored. */
+export type CommitSource = Pick<EventRow, 'category' | 'metadata' | 'exit_code' | 'captured_at' | 'branch'>
+
 /**
  * Commits Workscribe captured itself: `git commit -m` messages, at the time the commit finished, and AI-session
  * commits (subjects only — the session records which commits reached HEAD, not when). A `git commit` that failed
  * (rejected by a hook, nothing staged) made no commit, so it is skipped. A repeated subject keeps its first place,
  * and the first time any capture of it recorded.
  */
-export function collectCapturedCommits(rows: EventRow[]): CapturedCommit[] {
+export function collectCapturedCommits(rows: CommitSource[]): CapturedCommit[] {
   const commits = rows.flatMap((row): CapturedCommit[] => {
     const metadata = parseMetadata(row.metadata)
     if (row.category === 'shipping' && typeof metadata.message === 'string' && !isFailedCommand(row)) {

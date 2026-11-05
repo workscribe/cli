@@ -72,13 +72,25 @@ export function linkEventFile(
   )
 }
 
-/** Links a stored event to its project, branch and file. Without a project, nothing is linked. */
-export function writeEventDimensions(db: MigrationDatabase, eventId: number, dimensions: EventDimensions): void {
-  if (dimensions.project === null) return
+/** The ids an event was linked to. */
+export interface EventLinks {
+  projectId: number
+  branchId: number | null
+}
+
+/** Links a stored event to its project, branch and file. Without a project, nothing is linked (null). */
+export function writeEventDimensions(
+  db: MigrationDatabase,
+  eventId: number,
+  dimensions: EventDimensions
+): EventLinks | null {
+  if (dimensions.project === null) return null
   const projectId = upsertProject(db, dimensions.project)
   const branchId = dimensions.branch === null ? null : upsertBranch(db, projectId, dimensions.branch)
   db.prepare('UPDATE events SET project_id = ?, branch_id = ? WHERE id = ?').run(projectId, branchId, eventId)
-  if (dimensions.file === null) return
-  const fileId = upsertFile(db, projectId, dimensions.file.relativePath)
-  linkEventFile(db, { eventId, fileId, action: dimensions.file.action })
+  if (dimensions.file !== null) {
+    const fileId = upsertFile(db, projectId, dimensions.file.relativePath)
+    linkEventFile(db, { eventId, fileId, action: dimensions.file.action })
+  }
+  return { projectId, branchId }
 }

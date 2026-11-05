@@ -29,6 +29,7 @@ Each session is one project's **thread**: that project's work inside a work bloc
       "activeMinutes": 70,
       "blockId": 1,
       "alongside": ["web|2026-10-25T09:40:00.000Z"],
+      "tickets": ["API-412"],
       "notes": ["blocked on staging credentials"],
       "commits": [
         { "hash": "a1b2c3d", "subject": "fix: token refresh race", "committedAt": "2026-10-25T10:12:00+01:00", "source": "git" },
@@ -50,6 +51,7 @@ Each session is one project's **thread**: that project's work inside a work bloc
 | `project`, `branch`, `activeMinutes` | The block heading. `project` is the project's name, a `~/path` for work outside any project, or `null` (write `unknown`). `activeMinutes` is the time spent on this project; `startedAt`–`endedAt` can span other projects' work too. |
 | `branches` | Every branch the session touched, in the order first seen. `branch` is the latest of them, the one the session ended on. Each commit's `committedAt` says when it was made. |
 | `alongside` | The keys of the sessions worked in the same block. Don't mention those projects — Workscribe adds an `Alongside:` line under each summary itself — and leave their work to their own blocks. |
+| `tickets` | Ticket keys the session's branches and commits name. Mention one when the work is about it (e.g. "Fixed the token refresh race (API-412)"); don't list them for their own sake. May be empty even when a branch names one, right after an update. |
 | `repoPath` | Where to read files if a commit needs context. `null` outside a git repo. |
 | `notes` | The developer's own notes — always include them. |
 | `commits` | The main source of outcomes. `source: "git"` has a short `hash` to cite; `"captured"` commits have `hash: null` (amended or rebased). |

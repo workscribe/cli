@@ -41,6 +41,7 @@ export function thread(events: EventRow[], overrides: Partial<DayThread> = {}): 
     activeSlots: 6,
     events,
     agentSessions: [],
+    tickets: [],
     ...overrides,
   }
 }

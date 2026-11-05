@@ -14,6 +14,19 @@ import { effectiveDirectory } from '../normalize/git-directory'
 import { readCommitMessageFile } from './commit-message-file'
 import { eventDimensions, fileEventDimensions } from './dimensions'
 import type { AgentSessionRef } from '../db/agent-sessions'
+import type { EventDimensions } from '../db/dimensions'
+import type { TicketKeys } from '../db/tickets'
+import type { WorkscribeConfig } from '../config'
+import { ticketKeysOf, ticketPatternOf } from './tickets'
+import type { CommitSource } from '../summary/commits'
+
+/**
+ * The ticket keys an event names, with the branch it's linked to — none when it isn't linked to one. A config.json
+ * edited to drop `tickets` means the default pattern, never a failed capture.
+ */
+function ticketsOf(event: CommitSource, dimensions: EventDimensions, config: WorkscribeConfig): TicketKeys {
+  return ticketKeysOf({ linkedBranch: dimensions.branch, event }, ticketPatternOf(config.tickets?.pattern))
+}
 
 /**
  * `git commit -F <file>`: the message, read now while the file may still exist and redacted like the command — and
@@ -75,8 +88,7 @@ export function captureCommand(opts: {
     const command = opts.command ?? opts.file ?? opts.type
     const context = getRepoContext(cwd, config)
     const { repoName, branch } = context
-
-    insertEvent({
+    const ideEvent = {
       captured_at: new Date().toISOString(),
       command,
       cwd,
@@ -88,8 +100,9 @@ export function captureCommand(opts: {
       metadata: null,
       source: opts.source ?? null,
       file_path: opts.file ?? null,
-      dimensions: opts.file ? fileEventDimensions(context, opts.file, config) : eventDimensions(context),
-    })
+    }
+    const dimensions = opts.file ? fileEventDimensions(context, opts.file, config) : eventDimensions(context)
+    insertEvent({ ...ideEvent, dimensions, tickets: ticketsOf(ideEvent, dimensions, config) })
     return
   }
 
@@ -144,7 +157,7 @@ export function captureCommand(opts: {
   }
 
   // 7. Persist
-  insertEvent({
+  const shellEvent = {
     captured_at: new Date().toISOString(),
     command: safeCommand,
     cwd,
@@ -156,7 +169,12 @@ export function captureCommand(opts: {
     metadata: Object.keys(metadata).length > 0 ? JSON.stringify(metadata) : null,
     source: opts.source ?? null,
     file_path: null,
-    dimensions: eventDimensions(context),
+  }
+  const dimensions = eventDimensions(context)
+  insertEvent({
+    ...shellEvent,
+    dimensions,
+    tickets: ticketsOf(shellEvent, dimensions, config),
     agentSession: opts.agentSession,
   })
 }
