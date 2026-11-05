@@ -29,6 +29,8 @@ export interface SessionPayload {
   activeMinutes?: number
   /** For a thread: the names of the other projects worked in its block, in block order */
   alongside?: string[]
+  /** For a thread: its project's id, so the week groups projects by identity; null outside any project */
+  projectId?: number | null
   events: EventPayload[]
   /** The session's commits, each under the branch it was made on — captured ones, plus git's when it was asked */
   commits: StoryCommit[]
@@ -39,9 +41,13 @@ export interface DaySummaryPayload {
   sessions: SessionPayload[]
 }
 
+/** How the week is laid out: each project then each branch (the default), or day by day. */
+export type WeekLayout = 'project' | 'day'
+
 export interface WeekSummaryPayload {
   weekStart: string
   weekEnd: string
+  by: WeekLayout
   days: {
     date: string
     sessions: SessionPayload[]

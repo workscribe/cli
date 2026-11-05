@@ -59,7 +59,7 @@ Looking commits up in git takes at most 3 seconds per `workscribe summary` run, 
 
 Coding agents often run compound commands like `cd app && pnpm nx test shell 2>&1 | tail -40; npx tsc --noEmit`. Workscribe splits these into steps, sets aside shell glue (`cd`, `echo`, variable assignments, loop keywords) and classifies the command by its most telling step — here, the tests. The full command is still stored as it was run.
 
-A session with nothing to tell but activity says so in one line, "Explored and ran commands", under its heading. Weekly digests list up to 5 bullets per day, taking the top bullet of every project before the second, so one busy repo can't fill the day.
+A session with nothing to tell but activity says so in one line, "Explored and ran commands", under its heading. The week (`summary --week`, `week`) is laid out project by project, then branch by branch, with the days each branch was worked on. Each branch is told like a day's story, using git's commits for the whole week, with up to 6 bullets and then "…plus N more". `--by day` gives the day-by-day digest instead: up to 5 bullets per day, taking the top bullet of every project before the second, so one busy repo can't fill the day.
 
 Lint runs and exploratory commands (`cat`, `grep`, `ls`…) are left out by default. To include a category, add it to [`summary.includeCategories`](/configuration#summary):
 

@@ -18,7 +18,12 @@ vi.mock('fs', () => ({
   },
 }))
 vi.mock('../../src/utils/paths')
-vi.mock('../../src/utils/format', () => ({
+vi.mock('../../src/summary/day-commits', () => ({
+  DAY_GIT_BUDGET_MS: 3000,
+  lookupDayCommits: vi.fn((windows: unknown[]) => windows.map(() => null)),
+}))
+vi.mock('../../src/utils/format', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../src/utils/format')>()),
   todayDate: vi.fn(() => '2026-08-17'),
   startOfWeek: vi.fn(() => '2026-08-17'),
   eachDayOfRange: vi.fn(() => ['2026-08-17']),
@@ -35,6 +40,8 @@ import { postToWebhook } from '../../src/integrations/webhook'
 import { isSlackWebhookUrl, formatForSlack } from '../../src/integrations/slack'
 import { log } from '../../src/utils/logger'
 import { registerWeek } from '../../src/cli/week'
+import { lookupDayCommits } from '../../src/summary/day-commits'
+import { eachDayOfRange } from '../../src/utils/format'
 
 const mockFs = fs as unknown as Record<string, ReturnType<typeof vi.fn>>
 const mockCreateSummaryWriter = createSummaryWriter as ReturnType<typeof vi.fn>
@@ -176,5 +183,87 @@ describe('workscribe week', () => {
     await makeProgram().parseAsync(['week'], { from: 'user' })
 
     expect(mockLog.notice).not.toHaveBeenCalled()
+  })
+
+  it('lays the week out by project by default, and by day with --by day', async () => {
+    const summarizeWeek = vi.fn().mockResolvedValue('# Week')
+    mockCreateSummaryWriter.mockReturnValue({ summarizeWeek })
+
+    await makeProgram().parseAsync(['week'], { from: 'user' })
+    await makeProgram().parseAsync(['week', '--by', 'day'], { from: 'user' })
+
+    expect(summarizeWeek.mock.calls.map(([payload]) => payload.by)).toEqual(['project', 'day'])
+  })
+
+  it('refuses a layout it does not know', async () => {
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+      throw new Error('exit')
+    }) as never)
+    onTestFinished(() => exitSpy.mockRestore())
+
+    await expect(makeProgram().parseAsync(['week', '--by', 'month'], { from: 'user' })).rejects.toThrow('exit')
+
+    expect(mockLog.error).toHaveBeenCalledWith('--by must be project or day')
+  })
+
+  it("asks git once for the whole week's threads, within the week's budget", async () => {
+    await makeProgram().parseAsync(['week'], { from: 'user' })
+
+    expect(lookupDayCommits).toHaveBeenCalledOnce()
+    expect(lookupDayCommits).toHaveBeenCalledWith([expect.objectContaining({ cwd: '/Users/dev/api' })], {
+      budgetMs: 3000,
+    })
+  })
+
+  it('prints the week as one JSON document with summary.format json, and still posts the text', async () => {
+    mockReadConfig.mockReturnValue({ ...BASE_CONFIG, summary: { format: 'json' } })
+    mockCreateSummaryWriter.mockReturnValue({ summarizeWeek: vi.fn().mockResolvedValue('# Week summary') })
+
+    await makeProgram().parseAsync(['week', '--webhook', 'https://hooks.example.com/abc'], { from: 'user' })
+
+    expect(mockLog.plain).toHaveBeenCalledTimes(1)
+    const json = JSON.parse(mockLog.plain.mock.calls[0][0] as string)
+    expect(json).toMatchObject({ weekStart: '2026-08-17', weekEnd: '2026-08-17', by: 'project' })
+    expect(json.projects[0]).toMatchObject({
+      project: 'my-app',
+      branches: [expect.objectContaining({ branch: 'main' })],
+    })
+    expect(mockPostToWebhook).toHaveBeenCalledWith('https://hooks.example.com/abc', '# Week summary')
+  })
+
+  it("gives each thread of the week git's commits for its own window, across days and blocks", async () => {
+    const summarizeWeek = vi.fn().mockResolvedValue('# Week')
+    mockCreateSummaryWriter.mockReturnValue({ summarizeWeek })
+    vi.mocked(eachDayOfRange).mockReturnValue(['2026-08-17', '2026-08-18'])
+    const threadAt = (startedAt: string, repoName: string) =>
+      thread([row({ captured_at: startedAt, repo_name: repoName, cwd: `/Users/dev/${repoName}`, branch: 'main' })], {
+        repoName,
+        startedAt,
+        endedAt: startedAt,
+      })
+    const monday = threadAt('2026-08-17T09:00:00.000Z', 'api')
+    const tuesdayApi = threadAt('2026-08-18T09:00:00.000Z', 'api')
+    const tuesdayWeb = threadAt('2026-08-18T14:00:00.000Z', 'web')
+    vi.mocked(loadDayThreads).mockImplementation((date: string) =>
+      date === '2026-08-17'
+        ? [block([monday], { date })]
+        : [block([tuesdayApi], { date }), block([tuesdayWeb], { id: 2, date })]
+    )
+    const gitCommit = (subject: string, committedAt: string) => ({ hash: subject, subject, committedAt })
+    vi.mocked(lookupDayCommits).mockReturnValueOnce([
+      [gitCommit('fix: monday', '2026-08-17T09:00:00.000Z')],
+      [gitCommit('fix: tuesday api', '2026-08-18T09:00:00.000Z')],
+      [gitCommit('fix: tuesday web', '2026-08-18T14:00:00.000Z')],
+    ])
+
+    await makeProgram().parseAsync(['week'], { from: 'user' })
+
+    expect(lookupDayCommits).toHaveBeenCalledOnce()
+    const { days } = summarizeWeek.mock.calls[0][0]
+    const subjectsOf = (day: { sessions: { commits: { subject: string }[] }[] }) =>
+      day.sessions.map((session) => session.commits.map((commit) => commit.subject))
+    expect(days.map((day: { date: string }) => day.date)).toEqual(['2026-08-17', '2026-08-18'])
+    expect(subjectsOf(days[0])).toEqual([['fix: monday']])
+    expect(subjectsOf(days[1])).toEqual([['fix: tuesday api'], ['fix: tuesday web']])
   })
 })

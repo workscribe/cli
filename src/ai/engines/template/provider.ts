@@ -1,46 +1,6 @@
-import { UNKNOWN_LOCATION } from '../../../summary/heading'
-import { MAX_DAY_BULLETS } from './constants'
-import { countIncludedEvents, describeActivity } from './describe'
 import { renderSessionStory } from './story'
-import { pluralize, toBulletList } from './utils'
-import type { AIProvider, DaySummaryPayload, SessionPayload, WeekSummaryPayload } from '../../types'
-
-/** One entry per location for the day — several sessions in the same repo read as one block of work. */
-export function mergeByLocation(sessions: SessionPayload[]): SessionPayload[] {
-  const merged = new Map<string, SessionPayload>()
-  for (const session of sessions) {
-    const location = session.project ?? UNKNOWN_LOCATION
-    const existing = merged.get(location)
-    merged.set(
-      location,
-      existing
-        ? {
-            ...existing,
-            events: [...existing.events, ...session.events],
-            branches: [...new Set([...existing.branches, ...session.branches])],
-            durationMinutes: existing.durationMinutes + session.durationMinutes,
-          }
-        : { ...session, project: location }
-    )
-  }
-  return [...merged.values()]
-}
-
-function locationBullets(session: SessionPayload, includeCategories: string[]): string[] {
-  const bullets = describeActivity(session, includeCategories)
-  const lines = bullets.length > 0 ? bullets : [pluralize(countIncludedEvents(session, includeCategories), 'command')]
-  return lines.map((line) => `${session.project}: ${line}`)
-}
-
-/** Takes the top bullet of every location, then the second, and so on — so one busy repo can't fill the day. */
-function pickDayBullets(sessions: SessionPayload[], includeCategories: string[]): string[] {
-  const perLocation = mergeByLocation(sessions).map((session) => locationBullets(session, includeCategories))
-  const longest = Math.max(0, ...perLocation.map((bullets) => bullets.length))
-  const interleaved = Array.from({ length: longest }, (_unused, index) =>
-    perLocation.flatMap((bullets) => (index < bullets.length ? [bullets[index]] : []))
-  ).flat()
-  return interleaved.slice(0, MAX_DAY_BULLETS)
-}
+import { renderWeek, weekLayoutOf } from './week'
+import type { AIProvider, DaySummaryPayload, WeekSummaryPayload } from '../../types'
 
 /** Offline, deterministic summaries built from captured events — the default when no AI is configured. */
 export class TemplateProvider implements AIProvider {
@@ -51,10 +11,9 @@ export class TemplateProvider implements AIProvider {
     return payload.sessions.map((session) => renderSessionStory(session, this.includeCategories)).join('\n\n')
   }
 
+  /** The week by project then branch (the default), or day by day. */
   async summarizeWeek(payload: WeekSummaryPayload): Promise<string> {
-    return payload.days
-      .map((day) => `### ${day.date}\n${toBulletList(pickDayBullets(day.sessions, this.includeCategories))}`)
-      .join('\n\n')
+    return renderWeek(weekLayoutOf(payload, this.includeCategories))
   }
 
   async validate(): Promise<void> {

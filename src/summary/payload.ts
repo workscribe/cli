@@ -167,6 +167,7 @@ export function threadToPayload(
   return {
     ...spanToPayload({ ...thread, durationMinutes }, block.date, options),
     activeMinutes: toActiveMinutes(thread.activeSlots),
+    projectId: thread.projectId,
     alongside: block.threads
       .filter((other) => other.id !== thread.id)
       .map((other) => sessionLocation(other, options.context) ?? UNKNOWN_LOCATION),

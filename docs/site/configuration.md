@@ -78,10 +78,10 @@ workscribe config set redact.extra '["MY_INTERNAL_TOKEN"]'
 
 | Key | Type | Default | Description |
 |---|---|---|---|
-| `summary.format` | `"markdown"` \| `"json"` | `"markdown"` | Output format for daily summaries |
+| `summary.format` | `"markdown"` \| `"json"` | `"markdown"` | Output format for summaries, daily and weekly |
 | `summary.includeCategories` | string[] | `[]` | Event categories to re-include in summaries (overrides built-in exclusions). Excluded by default: `exploring`, `linting`. Example: `["linting"]` to include lint pass/fail results. |
 
-Summaries come from Workscribe's offline template engine. Each session is told branch by branch from your captured activity (notes, commits, test and build results, dependencies, releases, pushes and branch moves), with nothing cut, and weekly digests have up to 5 bullets per day. There's no engine to choose: for AI-written summaries, use the agent skill. See [Summaries](/summaries).
+Summaries come from Workscribe's offline template engine. Each session is told branch by branch from your captured activity (notes, commits, test and build results, dependencies, releases, pushes and branch moves), with nothing cut, and the week tells each branch the same way, up to 6 bullets each. There's no engine to choose: for AI-written summaries, use the agent skill. See [Summaries](/summaries).
 
 > **Removed in 2.0:** the `ai.*` keys (`ai.provider`, `ai.apiKey`, `ai.model`, `ai.baseUrl`) and `summary.engine`. `workscribe config set` refuses them, and `workscribe init` offers to delete them from an old config. See [Migrating to 2.0](/migrating-to-2).
 
@@ -115,7 +115,31 @@ In `json` mode, `workscribe summary` outputs structured data instead of markdown
 
 Each entry is one project thread. `bullets` holds every line of its summary under its heading, the `On <branch>:` lines and the closing activity line included, and `branch` is the latest branch it was on. `durationMinutes` is its span from first to last event; `activeMinutes` is its own active time and `alongside` names the other projects worked in the same stretch. The top-level `activeMinutes` is the day's time worked, counted once across projects. For a structured view of each session (commits, events, every branch), use [`workscribe sessions --json`](/commands#json-output-contract).
 
-Weekly summaries (`--week`) always output markdown regardless of this setting.
+The week (`summary --week`, `week`) prints one document too — its projects, each with its branches, the days each was worked on, its bullets (up to 6), how many more there were and its activity line:
+
+```json
+{
+  "weekStart": "2026-11-02",
+  "weekEnd": "2026-11-05",
+  "by": "project",
+  "projects": [
+    {
+      "project": "workscribe/cli",
+      "branches": [
+        {
+          "branch": "feat/WOR-147-sessions-contract-v2",
+          "dates": ["2026-11-03", "2026-11-04"],
+          "bullets": ["Committed: refactor(cli): share one fail helper across commands", "Tests passing"],
+          "moreCount": 0,
+          "activity": "With an AI coding assistant (164 commands)"
+        }
+      ]
+    }
+  ]
+}
+```
+
+`branch` is `null` for work on no branch, and `activity` is `null` when there's nothing to say about how. With `--by day` it's `{ "weekStart", "weekEnd", "by": "day", "days": [{ "date", "bullets" }] }`. `--slack` and `--webhook` still post the text, and their status lines go to stderr so the JSON can be piped.
 
 ```bash
 workscribe config set summary.format json

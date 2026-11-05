@@ -75,3 +75,12 @@ export function timeAgo(isoString: string, now = Date.now()): string {
   if (days === 1) return 'yesterday'
   return `${days} days ago`
 }
+
+/** A local date (`2026-11-03`) as the week shows it: `Mon 3 Nov`. */
+export function formatWeekday(date: string): string {
+  const [year, month, day] = date.split('-').map(Number)
+  // Noon UTC, formatted in UTC: the same calendar day whatever the machine's time zone
+  return new Date(Date.UTC(year, month - 1, day, 12))
+    .toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })
+    .replace(',', '')
+}

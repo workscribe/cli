@@ -38,6 +38,7 @@ Generate a work summary for today or a specific date with Workscribe's offline t
 workscribe summary
 workscribe summary --date 2026-05-20
 workscribe summary --week
+workscribe summary --week --by day
 workscribe summary --fresh
 workscribe summary --slack
 workscribe summary --webhook <url>
@@ -46,7 +47,8 @@ workscribe summary --webhook <url>
 | Option | Description |
 |---|---|
 | `--date <YYYY-MM-DD>` | Summarise a specific date instead of today |
-| `--week` | Summarise Mon–today for the current week |
+| `--week` | Summarise Mon–today for the current week — the same as [`workscribe week`](#workscribe-week) |
+| `--by <project\|day>` | With `--week`: lay the week out by project then branch (the default), or day by day |
 | `--fresh` | Ignore saved summaries and render the template for every session |
 | `--verbose` | Show all captured events, including those left out of the summary |
 | `--slack` | Post the summary to your configured Slack webhook |
@@ -104,10 +106,11 @@ The day is told one section per project thread: each project's work inside a str
 
 ## workscribe week
 
-Generate a weekly digest covering Monday through today with the offline template engine (up to 5 bullets per day). Digests are rendered fresh every time.
+Summarise Monday through today with the offline template engine, the way a weekly report is written: each project, then each branch you worked on, with the days you worked on it and what was done. `workscribe week` is `workscribe summary --week` under another name: same options, same output. The week is rendered fresh every time.
 
 ```bash
 workscribe week
+workscribe week --by day
 workscribe week --fresh
 workscribe week --slack
 workscribe week --webhook <url>
@@ -115,11 +118,24 @@ workscribe week --webhook <url>
 
 | Option | Description |
 |---|---|
-| `--fresh` | Accepted for 1.x scripts — digests are always rendered fresh |
-| `--slack` | Post the digest to your configured Slack webhook |
-| `--webhook <url>` | Post the digest to a custom webhook URL |
+| `--by <project\|day>` | Each project then each branch (the default), or day by day |
+| `--fresh` | Accepted for 1.x scripts — the week is always rendered fresh |
+| `--slack` | Post the week to your configured Slack webhook |
+| `--webhook <url>` | Post the week to a custom webhook URL |
 
-The natural pre-standup ritual for Monday morning or end-of-week reporting. Output is markdown grouped by day, with up to 5 bullets per day, each prefixed with the project it happened in.
+```markdown
+## workscribe/cli
+
+### feat/WOR-147-sessions-contract-v2 — Tue 3 Nov, Wed 4 Nov
+- Committed: refactor(cli): share one fail helper across commands
+- Tests passing
+- …plus 4 more
+With an AI coding assistant (164 commands) · 3 file saves in the editor
+```
+
+Each branch is told like a day's story (notes, commits from git and from capture, test and build results, dependencies, releases, pushes and branch moves), with up to 6 bullets and then a count of the rest; the activity line closes it. Work on no branch goes under `(no branch)`. A stretch of work that moved between branches shows under each of them.
+
+`--by day` gives the day-by-day digest instead: a section per day, up to 5 bullets each, each prefixed with the project it happened in. With `summary.format` set to `json`, the week prints as one JSON document (see [Configuration](/configuration#summary)).
 
 **Slack:**
 
@@ -170,7 +186,7 @@ EOF
 - The text must be non-empty and at most 8 KB. Secrets are redacted before it's stored, using the same rules as captured commands (including `redact.extra`).
 - Saving again for the same session replaces the earlier summary.
 - The key must name a thread from `workscribe sessions --json`; a key an older Workscribe listed for a session may match no thread. If the key no longer matches (new activity can regroup a day), run `workscribe sessions --json` again and use the new key.
-- The summary is saved against the thread's events, so it survives the day being regrouped. `workscribe summary`, `workscribe export`, `workscribe context` and the VS Code status bar show it for that thread. `workscribe summary --fresh` renders the template for that run only; the saved summary stays until the skill (or this command) saves a new one. Saved summaries are per thread, so weekly digests (`summary --week`, `week`) don't use them.
+- The summary is saved against the thread's events, so it survives the day being regrouped. `workscribe summary`, `workscribe export`, `workscribe context` and the VS Code status bar show it for that thread. `workscribe summary --fresh` renders the template for that run only; the saved summary stays until the skill (or this command) saves a new one. Saved summaries are per thread, so the week (`summary --week`, `week`) doesn't use them yet.
 
 ### Agent skill
 

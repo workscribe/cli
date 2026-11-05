@@ -9,10 +9,11 @@ import { formatSessionLabel } from '../summary/heading'
 import { createSummaryWriter } from '../summary/writer'
 import { printLegacyAiNotice } from './notices'
 import { postSummary } from '../summary/webhook'
-import { runWeeklySummary } from '../summary/weekly'
 import { renderDay, type RenderedDay } from '../summary/day'
 import { printExcludedFooter, printSavedNote } from './day-notes'
 import { loadDayThreads, requireThreadData } from './thread-day'
+import { addWeekLayoutOption, runWeekCommand } from './week'
+import { fail } from './fail'
 
 interface SessionSummaryJson {
   project: string | null
@@ -66,7 +67,7 @@ function printCapturedEvents(sessionPayloads: SessionPayload[], excluded: Set<st
 }
 
 export function registerSummary(program: Command): void {
-  program
+  const summaryCommand = program
     .command('summary')
     .description('Generate a work summary')
     .option('--date <YYYY-MM-DD>', 'date to summarize (default: today)')
@@ -75,68 +76,64 @@ export function registerSummary(program: Command): void {
     .option('--verbose', 'show all captured events, including those left out of the summary')
     .option('--slack', 'post summary to Slack webhook from config')
     .option('--webhook <url>', 'post summary to a custom webhook URL')
-    .action(async (options) => {
-      const config = readConfig()
-      printLegacyAiNotice(config)
-      const provider = createSummaryWriter(config)
+  addWeekLayoutOption(summaryCommand).action(async (options) => {
+    if (options.by !== undefined && !options.week) fail('--by only applies to --week')
+    // ── Weekly branch: the same handler as `workscribe week` ──────────────────
+    if (options.week) {
+      await runWeekCommand(options)
+      return
+    }
 
-      requireThreadData()
+    const config = readConfig()
+    printLegacyAiNotice(config)
+    const provider = createSummaryWriter(config)
 
-      // ── Weekly branch ────────────────────────────────────────────────────────
-      if (options.week) {
-        try {
-          await runWeeklySummary({ options, config, provider, loadDay: loadDayThreads })
-        } catch (error) {
-          log.error((error as Error).message)
-          process.exit(1)
-        }
-        return
-      }
+    requireThreadData()
 
-      // ── Daily branch ─────────────────────────────────────────────────────────
-      let date = todayDate()
-      if (options.date) {
-        try {
-          date = parseDate(options.date)
-        } catch (error) {
-          log.error((error as Error).message)
-          process.exit(1)
-        }
-      }
-
-      const blocks = loadDayThreads(date)
-
-      if (blocks.length === 0) {
-        log.plain(`No activity captured for ${date}`)
-        return
-      }
-
-      const jsonMode = config.summary?.format === 'json'
-      let day: RenderedDay
+    // ── Daily branch ─────────────────────────────────────────────────────────
+    let date = todayDate()
+    if (options.date) {
       try {
-        day = await renderDay({ date, blocks, config, provider, fresh: options.fresh })
+        date = parseDate(options.date)
       } catch (error) {
-        log.error(`Summary failed: ${(error as Error).message}`)
+        log.error((error as Error).message)
         process.exit(1)
       }
-      const { sessionPayloads, saved, fullSummary, needsGeneration } = day
-      const excluded = buildExcludedSet(config.summary?.includeCategories ?? [])
-      if (needsGeneration && options.verbose) {
-        if (jsonMode) log.notice('--verbose is skipped when summary.format is json, to keep the JSON output clean')
-        else printCapturedEvents(sessionPayloads, excluded)
-      }
+    }
 
-      if (jsonMode) {
-        // Only the JSON on stdout, so it can be piped straight into another tool
-        log.plain(toJsonOutput(day, date))
-      } else {
-        log.plain('')
-        log.plain(fullSummary)
-        log.plain('')
-        printSavedNote(saved)
-        if (needsGeneration) printExcludedFooter(sessionPayloads, excluded)
-      }
+    const blocks = loadDayThreads(date)
 
-      await postSummary({ options, config, summary: fullSummary, statusToStderr: jsonMode })
-    })
+    if (blocks.length === 0) {
+      log.plain(`No activity captured for ${date}`)
+      return
+    }
+
+    const jsonMode = config.summary?.format === 'json'
+    let day: RenderedDay
+    try {
+      day = await renderDay({ date, blocks, config, provider, fresh: options.fresh })
+    } catch (error) {
+      log.error(`Summary failed: ${(error as Error).message}`)
+      process.exit(1)
+    }
+    const { sessionPayloads, saved, fullSummary, needsGeneration } = day
+    const excluded = buildExcludedSet(config.summary?.includeCategories ?? [])
+    if (needsGeneration && options.verbose) {
+      if (jsonMode) log.notice('--verbose is skipped when summary.format is json, to keep the JSON output clean')
+      else printCapturedEvents(sessionPayloads, excluded)
+    }
+
+    if (jsonMode) {
+      // Only the JSON on stdout, so it can be piped straight into another tool
+      log.plain(toJsonOutput(day, date))
+    } else {
+      log.plain('')
+      log.plain(fullSummary)
+      log.plain('')
+      printSavedNote(saved)
+      if (needsGeneration) printExcludedFooter(sessionPayloads, excluded)
+    }
+
+    await postSummary({ options, config, summary: fullSummary, statusToStderr: jsonMode })
+  })
 }
