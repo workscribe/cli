@@ -186,6 +186,8 @@ const BUILTIN_PATTERNS: RegExp[] = [
   /(?<=https?:\/\/)[^\s:@/?#]+(?=@)/g,
 ]
 
+export const REDACTED_TEXT = '[REDACTED]'
+
 export function redact(command: string, extraPatterns: string[] = []): string {
   let result = command
 
@@ -202,7 +204,7 @@ export function redact(command: string, extraPatterns: string[] = []): string {
   for (const pattern of allPatterns) {
     // Reset lastIndex for global regexes
     pattern.lastIndex = 0
-    result = result.replace(pattern, '[REDACTED]')
+    result = result.replace(pattern, REDACTED_TEXT)
   }
 
   return result

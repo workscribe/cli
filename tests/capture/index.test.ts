@@ -277,6 +277,30 @@ describe('captureCommand — project links', () => {
     )
   })
 
+  it('redacts a command from an IDE, even when it also names a file', () => {
+    mockRedact.mockReturnValue('run --password=[REDACTED]')
+
+    captureCommand({
+      command: 'run --password=FAKEVALUE',
+      cwd: '/repo',
+      exitCode: null,
+      durationMs: null,
+      type: 'task_run',
+      file: '/repo/src/a.ts',
+    })
+
+    expect(mockInsertEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ command: 'run --password=[REDACTED]', file_path: '/repo/src/a.ts' })
+    )
+  })
+
+  it('stores a save with no command under its path, without redacting it', () => {
+    captureCommand({ cwd: '/repo', exitCode: null, durationMs: null, type: 'code_edit', file: '/repo/src/a.ts' })
+
+    expect(mockRedact).not.toHaveBeenCalled()
+    expect(mockInsertEvent).toHaveBeenCalledWith(expect.objectContaining({ command: '/repo/src/a.ts' }))
+  })
+
   it('links an editor save to its file, keeping the text columns as before', () => {
     captureCommand({ cwd: '/repo', exitCode: null, durationMs: null, type: 'code_edit', file: '/repo/src/a.ts' })
 
@@ -399,6 +423,29 @@ describe('captureCommand — where the work happened', () => {
     expect(readCommitMessageFile).toHaveBeenCalledWith('msg.txt', '/r/web')
     const stored = JSON.parse(vi.mocked(mockInsertEvent).mock.calls[0][0].metadata as string)
     expect(stored).toEqual({ message: 'feat: from a file' })
+  })
+
+  it("redacts an AI session's commit subjects, with the configured patterns", () => {
+    mockReadConfig.mockReturnValue({ ...BASE_CONFIG, redact: { extra: ['INTERNAL'] } })
+    mockNormalize.mockReturnValue({ category: 'ai_session', metadata: { tool: 'claude' }, matchedStep: 'claude' })
+    vi.mocked(getCommitsSince).mockReturnValue(['set --password=FAKEVALUE'])
+    mockRedact.mockImplementation((text: string, extra: string[]) =>
+      extra.includes('INTERNAL') ? text.replace('FAKEVALUE', '[REDACTED]') : text
+    )
+
+    captureCommand({ command: 'claude', cwd: '/r/api', exitCode: 0, durationMs: 10, gitBefore: 'abc123' })
+
+    const stored = JSON.parse(mockInsertEvent.mock.calls[0][0].metadata as string) as { commits: string[] }
+    expect(stored.commits).toEqual(['set --password=[REDACTED]'])
+  })
+
+  it('passes the configured patterns to an Aider prompt', () => {
+    mockReadConfig.mockReturnValue({ ...BASE_CONFIG, redact: { extra: ['INTERNAL'] } })
+    mockNormalize.mockReturnValue({ category: 'ai_session', metadata: { tool: 'aider' } })
+
+    captureCommand({ command: 'aider', cwd: '/repo', exitCode: 0, durationMs: 10 })
+
+    expect(mockReadLastAiderPrompt).toHaveBeenCalledWith('/repo', ['INTERNAL'])
   })
 
   it("looks for an AI session's commits in the work directory", () => {

@@ -335,6 +335,61 @@ describe('runPendingJobs', () => {
   })
 })
 
+describe('runPendingJobs — cleanup', () => {
+  /** A cleanup that's pending until it has run `succeedOnAttempt` times, throwing before that. */
+  function cleanupOf({ succeedOnAttempt = 1 } = {}) {
+    let attempts = 0
+    const run = vi.fn(() => {
+      attempts += 1
+      if (attempts < succeedOnAttempt) throw new Error('database is locked')
+    })
+    return { isPending: () => attempts < succeedOnAttempt, run }
+  }
+
+  it('runs once the job is done, outside any transaction', () => {
+    const db = migratedDatabase()
+    insertEvents(db, 3)
+    const cleanup = cleanupOf()
+    cleanup.run.mockImplementationOnce(() => {
+      expect(getJobRow(db, 'copy-events')?.status).toBe('done')
+      db.exec('BEGIN')
+      db.exec('COMMIT')
+    })
+
+    const result = run(db, [copyJob({ cleanup })])
+
+    expect(result.jobs[0].outcome).toBe('done')
+    expect(cleanup.run).toHaveBeenCalledOnce()
+  })
+
+  it('does not run while the job is paused', () => {
+    const db = migratedDatabase()
+    insertEvents(db, 3)
+    const cleanup = cleanupOf()
+
+    expect(run(db, [copyJob({ cleanup })], { budgetMs: 0 }).jobs[0].outcome).toBe('paused')
+    expect(cleanup.run).not.toHaveBeenCalled()
+  })
+
+  it('never fails a job that is done, and tries again on the next run though no job is pending', () => {
+    const db = migratedDatabase()
+    insertEvents(db, 1)
+    const cleanup = cleanupOf({ succeedOnAttempt: 2 })
+    const job = copyJob({ cleanup })
+
+    const first = run(db, [job])
+    expect(first.jobs[0].outcome).toBe('done')
+    expect(getJobRow(db, 'copy-events')?.status).toBe('done')
+    expect(cleanup.run).toHaveBeenCalledTimes(1)
+
+    expect(run(db, [job])).toEqual({ backup: 'not-needed', jobs: [] })
+    expect(cleanup.run).toHaveBeenCalledTimes(2)
+
+    run(db, [job])
+    expect(cleanup.run).toHaveBeenCalledTimes(2)
+  })
+})
+
 describe('readDataStatus', () => {
   it('lists pending jobs before they run', () => {
     const db = migratedDatabase()

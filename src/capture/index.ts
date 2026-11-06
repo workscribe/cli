@@ -1,6 +1,7 @@
 import fs from 'fs'
 import { insertEvent, getLastEvent, getLastEventForFile, getLastEventForCwd } from '../db'
 import { redact } from './redact'
+import { commandHint } from './hint'
 import { getRepoContext } from './git'
 import { getCommitsSince } from './git-snapshot'
 import { readLastAiderPrompt } from './aider'
@@ -85,7 +86,7 @@ export function captureCommand(opts: {
       }
     }
 
-    const command = opts.command ?? opts.file ?? opts.type
+    const command = opts.command === undefined ? (opts.file ?? opts.type) : redact(opts.command, config.redact.extra)
     const context = getRepoContext(cwd, config)
     const { repoName, branch } = context
     const ideEvent = {
@@ -135,7 +136,7 @@ export function captureCommand(opts: {
   if (category === 'other') {
     const firstToken = safeCommand.trim().split(/\s+/)[0]
     if (firstToken) metadata.tool = firstToken
-    metadata.hint = safeCommand.trim().slice(0, 120)
+    metadata.hint = commandHint(safeCommand)
   }
 
   // 6. For ai_session events, enrich metadata
@@ -143,14 +144,14 @@ export function captureCommand(opts: {
     // 6a. Commits made during the session
     if (opts.gitBefore) {
       const commits = getCommitsSince(opts.gitBefore, workDirectory)
-      if (commits.length > 0) metadata.commits = commits
+      if (commits.length > 0) metadata.commits = commits.map((subject) => redact(subject, config.redact.extra))
     }
 
     // 6b. Last user prompt from history file (e.g. Aider)
     if (config.capture.includeAiderPrompt !== false) {
       const toolEntry = loadAIToolRegistry().find((entry) => entry.tool === metadata.tool)
       if (toolEntry?.contextSource === 'history-file') {
-        const prompt = readLastAiderPrompt(cwd)
+        const prompt = readLastAiderPrompt(cwd, config.redact.extra)
         if (prompt) metadata.prompt = prompt
       }
     }

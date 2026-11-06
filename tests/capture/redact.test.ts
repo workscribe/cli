@@ -397,6 +397,8 @@ describe('redact', () => {
       ['run --key ab/cd.ef', 'run --key [REDACTED]'],
     ])('%s', (command, expected) => {
       expect(redact(command)).toBe(expected)
+      // The scrub-secrets job checks a row is clean by redacting it again
+      expect(redact(expected)).toBe(expected)
     })
 
     it('redacts a whole private key block', () => {

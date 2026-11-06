@@ -569,7 +569,7 @@ Some updates change how stored activity is organised. Workscribe does that work 
 
 - **A backup comes first.** Before the first change after an update, Workscribe copies your database to `~/.workscribe/backups/` (once per version; the newest 3 are kept). If the backup can't be made, nothing is changed.
 - **Interrupted is fine.** Each step is saved as it finishes; the next run carries on where the last one stopped.
-- **Nothing is deleted.** Rows an upgrade can't sort out are kept as they are and listed, and `workscribe status` shows how many.
+- **Nothing is deleted.** Rows an upgrade can't sort out are kept as they are and listed, and `workscribe status` shows how many. The one thing an upgrade removes is text matching a secret pattern, which is replaced with `[REDACTED]` (see [Privacy](/privacy)).
 
 Exits with 1 if an upgrade failed or its check didn't pass, so it can run in a script. With nothing to do, it says your data is up to date.
 

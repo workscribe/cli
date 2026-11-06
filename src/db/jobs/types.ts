@@ -42,4 +42,12 @@ export interface DataJob {
   /** Handles up to `limit` rows with an id above `afterId`, in id order. */
   runBatch(db: MigrationDatabase, afterId: number, limit: number): BatchResult
   verify(db: MigrationDatabase): JobVerification
+  /**
+   * Work left once the job is done, like rewriting the file. It runs outside every transaction, whenever a data command
+   * finds it pending, so a busy or interrupted attempt is retried. An error is logged, and never fails the job.
+   */
+  cleanup?: {
+    isPending(db: MigrationDatabase): boolean
+    run(db: MigrationDatabase): void
+  }
 }
