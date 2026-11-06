@@ -1,5 +1,17 @@
 # Changelog
 
+## [3.1.0](https://github.com/workscribe/cli/compare/v3.0.1...v3.1.0) (2026-11-06)
+
+### Features
+
+* **summary:** add copy-ready plain text output ([a995022](https://github.com/workscribe/cli/commit/a99502253e571eadeedf8cdcd334721379d751d4))
+
+### Bug Fixes
+
+* **capture:** redact by default and keep compound commands intact ([8db3b01](https://github.com/workscribe/cli/commit/8db3b017cd057a50b4a5cd273505dd6e1d517602))
+* **capture:** redact secrets in common command forms ([dc51135](https://github.com/workscribe/cli/commit/dc511355fcab0e613225c5dad4698e9b7661406f))
+* **capture:** scrub secrets from events already stored ([efc28bc](https://github.com/workscribe/cli/commit/efc28bc0d8dadae420b4c9ea8499aedbe5fec74f))
+
 ## [3.0.1](https://github.com/workscribe/cli/compare/v3.0.0...v3.0.1) (2026-11-05)
 
 ### Bug Fixes
