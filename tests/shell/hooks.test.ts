@@ -29,6 +29,8 @@ interface Sandbox {
   callsFile: string
   /** A folder holding the stub `workscribe`, to put first on PATH */
   binDir: string
+  /** The shell's home: with an alert pending in the real one, the hook's `alerts --check` would overwrite the calls */
+  home: string
 }
 
 function makeSandbox(): Sandbox {
@@ -36,15 +38,17 @@ function makeSandbox(): Sandbox {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'workscribe-hooks-')))
   const repo = path.join(root, 'repo')
   const binDir = path.join(root, 'bin')
+  const home = path.join(root, 'home')
   fs.mkdirSync(repo)
   fs.mkdirSync(binDir)
+  fs.mkdirSync(home)
   const git = (...args: string[]) => execFileSync('git', ['-C', repo, ...args], { encoding: 'utf-8' }).trim()
   git('init', '-q')
   git('-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '-q', '--allow-empty', '-m', 'init')
   const callsFile = path.join(root, 'calls')
   const stub = `#!/bin/sh\nfor argument in "$@"; do printf '%s\\n' "$argument"; done > '${callsFile}'\n`
   fs.writeFileSync(path.join(binDir, 'workscribe'), stub, { mode: 0o755 })
-  return { repo, head: git('rev-parse', 'HEAD'), callsFile, binDir }
+  return { repo, head: git('rev-parse', 'HEAD'), callsFile, binDir, home }
 }
 
 /** The hook as `init` writes it, pinned to a Node stub — `[[ -x <binary> ]]`, then `node <binary> _capture`. */
@@ -84,7 +88,7 @@ function runIn({ sandbox, shell, script, binDirs = [sandbox.binDir] }: Run): str
   fs.rmSync(sandbox.callsFile, { force: true })
   const result = spawnSync(shell[0], [...shell.slice(1), script], {
     cwd: sandbox.repo,
-    env: { ...process.env, PATH: [...binDirs, process.env.PATH].join(':') },
+    env: { ...process.env, HOME: sandbox.home, PATH: [...binDirs, process.env.PATH].join(':') },
     encoding: 'utf-8',
   })
   expect(result.stderr).toBe('')
