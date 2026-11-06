@@ -69,6 +69,8 @@ workscribe config set redact.extra '["MY_INTERNAL_SECRET"]'
 
 Redaction is applied as a regex replace — matched values are replaced with `[REDACTED]` before the command touches the database.
 
+It works from patterns, so an unusual form or an unlisted tool can get through. It also errs towards removing too much, so a command can occasionally lose a harmless word. For sensitive work, use `workscribe pause` (see below), and add anything specific to you with `redact.extra`.
+
 ---
 
 ## When your activity leaves your machine
