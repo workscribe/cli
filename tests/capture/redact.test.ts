@@ -241,4 +241,106 @@ describe('redact', () => {
       expect(result).toContain('[REDACTED]')
     })
   })
+
+  describe('secrets in common command forms', () => {
+    it.each([
+      ['mysql -u root -pFAKEVALUE', 'mysql -u root -p[REDACTED]'],
+      ['mysql -uroot -pFAKEVALUE db', 'mysql -uroot -p[REDACTED] db'],
+      ['mysqldump -pFAKEVALUE db', 'mysqldump -p[REDACTED] db'],
+      ['mysqladmin -u root -pFAKEVALUE ping', 'mysqladmin -u root -p[REDACTED] ping'],
+      ['mariadb -pFAKEVALUE', 'mariadb -p[REDACTED]'],
+      ["mysql -p'FAKE VALUE' db", 'mysql -p[REDACTED] db'],
+      ['mysql --password=FAKEVALUE', 'mysql --password=[REDACTED]'],
+      ['sshpass -p FAKEVALUE ssh host', 'sshpass -p [REDACTED] ssh host'],
+      ['sshpass -pFAKEVALUE ssh host', 'sshpass -p[REDACTED] ssh host'],
+      ['redis-cli -a FAKEVALUE ping', 'redis-cli -a [REDACTED] ping'],
+      ['docker login -u me -p FAKEVALUE', 'docker login -u me -p [REDACTED]'],
+      ['podman login -p FAKEVALUE', 'podman login -p [REDACTED]'],
+      ['mongosh -u me -p FAKEVALUE', 'mongosh -u me -p [REDACTED]'],
+      ['ssh-keygen -N FAKEVALUE', 'ssh-keygen -N [REDACTED]'],
+      ['unzip -P FAKEVALUE a.zip', 'unzip -P [REDACTED] a.zip'],
+      ['zip -P FAKEVALUE a.zip b', 'zip -P [REDACTED] a.zip b'],
+      ['openssl enc -pass pass:FAKEVALUE', 'openssl enc -pass pass:[REDACTED]'],
+      ['curl -u me:FAKEVALUE https://x.io', 'curl -u me:[REDACTED] https://x.io'],
+      ['curl --user me:FAKEVALUE https://x.io', 'curl --user me:[REDACTED] https://x.io'],
+      ['curl -H "Authorization: Bearer FAKEVALUE1" x.io', 'curl -H "Authorization: Bearer [REDACTED]" x.io'],
+      ['curl -H "Authorization: Basic FAKEVALUE" x.io', 'curl -H "Authorization: Basic [REDACTED]" x.io'],
+      ["curl -H 'X-Api-Key: FAKEVALUE' x.io", "curl -H 'X-Api-Key: [REDACTED]' x.io"],
+      ['curl -H "Cookie: session=FAKEVALUE" x.io', 'curl -H "Cookie: [REDACTED]" x.io'],
+      ['run --token=FAKEVALUE', 'run --token=[REDACTED]'],
+      ['run --api-key=FAKEVALUE', 'run --api-key=[REDACTED]'],
+      ['run --client-secret FAKEVALUE', 'run --client-secret [REDACTED]'],
+      ['run --access-token FAKEVALUE', 'run --access-token [REDACTED]'],
+      ['run --pass FAKEVALUE', 'run --pass [REDACTED]'],
+      ['run --pwd FAKEVALUE', 'run --pwd [REDACTED]'],
+      ['run --password "FAKE VALUE" now', 'run --password [REDACTED] now'],
+      ['git clone https://FAKEVALUE@github.com/a/b', 'git clone https://[REDACTED]@github.com/a/b'],
+      ['npm config set //r.io/:_password FAKEVALUE', 'npm config set //r.io/:_password [REDACTED]'],
+      ['psql "host=x password=FAKEVALUE"', 'psql "host=x password=[REDACTED]"'],
+      ['MYSQL_PWD=FAKEVALUE mysql', 'MYSQL_PWD=[REDACTED] mysql'],
+      ['export DB_PWD=FAKEVALUE', 'export DB_PWD=[REDACTED]'],
+      [
+        'kubectl create secret generic s --from-literal=password=FAKEVALUE',
+        'kubectl create secret generic s --from-literal=password=[REDACTED]',
+      ],
+      ['gh auth login --with-token <<< FAKEVALUE', 'gh auth login --with-token <<< [REDACTED]'],
+      ['echo FAKEVALUE | docker login --password-stdin', 'echo [REDACTED] | docker login --password-stdin'],
+    ])('%s', (command, expected) => {
+      expect(redact(command)).toBe(expected)
+    })
+
+    it('redacts a whole private key block', () => {
+      const block = '-----BEGIN RSA PRIVATE KEY-----\nFAKEVALUE\n-----END RSA PRIVATE KEY-----'
+      expect(redact(`cat > key.pem <<EOF\n${block}\nEOF`)).toBe('cat > key.pem <<EOF\n[REDACTED]\nEOF')
+    })
+
+    it.each([
+      ['Anthropic', 'sk-ant-api03-' + 'a'.repeat(30)],
+      ['OpenAI', 'sk-proj-' + 'a'.repeat(30)],
+      ['Google', 'AIza' + 'a'.repeat(35)],
+      ['npm', 'npm_' + 'a'.repeat(36)],
+      ['GitHub OAuth', 'gho_' + 'a'.repeat(36)],
+    ])('redacts %s keys', (_provider, key) => {
+      expect(redact(`deploy ${key} now`)).toBe('deploy [REDACTED] now')
+    })
+  })
+
+  describe('leaves ordinary commands alone', () => {
+    it.each([
+      'mkdir -p src/ui',
+      'cp -p a b',
+      'ls -p src',
+      'grep -p x f',
+      'tar -pxf a.tar',
+      'npm install -P lodash',
+      'ssh -p 2222 host',
+      'psql -p 5432 db',
+      'docker run -p 3000:3000 img',
+      'git log -p',
+      'mysql -p db',
+      'mongosh -p --tls',
+      'docker login --password-stdin -u me',
+      'gh auth login --with-token',
+      'task-list-item',
+      'git clone git@github.com:a/b.git',
+      'curl https://example.com/a',
+      'git push origin main',
+      'cd "$PWD/app"',
+    ])('%s', (command) => {
+      expect(redact(command)).toBe(command)
+    })
+  })
+
+  describe('leaves prose alone, so a prompt about these topics raises no secret alert', () => {
+    it.each([
+      'Bearer tokens are sent in the header',
+      'add bearer authentication to the API',
+      'Authorization: added middleware for it',
+      'the password is checked on login',
+      'fix the password field and the token refresh',
+      'risk-based review of the key rotation',
+    ])('%s', (prose) => {
+      expect(redact(prose)).toBe(prose)
+    })
+  })
 })
