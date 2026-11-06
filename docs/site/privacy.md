@@ -53,9 +53,10 @@ Before any event is written to disk, Workscribe strips sensitive patterns from t
 
 **Automatically redacted:**
 - Bearer tokens (`Bearer <token>`)
-- Authorization headers
-- API keys and secrets in common formats
-- Passwords passed as flags (`--password`, `-p`)
+- Authorization, API key and cookie headers
+- API keys and tokens from common providers, such as GitHub, GitLab, AWS, Anthropic, OpenAI, Google, npm, Slack and Stripe
+- Passwords and tokens passed as flags (`--password`, `--token=…`), and tools' short flags where they mean a password, such as `mysql -p…`, `sshpass -p`, `docker login -p`, `redis-cli -a` and `curl -u user:password`
+- `password=` in connection strings, passwords in URLs, sensitive environment variables and tokens piped to `--password-stdin`
 - JWT tokens
 - Private keys
 - Slack incoming webhook URLs (`hooks.slack.com/services/...`)
@@ -67,6 +68,8 @@ workscribe config set redact.extra '["MY_INTERNAL_SECRET"]'
 ```
 
 Redaction is applied as a regex replace — matched values are replaced with `[REDACTED]` before the command touches the database.
+
+It works from patterns, so an unusual form or an unlisted tool can get through. It also errs towards removing too much, so a command can occasionally lose a harmless word. For sensitive work, use `workscribe pause` (see below), and add anything specific to you with `redact.extra`.
 
 ---
 
