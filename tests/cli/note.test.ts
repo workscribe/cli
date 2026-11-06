@@ -43,6 +43,16 @@ describe('workscribe note', () => {
     expect(metadata.text).toBe('Fixed race condition in auth middleware')
   })
 
+  it('redacts a secret in the note, with the configured patterns too', () => {
+    mockReadConfig.mockReturnValue(createTestConfig({ redact: { extra: ['INTERNAL'] } }))
+
+    makeProgram().parse(['note', 'rotated it: --password=FAKEVALUE on INTERNAL'], { from: 'user' })
+
+    const call = mockInsertEvent.mock.calls[0][0] as Record<string, unknown>
+    const metadata = JSON.parse(call.metadata as string) as { text: string }
+    expect(metadata.text).toBe('rotated it: --password=[REDACTED] on [REDACTED]')
+  })
+
   it('sets command to "workscribe note"', () => {
     makeProgram().parse(['note', 'some note'], { from: 'user' })
     expect(mockInsertEvent).toHaveBeenCalledWith(expect.objectContaining({ command: 'workscribe note' }))

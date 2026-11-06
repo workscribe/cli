@@ -25,6 +25,19 @@ describe('readLastAiderPrompt', () => {
     expect(readLastAiderPrompt('/repo')).toBe('add tests for the new billing module')
   })
 
+  it('redacts the prompt before cutting it, so a long secret cannot survive in part', () => {
+    const jwt = `eyJ${'a'.repeat(100)}.eyJ${'b'.repeat(100)}.${'c'.repeat(100)}`
+    mockReadFileSync.mockReturnValue(`#### try this token ${jwt} now`)
+
+    expect(readLastAiderPrompt('/repo')).toBe('try this token [REDACTED] now')
+  })
+
+  it('applies the configured patterns', () => {
+    mockReadFileSync.mockReturnValue('#### ask about PROJECT-X')
+
+    expect(readLastAiderPrompt('/repo', ['PROJECT-X'])).toBe('ask about [REDACTED]')
+  })
+
   it('returns the only prompt when there is one message', () => {
     mockReadFileSync.mockReturnValue('#### implement OAuth2 login flow\n\nSome response.')
     expect(readLastAiderPrompt('/repo')).toBe('implement OAuth2 login flow')

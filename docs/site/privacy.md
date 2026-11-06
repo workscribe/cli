@@ -61,13 +61,21 @@ Before any event is written to disk, Workscribe strips sensitive patterns from t
 - Private keys
 - Slack incoming webhook URLs (`hooks.slack.com/services/...`)
 
+**Events already stored:** when you update, a data upgrade applies the built-in patterns to the commands and structured fields of your existing events, including notes, then rewrites the database file so the old text doesn't stay in it. Some things can still hold it:
+
+- Backups taken before the upgrade, until they're pruned (the newest 3 are kept). They're your only way to undo the rewrite, so they aren't deleted automatically. Delete `~/.workscribe/backups/` yourself if you'd rather not keep them.
+- Saved summaries, which aren't rewritten. Summaries from older versions weren't always redacted when they were saved.
+- An Aider prompt stored by an older version, if it was cut off partway through a secret. A pattern can't recognise part of one.
+
 **Add your own patterns:**
 
 ```bash
 workscribe config set redact.extra '["MY_INTERNAL_SECRET"]'
 ```
 
-Redaction is applied as a regex replace — matched values are replaced with `[REDACTED]` before the command touches the database.
+Your own patterns only apply to new events, not to ones already stored.
+
+Redaction is applied as a regex replace — matched values are replaced with `[REDACTED]` before the command touches the database. Notes and commands sent by IDE integrations are redacted the same way.
 
 It works from patterns, so an unusual form or an unlisted tool can get through. It also errs towards removing too much, so a command can occasionally lose a harmless word. For sensitive work, use `workscribe pause` (see below), and add anything specific to you with `redact.extra`.
 

@@ -125,14 +125,29 @@ function recordFailure(db: MigrationDatabase, job: DataJob, message: string): vo
   }
 }
 
+/** Only for done jobs. Another process holding the lock, or any other error, just leaves the cleanup for next time. */
+function runPendingCleanups(db: MigrationDatabase, jobs: DataJob[]): void {
+  for (const job of jobs) {
+    if (!job.cleanup || !isJobDone(getJobRow(db, job.name), job)) continue
+    try {
+      if (job.cleanup.isPending(db)) job.cleanup.run(db)
+    } catch (error) {
+      debugLog(`data job ${job.name}: cleanup`, error)
+    }
+  }
+}
+
 /**
  * Runs the pending jobs in order, stopping at the first one that doesn't finish, so a job can rely on every job
  * before it. Nothing runs unless `ensureBackup` confirms a backup. Each batch commits on its own: an interrupted run
- * resumes from the last batch it committed.
+ * resumes from the last batch it committed. Done jobs' cleanups run last, retried until they finish.
  */
 export function runPendingJobs(db: MigrationDatabase, jobs: DataJob[], options: RunOptions): RunResult {
   const pending = jobs.filter((job) => !isJobDone(getJobRow(db, job.name), job))
-  if (pending.length === 0) return { backup: 'not-needed', jobs: [] }
+  if (pending.length === 0) {
+    runPendingCleanups(db, jobs)
+    return { backup: 'not-needed', jobs: [] }
+  }
   const backup = options.ensureBackup()
   if (backup !== 'ready') return { backup, jobs: [] }
 
@@ -151,5 +166,6 @@ export function runPendingJobs(db: MigrationDatabase, jobs: DataJob[], options: 
     results.push(result)
     if (result.outcome !== 'done') break
   }
+  runPendingCleanups(db, jobs)
   return { backup: 'ready', jobs: results }
 }
