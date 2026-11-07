@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.2.0](https://github.com/workscribe/cli/compare/v3.1.0...v3.2.0) (2026-11-07)
+
+### Features
+
+* **normalize:** keep read-only commands out of summaries ([5bb6cff](https://github.com/workscribe/cli/commit/5bb6cffb901be26edd3d341b3a7ec6340b87dba4))
+* **summary:** name agents and count their sessions ([20e90bf](https://github.com/workscribe/cli/commit/20e90bfc85c0e2701f7f61814d8d383136eb02be))
+
 ## [3.1.0](https://github.com/workscribe/cli/compare/v3.0.1...v3.1.0) (2026-11-06)
 
 ### Features
