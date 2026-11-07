@@ -36,7 +36,7 @@ const FIRST_SUBSTITUTION = /\$\(([^()]*)\)/
 const SUBSTITUTIONS = /\$\(([^()]*)\)|`([^`]*)`/g
 
 /** The commands a line's `$(…)`/backtick substitutions run — what the shell executes from heredoc text. */
-function substitutionCommands(line: string): string[] {
+export function substitutionCommands(line: string): string[] {
   return [...line.matchAll(SUBSTITUTIONS)]
     .map((match) => (match[1] ?? match[2] ?? '').trim())
     .filter((command) => command !== '')

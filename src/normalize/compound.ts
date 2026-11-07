@@ -3,6 +3,7 @@
 import { commandSteps, isGlueStep, simpleCommandOf } from '../capture/command-steps'
 import { DEFAULT_EXCLUDED_CATEGORIES } from '../summary/exclusions'
 import type { NormalizedEvent } from './patterns'
+import { READ_ONLY_CATEGORY } from './read-only'
 
 /** Matches a step: `command` is its simple form (one line, redirections gone), `raw` the step as written. */
 export type MatchCommand = (command: string, raw: string) => NormalizedEvent
@@ -24,32 +25,32 @@ export const STEP_CATEGORY_PRIORITY = [
   'versioning',
 ]
 
-// Ranks after the priority list, lower is more telling: any other category, then ones summaries leave out, then `other`
+// Ranks after the priority list, lower is more telling: any other category, then ones summaries leave out, then `other`,
+// then reads. Even an unknown step says more than a read: `grep x f && ./deploy.sh` mustn't leave summaries
 const OTHER_CATEGORY_RANK = STEP_CATEGORY_PRIORITY.length
 const EXCLUDED_CATEGORY_RANK = OTHER_CATEGORY_RANK + 1
 const UNCLASSIFIED_RANK = EXCLUDED_CATEGORY_RANK + 1
+const READ_ONLY_RANK = UNCLASSIFIED_RANK + 1
 
 function rankOf(category: string): number {
   const index = STEP_CATEGORY_PRIORITY.indexOf(category)
   if (index !== -1) return index
   if (category === UNCLASSIFIED.category) return UNCLASSIFIED_RANK
+  if (category === READ_ONLY_CATEGORY) return READ_ONLY_RANK
   if (DEFAULT_EXCLUDED_CATEGORIES.has(category)) return EXCLUDED_CATEGORY_RANK
   return OTHER_CATEGORY_RANK
 }
 
 /** The most telling step's event, and that step; ties go to the earlier step. */
-function primaryStepEvent(steps: string[], matchCommand: MatchCommand): NormalizedEvent {
-  const events = steps.map((step) => ({ ...matchCommand(simpleCommandOf(step), step), matchedStep: step }))
-  return events.reduce<NormalizedEvent>(
-    (best, event) => (rankOf(event.category) < rankOf(best.category) ? event : best),
-    UNCLASSIFIED
-  )
+function primaryStepEvent(stepEvents: NormalizedEvent[]): NormalizedEvent {
+  return stepEvents.reduce((best, event) => (rankOf(event.category) < rankOf(best.category) ? event : best))
 }
 
 /**
  * A command the rules already recognise as it is, with nothing else to run, keeps that result. Otherwise it's
  * split into the commands it runs, shell glue (`cd`, `echo`, assignments, loop keywords) is set aside, and the
- * most telling step names the event — falling back to the whole command when no step is recognised either.
+ * most telling step names the event — falling back to the whole command when no step is recognised. When only reads
+ * are recognised next to an unknown step, it's `other`: as a whole, `git status && ./deploy.sh` would match `^git`.
  */
 export function classifyCompound(command: string, matchCommand: MatchCommand): NormalizedEvent {
   const workSteps = commandSteps(command).filter((step) => !isGlueStep(step))
@@ -61,6 +62,9 @@ export function classifyCompound(command: string, matchCommand: MatchCommand): N
   const isRecognisedSingleCommand = workSteps.length <= 1 && wholeCommandEvent.category !== UNCLASSIFIED.category
   if (isRecognisedSingleCommand || workSteps.length === 0) return wholeCommandEvent
 
-  const primaryEvent = primaryStepEvent(workSteps, matchCommand)
-  return primaryEvent.category === UNCLASSIFIED.category ? wholeCommandEvent : primaryEvent
+  const stepEvents = workSteps.map((step) => ({ ...matchCommand(simpleCommandOf(step), step), matchedStep: step }))
+  const primaryEvent = primaryStepEvent(stepEvents)
+  if (primaryEvent.category !== UNCLASSIFIED.category) return primaryEvent
+  const isAnyStepRecognised = stepEvents.some((event) => event.category !== UNCLASSIFIED.category)
+  return isAnyStepRecognised ? { ...UNCLASSIFIED, matchedStep: command } : wholeCommandEvent
 }

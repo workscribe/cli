@@ -117,6 +117,15 @@ export function maskQuotedText(text: string): string {
   return masked.join('')
 }
 
+/** The text with what the shell takes literally (single-quoted text, escapes, quote marks) replaced by `_`. */
+export function maskLiteralText(text: string): string {
+  const masked = Array.from({ length: text.length }, () => '_')
+  for (const { index, quote } of quotedCharacters(text)) {
+    if (quote !== "'") masked[index] = text[index]
+  }
+  return masked.join('')
+}
+
 export function startsWithWord(step: string, word: string): boolean {
   return step === word || step.startsWith(`${word} `) || step.startsWith(`${word}\t`)
 }

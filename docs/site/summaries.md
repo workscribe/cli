@@ -61,7 +61,7 @@ Coding agents often run compound commands like `cd app && pnpm nx test shell 2>&
 
 A session with nothing to tell but activity says so in one line, "Explored and ran commands", under its heading. The week (`summary --week`, `week`) is laid out project by project, then branch by branch, with the days each branch was worked on. Each branch is told like a day's story, using git's commits for the whole week, with up to 6 bullets and then "…plus N more". `--by day` gives the day-by-day digest instead: up to 5 bullets per day, taking the top bullet of every project before the second, so one busy repo can't fill the day.
 
-Lint runs and exploratory commands (`cat`, `grep`, `ls`…) are left out by default. To include a category, add it to [`summary.includeCategories`](/configuration#summary):
+Lint runs and commands that only read are left out by default: `cat`, `grep`, `find`, `ls`, `wc`, `sed -n`, `git status`, `git log`, `git diff`, `git show`, plain `git branch`, and inline scripts (`python3 -c`, `python3 -`, `node -e`). A compound command is only left out when everything in it reads, so `grep x f && ./deploy.sh` stays in. An inline script can't be told apart from a read, so its changes only appear through the commits and file saves they lead to. To include a category, add it to [`summary.includeCategories`](/configuration#summary):
 
 ```bash
 workscribe config set summary.includeCategories '["linting"]'
