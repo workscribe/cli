@@ -1,0 +1,17 @@
+{
+  "timestamp": "2026-11-06T23:54:08.880Z",
+  "hook_event_name": "PostToolUse",
+  "session_id": "<session_id>",
+  "transcript_path": "<transcript_path>",
+  "tool_name": "run_in_terminal",
+  "tool_input": {
+    "command": "sh -c 'sleep 8; exit 4'",
+    "explanation": "Run the seventh requested command exactly as specified.",
+    "goal": "Execute probe command 7",
+    "mode": "sync",
+    "timeout": 30000
+  },
+  "tool_response": "<tool_response>",
+  "tool_use_id": "<tool_use_id>",
+  "cwd": "/Users/dev/api"
+}

@@ -1,0 +1,14 @@
+{
+  "artifactDirectoryPath": "<artifactDirectoryPath>",
+  "conversationId": "<conversationId>",
+  "error": "",
+  "executionNum": 0,
+  "fullyIdle": true,
+  "lastUserInput": "This is a hook test in a throwaway repo. Using only your terminal tool, run each of these exactly, as separate tool calls, in order. Keep going if one fails. Do not fix anything. Then stop.\n1. true\n2. sh -c 'exit 3'\n3. git add -A && git commit -m \"feat: probe rejected\"\n4. cd sub && true\n5. cat <<'PROBE'\nprobe line one\nprobe line two\nPROBE",
+  "modelName": "gemini-3.8-flash-high",
+  "terminationReason": "NO_TOOL_CALL",
+  "transcriptPath": "<transcriptPath>",
+  "workspacePaths": [
+    "/Users/dev/api"
+  ]
+}

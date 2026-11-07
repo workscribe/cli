@@ -1,0 +1,20 @@
+{
+  "artifactDirectoryPath": "<artifactDirectoryPath>",
+  "conversationId": "<conversationId>",
+  "error": "",
+  "lastUserInput": "Do not read files. Use the terminal tool to start exactly this command with the shortest possible wait before it goes to the background: sh -c 'sleep 25; exit 5' . Then keep waiting until it has finished, and report its exit code.",
+  "modelName": "gemini-3.8-flash-high",
+  "stepIdx": 2,
+  "toolCall": {
+    "args": {
+      "CommandLine": "sh -c 'sleep 25; exit 5'",
+      "WaitMsBeforeAsync": 500,
+      "toolSummary": "Background sleep command"
+    },
+    "name": "run_command"
+  },
+  "transcriptPath": "<transcriptPath>",
+  "workspacePaths": [
+    "/Users/dev/api"
+  ]
+}

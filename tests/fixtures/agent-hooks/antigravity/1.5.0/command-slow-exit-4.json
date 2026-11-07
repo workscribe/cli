@@ -1,0 +1,21 @@
+{
+  "artifactDirectoryPath": "<artifactDirectoryPath>",
+  "conversationId": "<conversationId>",
+  "error": "",
+  "lastUserInput": "Without reading any files, use your terminal tool to run exactly this, wait for it to finish, then report its exit code and stop: sh -c 'sleep 8; exit 4'",
+  "modelName": "gemini-3.8-flash-high",
+  "stepIdx": 2,
+  "toolCall": {
+    "args": {
+      "CommandLine": "sh -c 'sleep 8; exit 4'",
+      "IsDaemon": false,
+      "WaitMsBeforeAsync": 10000,
+      "toolSummary": "Execute sleep command"
+    },
+    "name": "run_command"
+  },
+  "transcriptPath": "<transcriptPath>",
+  "workspacePaths": [
+    "/Users/dev/api"
+  ]
+}

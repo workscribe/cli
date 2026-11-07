@@ -1,0 +1,9 @@
+{
+  "timestamp": "2026-11-06T23:50:21.174Z",
+  "hook_event_name": "SessionStart",
+  "session_id": "<session_id>",
+  "transcript_path": "<transcript_path>",
+  "source": "new",
+  "model": "auto",
+  "cwd": "/Users/dev/api"
+}

@@ -1,0 +1,14 @@
+{
+  "artifactDirectoryPath": "<artifactDirectoryPath>",
+  "conversationId": "<conversationId>",
+  "error": "",
+  "executionNum": 0,
+  "fullyIdle": false,
+  "lastUserInput": "Without reading any files, run exactly this with your terminal tool and wait for it to finish: sleep 120",
+  "modelName": "gemini-3.8-flash-high",
+  "terminationReason": "NO_TOOL_CALL",
+  "transcriptPath": "<transcriptPath>",
+  "workspacePaths": [
+    "/Users/dev/api"
+  ]
+}

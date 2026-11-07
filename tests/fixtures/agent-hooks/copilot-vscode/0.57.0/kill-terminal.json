@@ -1,0 +1,13 @@
+{
+  "timestamp": "2026-11-07T00:00:07.716Z",
+  "hook_event_name": "PostToolUse",
+  "session_id": "<session_id>",
+  "transcript_path": "<transcript_path>",
+  "tool_name": "kill_terminal",
+  "tool_input": {
+    "id": "<uuid>"
+  },
+  "tool_response": "<tool_response>",
+  "tool_use_id": "<tool_use_id>",
+  "cwd": "/Users/dev/api"
+}

@@ -1,0 +1,20 @@
+{
+  "artifactDirectoryPath": "<artifactDirectoryPath>",
+  "conversationId": "<conversationId>",
+  "error": "/Users/dev/api/missing-file.txt does not exist; the file may have been moved, renamed, or deleted",
+  "lastUserInput": "This is a hook test in a throwaway repo. Use your file editing tools, not the terminal, except where stated. Do each step as a separate tool call, in order. Keep going if one fails. Do not fix anything. Then stop.\n1. Edit app.txt: replace the word alpha with beta.\n2. In multi.txt, in one single tool call, replace one with 1 and three with 3.\n3. Create a new file called created.txt containing the word new.\n4. Edit missing-file.txt: replace the word nothing with something. That file does not exist; attempt the edit anyway.\n5. Delete delete-me.txt, using the terminal command rm delete-me.txt if you have no delete tool.",
+  "modelName": "gemini-3.8-flash-high",
+  "stepIdx": 8,
+  "toolCall": {
+    "args": {
+      "Path": "/Users/dev/api/missing-file.txt",
+      "Replacement": "something",
+      "Target": "nothing"
+    },
+    "name": "edit_file"
+  },
+  "transcriptPath": "<transcriptPath>",
+  "workspacePaths": [
+    "/Users/dev/api"
+  ]
+}
