@@ -19,7 +19,7 @@ On feature/auth:
 - Committed: add JWT validation middleware
 - Added dependencies: bcrypt, jsonwebtoken
 - Pushed to origin/feature/auth
-With an AI coding assistant (126 commands) · 3 file saves in the editor
+With Claude Code (2 sessions) · 3 file saves in the editor
 
 ## infrastructure — 45m
 - Note: staging was flaky after the compose upgrade

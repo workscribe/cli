@@ -37,7 +37,7 @@ Follow [references/summary-format.md](references/summary-format.md). In short:
 
 - Up to **7 bullets**, most important first: what was built, fixed, shipped or decided.
 - Build bullets from `commits` (cite the short hash, e.g. `(a1b2c3d)`), test and build results (`exitCode` 0 vs non-zero; `null` means unknown, never "failed"), `notes` (always include them), and `hint`s on unclassified events.
-- Describe outcomes, not commands or tools. Never name the AI tool used. Don't invent anything the data doesn't show.
+- Describe outcomes, not commands or tools. Don't invent anything the data doesn't show.
 - Don't name the projects worked `alongside` — Workscribe adds that line under each saved summary itself. Never repeat their work.
 - Skip a session with nothing notable rather than padding it.
 

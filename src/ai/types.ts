@@ -7,6 +7,8 @@ export interface EventPayload {
   hint?: string
   /** Who captured the event (e.g. `claude-code` for a command a coding agent ran) — absent for plain shell commands. */
   source?: string
+  /** The agent session the event belongs to (`agent_sessions.id`, so only meaningful within one database), if any */
+  agentSessionId?: number
   exitCode: number | null
   durationMs: number | null
   /** The branch the event happened on (read just after the command ran), or null outside a repo */

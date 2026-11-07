@@ -29,7 +29,7 @@ Each section reads as a short story of what you did:
   1. its commits: the messages Workscribe captured, plus your commits from `git log` in the session's repo, each placed on the branch you were on when you made it. A `git commit` that failed (rejected by a hook, nothing staged) is never listed.
   2. how tests and builds turned out: "Tests now passing" when they went from failing to passing, "Tests failing" when the last run failed. It says what happened, not how many runs there were.
   3. dependencies added or removed, then releases and pushes
-- **One closing line for how you worked:** "With an AI coding assistant (126 commands) · 3 file saves in the editor". The tool is never named, and saves need the VS Code extension.
+- **One closing line for how you worked:** "With Claude Code (2 sessions) · 3 file saves in the editor". It names each coding agent and counts its sessions, not its commands, so anything you copy or send by webhook says which tool you used. Agents without session ids are named with no count, and saves need the VS Code extension.
 
 - **Branch moves, in plain language,** after each branch's work, so you can retrace what you did (or undo it) without remembering the commands:
   - "Created feat/x from main" (`git switch -c`, `git checkout -b`)
@@ -50,7 +50,7 @@ On main:
 On feat/auth:
 - Committed: feat: add auth middleware
 - Added dependencies: bcrypt
-With an AI coding assistant (126 commands) · 3 file saves in the editor
+With Claude Code (2 sessions) · 3 file saves in the editor
 ```
 
 The session's branch is the latest one it was on, so the heading lists every branch but `workscribe context` and `sessions --json` name the one you finished on.

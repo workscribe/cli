@@ -86,12 +86,12 @@ On feat/auth:
 - Committed: feat: add auth middleware
 - Added dependencies: bcrypt
 - Pushed to origin/feat/auth
-With an AI coding assistant (126 commands) · 3 file saves in the editor
+With Claude Code (2 sessions) · 3 file saves in the editor
 Alongside: web
 
 ## web (main) — 40m
 - Committed: feat: login page
-With an AI coding assistant (31 commands)
+With Claude Code (1 session)
 Alongside: api
 
 Time worked: 2h 30m
@@ -150,7 +150,7 @@ workscribe week --webhook <url>
 - Committed: refactor(cli): share one fail helper across commands
 - Tests passing
 - …plus 4 more
-With an AI coding assistant (164 commands) · 3 file saves in the editor
+With Claude Code (3 sessions) · 3 file saves in the editor
 ```
 
 Each branch is told like a day's story (notes, commits from git and from capture, test and build results, dependencies, releases, pushes and branch moves), with up to 6 bullets and then a count of the rest; the activity line closes it. Work on no branch goes under `(no branch)`. A stretch of work that moved between branches shows under each of them.

@@ -106,7 +106,7 @@ In `json` mode, `workscribe summary` outputs structured data instead of markdown
         "Tests now passing",
         "On feature/auth:",
         "Added dependencies: bcrypt",
-        "With an AI coding assistant (126 commands)"
+        "With Claude Code (2 sessions)"
       ]
     }
   ]
@@ -131,7 +131,7 @@ The week (`summary --week`, `week`) prints one document too — its projects, ea
           "dates": ["2026-11-03", "2026-11-04"],
           "bullets": ["Committed: refactor(cli): share one fail helper across commands", "Tests passing"],
           "moreCount": 0,
-          "activity": "With an AI coding assistant (164 commands)"
+          "activity": "With Claude Code (3 sessions)"
         }
       ]
     }
@@ -139,7 +139,7 @@ The week (`summary --week`, `week`) prints one document too — its projects, ea
 }
 ```
 
-`branch` is `null` for work on no branch, and `activity` is `null` when there's nothing to say about how. With `--by day` it's `{ "weekStart", "weekEnd", "by": "day", "days": [{ "date", "bullets" }] }`. `--slack` and `--webhook` still post the text, and their status lines go to stderr so the JSON can be piped.
+`branch` is `null` for work on no branch, and `activity` is `null` when there's nothing to say about how. `activity` is display text, not a stable format: it now names the agents and counts sessions, where it used to count commands. With `--by day` it's `{ "weekStart", "weekEnd", "by": "day", "days": [{ "date", "bullets" }] }`. `--slack` and `--webhook` still post the text, and their status lines go to stderr so the JSON can be piped.
 
 ```bash
 workscribe config set summary.format json
