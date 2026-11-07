@@ -5,6 +5,7 @@ import { commit, event, onBranch, session } from './fixtures'
 const byAgent = (category: string, exitCode: number | null = null) => ({
   ...event(category, {}, exitCode),
   source: 'claude-code',
+  agentSessionId: 1,
 })
 
 describe('storyLines — one branch', () => {
@@ -35,11 +36,7 @@ describe('storyLines — one branch', () => {
     const unknown = [byAgent('testing'), byAgent('building')]
 
     expect(storyLines(session(failing))).toEqual(['- Tests failing'])
-    expect(storyLines(session(unknown))).toEqual([
-      '- Ran tests',
-      '- Ran builds',
-      'With an AI coding assistant (2 commands)',
-    ])
+    expect(storyLines(session(unknown))).toEqual(['- Ran tests', '- Ran builds', 'With Claude Code (1 session)'])
   })
 
   it('names no branch in the bullets: the heading already does', () => {
@@ -110,7 +107,7 @@ describe('storyLines — activity', () => {
 
     expect(storyLines(session(events))).toEqual([
       '- Tests passing',
-      'With an AI coding assistant (2 commands) · 2 file saves in the editor',
+      'With Claude Code (1 session) · 2 file saves in the editor',
     ])
   })
 
@@ -119,8 +116,22 @@ describe('storyLines — activity', () => {
 
     expect(storyLines(session(events, { project: 'api', durationMinutes: 45 }))).toEqual([
       '- Explored and ran commands',
-      'With an AI coding assistant (2 commands)',
+      'With Claude Code (1 session)',
     ])
+  })
+
+  it('counts sessions, not commands, and leaves out a count it does not have', () => {
+    const twoSessions = [byAgent('testing', 0), { ...byAgent('other'), agentSessionId: 2 }]
+    const noIds = [{ ...event('testing', {}, 0), source: 'claude-code' }]
+
+    expect(storyLines(session(twoSessions))).toContain('With Claude Code (2 sessions)')
+    expect(storyLines(session(noIds))).toContain('With Claude Code')
+  })
+
+  it('never takes the editor for an agent', () => {
+    const save = { ...event('code_edit'), source: 'vscode', agentSessionId: 9 }
+
+    expect(storyLines(session([save]))).toEqual(['- Edited files', '1 file save in the editor'])
   })
 
   it('says files were edited when that was all', () => {
@@ -130,14 +141,14 @@ describe('storyLines — activity', () => {
     ])
   })
 
-  it('never names the AI tool or prints raw hints or commands', () => {
+  it('never prints raw hints or commands', () => {
     const events = [
       { ...byAgent('other'), hint: 'pnpm nx test shell --skip-nx-cache 2>&1 | tail -40' },
       byAgent('ai_session'),
     ]
     const output = renderSessionStory(session(events, { commits: [commit('add refresh endpoint')] }))
 
-    expect(output).not.toMatch(/claude|pnpm|nx test|tail/i)
+    expect(output).not.toMatch(/pnpm|nx test|tail/i)
     expect(output).toContain('Committed: add refresh endpoint')
   })
 })

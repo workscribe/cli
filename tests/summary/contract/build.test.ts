@@ -44,6 +44,13 @@ function soloThreadToJson(events: Parameters<typeof thread>[0], overrides: Param
 }
 
 describe('eventToJson', () => {
+  it('keeps the agent session out of the event, whose keys are pinned', () => {
+    const json = eventToJson(capturedRow('npm test', { agent_session_id: 7 }))
+
+    expect(json).not.toHaveProperty('agentSessionId')
+    expect(Object.keys(json)).not.toContain('agent_session_id')
+  })
+
   it.each([
     ['git commit -m "fix: token"', { message: 'fix: token' }],
     ['npm install bcrypt', { tool: 'npm', packages: ['bcrypt'] }],

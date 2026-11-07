@@ -138,7 +138,7 @@ describe('describeActivity', () => {
     expect(describeActivity(session(events))).toEqual([])
   })
 
-  it('never names the AI tool or prints raw hints', () => {
+  it('never prints raw hints, or names a tool only launched from the shell', () => {
     const events = [
       { ...event('other', {}), hint: 'curl -H "Authorization: secret" https://example.com' },
       event('ai_session', { tool: 'claude', commits: ['add refresh endpoint'] }),
@@ -161,12 +161,18 @@ describe('describeActivity — work a coding agent did', () => {
   const byAgent = (category: string, metadata: Record<string, unknown> = {}, exitCode: number | null = 0) => ({
     ...event(category, metadata, exitCode),
     source: 'claude-code',
+    agentSessionId: 1,
   })
 
-  it('counts every command the agent ran, including ones the summary leaves out', () => {
-    const events = [byAgent('testing'), byAgent('exploring', { tool: 'grep' }), byAgent('other'), event('testing')]
+  it('counts the sessions of every event, including ones the summary leaves out', () => {
+    const events = [
+      byAgent('testing'),
+      { ...byAgent('exploring', { tool: 'grep' }), agentSessionId: 2 },
+      byAgent('other'),
+      event('testing'),
+    ]
 
-    expect(describeActivity(session(events))).toContain('Worked with an AI coding assistant (3 commands)')
+    expect(describeActivity(session(events))).toContain('Worked with Claude Code (2 sessions)')
   })
 
   it('sits after pushes and before IDE edits', () => {
@@ -175,7 +181,7 @@ describe('describeActivity — work a coding agent did', () => {
     expect(describeActivity(session(events))).toEqual([
       'Tests passing (1 run)',
       'Pushed to origin/main',
-      'Worked with an AI coding assistant (1 command)',
+      'Worked with Claude Code (1 session)',
       'Edited files in the IDE (1 save)',
     ])
   })
@@ -183,9 +189,7 @@ describe('describeActivity — work a coding agent did', () => {
   it('is the only bullet when the agent only explored', () => {
     const events = [byAgent('exploring', { tool: 'cat' }), byAgent('other')]
 
-    expect(describeActivity(session(events, { project: 'api' }))).toEqual([
-      'Worked with an AI coding assistant (2 commands)',
-    ])
+    expect(describeActivity(session(events, { project: 'api' }))).toEqual(['Worked with Claude Code (1 session)'])
   })
 
   it('stays within the bullet cap', () => {
@@ -203,11 +207,11 @@ describe('describeActivity — work a coding agent did', () => {
     expect(describeActivity(session(events))).toHaveLength(7)
   })
 
-  it('says nothing about an agent when none ran commands', () => {
-    expect(describeActivity(session([event('testing')])).join('\n')).not.toContain('AI coding assistant')
+  it('says nothing about an agent when none worked', () => {
+    expect(describeActivity(session([event('testing')])).join('\n')).not.toContain('Worked with')
   })
 
-  it('never names the tool or prints the commands the agent ran', () => {
+  it('never prints the commands the agent ran', () => {
     const events = [
       { ...byAgent('other'), hint: 'pnpm nx test shell --skip-nx-cache 2>&1 | tail -40' },
       byAgent('ai_session', { tool: 'claude' }),
@@ -215,6 +219,6 @@ describe('describeActivity — work a coding agent did', () => {
     ]
     const output = describeActivity(session(events)).join('\n')
 
-    expect(output).not.toMatch(/claude|pnpm|nx test|tail/i)
+    expect(output).not.toMatch(/pnpm|nx test|tail/i)
   })
 })

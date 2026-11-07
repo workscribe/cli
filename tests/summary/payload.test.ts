@@ -57,6 +57,11 @@ describe('eventRowToPayload', () => {
     })
   })
 
+  it('carries the agent session, only when the event has one', () => {
+    expect(eventRowToPayload(makeEvent({ agent_session_id: 7 })).agentSessionId).toBe(7)
+    expect(eventRowToPayload(makeEvent({ agent_session_id: null }))).not.toHaveProperty('agentSessionId')
+  })
+
   it('reads the branch moves in a git command, so the story can tell them', () => {
     const row = makeEvent({ category: 'versioning', command: 'git switch -c feat/x', metadata: '{"branch":"feat/x"}' })
 

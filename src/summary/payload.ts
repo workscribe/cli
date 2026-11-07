@@ -53,6 +53,7 @@ export function eventRowToPayload(row: EventRow): EventPayload {
     branch: row.branch,
     capturedAt: row.captured_at,
     ...(row.source ? { source: row.source } : {}),
+    ...(row.agent_session_id == null ? {} : { agentSessionId: row.agent_session_id }),
     ...gitMovesField(row),
   }
   if (row.category !== 'other' || typeof metadata.hint !== 'string') return payload

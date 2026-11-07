@@ -2,7 +2,8 @@
 // shipped and how you moved between branches — and the agent and editor activity in one closing line. Nothing is
 // cut or folded: every commit and every move is told, so the story is a full record you can retrace. Pure.
 import { formatSessionHeading } from '../../../summary/heading'
-import { AGENT_SOURCES, STORY_BUILD_WORDING, STORY_TEST_WORDING } from './constants'
+import { describeAgents } from './agents'
+import { STORY_BUILD_WORDING, STORY_TEST_WORDING } from './constants'
 import {
   describeDependencies,
   describeNotes,
@@ -73,16 +74,14 @@ function branchBullets(group: BranchGroup): string[] {
 }
 
 /**
- * "With an AI coding assistant (126 commands) · 3 file saves in the editor" — how, not what, so it comes last. Agent
- * commands are counted over every event (`allEvents`), excluded categories too; saves over the included `events`.
+ * "With Claude Code (2 sessions) · 3 file saves in the editor" — how, not what, so it comes last. Agents are read from
+ * every event (`allEvents`), excluded categories too; saves from the included `events`.
  */
 function describeActivityLine(allEvents: EventPayload[], events: EventPayload[]): string | null {
-  const agentCommands = allEvents.filter(
-    (event) => event.source !== undefined && AGENT_SOURCES.includes(event.source)
-  ).length
+  const agents = describeAgents(allEvents)
   const saves = eventsOf(events, 'code_edit').length
   const parts = [
-    agentCommands > 0 ? `With an AI coding assistant (${pluralize(agentCommands, 'command')})` : null,
+    agents === null ? null : `With ${agents}`,
     saves > 0 ? `${pluralize(saves, 'file save')} in the editor` : null,
   ].filter((part): part is string => part !== null)
   return parts.length > 0 ? parts.join(' · ') : null

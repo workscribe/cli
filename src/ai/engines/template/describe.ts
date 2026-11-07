@@ -1,13 +1,7 @@
 import { isFailedExit } from '../../../summary/commits'
 import { buildExcludedSet } from '../../../summary/exclusions'
-import {
-  AGENT_SOURCES,
-  BUILD_WORDING,
-  MAX_COMMIT_BULLETS,
-  MAX_LISTED_PACKAGES,
-  MAX_SESSION_BULLETS,
-  TEST_WORDING,
-} from './constants'
+import { describeAgents } from './agents'
+import { BUILD_WORDING, MAX_COMMIT_BULLETS, MAX_LISTED_PACKAGES, MAX_SESSION_BULLETS, TEST_WORDING } from './constants'
 import { eventsOf, pluralize, stringsIn, unique } from './utils'
 import type { EventPayload, SessionPayload } from '../../types'
 import type { Outcome, OutcomeWording } from './types'
@@ -106,12 +100,10 @@ export function describePushes(events: EventPayload[]): string | null {
   return targets.length > 0 ? `Pushed to ${targets.join(', ')}` : null
 }
 
-/** Commands a coding agent ran in the session — counted from all of them, including ones the summary leaves out. */
+/** The coding agents in the session — read from all its events, including ones the summary leaves out. */
 function describeAgentWork(events: EventPayload[]): string | null {
-  const agentCommands = events.filter((event) => event.source !== undefined && AGENT_SOURCES.includes(event.source))
-  return agentCommands.length > 0
-    ? `Worked with an AI coding assistant (${pluralize(agentCommands.length, 'command')})`
-    : null
+  const agents = describeAgents(events)
+  return agents === null ? null : `Worked with ${agents}`
 }
 
 function describeEdits(events: EventPayload[]): string | null {

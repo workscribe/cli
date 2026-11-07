@@ -94,12 +94,12 @@ describe('weekByProject', () => {
     ])
   })
 
-  it("counts each branch's own agent commands in its activity line", () => {
-    const agent = { ...event('testing'), source: 'claude-code' }
+  it("counts each branch's own agent sessions in its activity line", () => {
+    const agent = { ...event('testing'), source: 'claude-code', agentSessionId: 1 }
     const thread = session(
       [
         at(agent, '2026-11-02T10:00:00.000Z', 'feat/a'),
-        at(agent, '2026-11-02T10:05:00.000Z', 'feat/a'),
+        at({ ...agent, agentSessionId: 2 }, '2026-11-02T10:05:00.000Z', 'feat/a'),
         at(agent, '2026-11-02T11:00:00.000Z', 'feat/b'),
       ],
       { project: 'cli', projectId: 1, branches: ['feat/a', 'feat/b'] }
@@ -108,9 +108,23 @@ describe('weekByProject', () => {
     const [project] = weekByProject(week([{ date: '2026-11-02', sessions: [thread] }]))
 
     expect(project.branches.map((branch) => branch.activity)).toEqual([
-      'With an AI coding assistant (2 commands)',
-      'With an AI coding assistant (1 command)',
+      'With Claude Code (2 sessions)',
+      'With Claude Code (1 session)',
     ])
+  })
+
+  it('counts one agent session across two days once', () => {
+    const agent = { ...event('testing'), source: 'claude-code', agentSessionId: 1 }
+    const onDay = (date: string, capturedAt: string) => ({
+      date,
+      sessions: [session([at(agent, capturedAt, 'main')], { project: 'cli', projectId: 1, branches: ['main'] })],
+    })
+
+    const [project] = weekByProject(
+      week([onDay('2026-11-02', '2026-11-02T23:50:00.000Z'), onDay('2026-11-03', '2026-11-03T00:10:00.000Z')])
+    )
+
+    expect(project.branches[0].activity).toBe('With Claude Code (1 session)')
   })
 
   it(`keeps ${MAX_BRANCH_BULLETS} bullets per branch and counts the rest`, () => {
@@ -190,7 +204,7 @@ describe('renderWeekByProject', () => {
             dates: ['2026-11-02', '2026-11-03'],
             bullets: ['Committed: fix: token'],
             moreCount: 2,
-            activity: 'With an AI coding assistant (3 commands)',
+            activity: 'With Claude Code (2 sessions)',
           },
           { branch: null, dates: ['2026-11-04'], bullets: ['Tests passing'], moreCount: 0, activity: null },
           {
@@ -198,7 +212,7 @@ describe('renderWeekByProject', () => {
             dates: ['2026-11-04'],
             bullets: [],
             moreCount: 0,
-            activity: 'With an AI coding assistant (1 command)',
+            activity: 'With Claude Code (1 session)',
           },
         ],
       },
@@ -207,9 +221,9 @@ describe('renderWeekByProject', () => {
     expect(text).toBe(
       [
         '## cli',
-        '### main — Mon 2 Nov, Tue 3 Nov\n- Committed: fix: token\n- …plus 2 more\nWith an AI coding assistant (3 commands)',
+        '### main — Mon 2 Nov, Tue 3 Nov\n- Committed: fix: token\n- …plus 2 more\nWith Claude Code (2 sessions)',
         '### (no branch) — Wed 4 Nov\n- Tests passing',
-        '### docs — Wed 4 Nov\nWith an AI coding assistant (1 command)',
+        '### docs — Wed 4 Nov\nWith Claude Code (1 session)',
       ].join('\n\n')
     )
   })
