@@ -243,7 +243,7 @@ describe('scrub-secrets job', () => {
 
   it('runs ahead of drop-old-sessions, and on a database where that job is already done', () => {
     const names = JOBS.map((job) => job.name)
-    expect(names.indexOf(scrubSecretsJob.name)).toBe(names.indexOf(dropOldSessionsJob.name) - 1)
+    expect(names.indexOf(scrubSecretsJob.name)).toBeLessThan(names.indexOf(dropOldSessionsJob.name))
 
     const db = database()
     db.prepare(

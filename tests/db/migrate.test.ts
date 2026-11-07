@@ -93,6 +93,19 @@ describe('applyMigrations', () => {
 })
 
 describe('migration 006 — reclassify unclassified events', () => {
+  it('moves a read-only other row to exploring, and still leaves one the rules do not know', () => {
+    const db = databaseAtVersion5()
+    insertEvent(db, 'ls src', 'other', '{"tool":"ls","hint":"ls src"}')
+    insertEvent(db, 'gh run view 123', 'other', '{"tool":"gh","hint":"gh run view 123"}')
+
+    applyMigrations(db, MIGRATIONS)
+
+    expect(events(db)).toEqual([
+      expect.objectContaining({ command: 'ls src', category: 'exploring', metadata: '{"tool":"ls"}' }),
+      expect.objectContaining({ command: 'gh run view 123', category: 'other' }),
+    ])
+  })
+
   it('reclassifies only other rows, replacing their metadata and leaving every command untouched', () => {
     const db = databaseAtVersion5()
     insertEvent(

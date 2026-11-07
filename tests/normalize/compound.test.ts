@@ -27,7 +27,7 @@ describe('normalizeCommand — compound commands', () => {
     ['(cd streambox && pnpm exec tsc -p shell/tsconfig.app.json --noEmit; echo tsc=$?)', 'building'],
     ['pnpm nx run-many -t lint --skip-nx-cache 2>&1 | grep -aB2 warning', 'linting'],
     ['for f in a b; do npm run build; done', 'building'],
-    ['for f in a b; do sed -n 1p $f; done', 'other'],
+    ['for f in a b; do sed -n 1p $f; done', 'exploring'],
     ['gh run view 123 --log-failed', 'other'],
     ['for f in $(npm test); do echo $f; done', 'testing'],
     ["git commit -F - <<EOF\nBuilt at $(date), don't merge\nEOF\nnpm test", 'testing'],
@@ -37,6 +37,43 @@ describe('normalizeCommand — compound commands', () => {
     ['NODE_ENV=test npm test 2>&1 | tail', 'testing'],
     ['f=$(find . -name x.ts); sed -n 1p $f', 'exploring'],
     ['f=$(find . -name x.ts)', 'exploring'],
+    ['grep x f && ./deploy.sh', 'other'],
+    ['python3 -c "print(1)" && ./deploy.sh', 'other'],
+    ['git status && ./deploy.sh', 'other'],
+    ['git log && ./x', 'other'],
+    ['./x && git log', 'other'],
+    ['ls src && cat f', 'exploring'],
+    ['git diff && git log', 'exploring'],
+    ['git log && npm test', 'testing'],
+    ['git add . && git commit -m x', 'shipping'],
+    ['grep x f && git add .', 'versioning'],
+    ['cat f | xargs rm', 'other'],
+    ['git diff > x.patch', 'versioning'],
+    ['git diff | ./x', 'versioning'],
+    ['sed -i s/a/b/ f', 'other'],
+    ['sed -ni 1p f', 'other'],
+    ["sed -n 'w out' f", 'other'],
+    ["sed -n 'w p' f", 'other'],
+    ["sed -n '1e touch p' f", 'other'],
+    ['sed -n -f x.sed f', 'other'],
+    ['rg --pre ./x y', 'other'],
+    ['cat $(rm $(ls))', 'other'],
+    ['cat <(rm x)', 'other'],
+    ['find . -delete', 'other'],
+    ['git branch -d x', 'versioning'],
+    ['cat > f <<EOF\nx\nEOF', 'other'],
+    ['sed -n 1,5p f', 'exploring'],
+    ["sed -n '/x/p' f", 'exploring'],
+    ["sed -n '$=' f", 'exploring'],
+    ['sed -n -e 1p f', 'exploring'],
+    ['sed -n 1p $f', 'exploring'],
+    ["grep '$(' f", 'exploring'],
+    ['git log 2>&1 | head -5', 'exploring'],
+    ['git -C ../web status', 'exploring'],
+    ['cat f | sort | uniq', 'exploring'],
+    ["python3 - <<'EOF'\nprint(1)\nEOF", 'exploring'],
+    ['node -e "console.log(1)"', 'exploring'],
+    ['npx eslint . && ./deploy.sh', 'linting'],
   ])('%s → %s', (command, expected) => {
     expect(category(command)).toBe(expected)
   })
@@ -108,6 +145,18 @@ describe('normalizeCommand — matchedStep, for capture', () => {
 
   it('is the one work step when the whole command was recognised, not the `cd` before it', () => {
     expect(normalizeCommand('git commit -m "x" 2>&1 | tail -3').matchedStep).toBe('git commit -m "x" 2>&1 | tail -3')
+  })
+
+  it('credits an all-read compound command to its first step, for `git -C`', () => {
+    expect(normalizeCommand('git -C ../web log && git -C ../web status').matchedStep).toBe('git -C ../web log')
+  })
+
+  it('names the whole command when a read sits next to an unknown step', () => {
+    expect(normalizeCommand('git status && ./deploy.sh')).toEqual({
+      category: 'other',
+      metadata: {},
+      matchedStep: 'git status && ./deploy.sh',
+    })
   })
 
   it('keeps an agent heredoc message intact in the step', () => {

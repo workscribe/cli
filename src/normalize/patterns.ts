@@ -5,6 +5,7 @@ import { classifyCompound, UNCLASSIFIED } from './compound'
 import { commitMessageOf } from './commit-message'
 import { dependencyMetadata, extractPackages, INSTALL_WORDS, REMOVE_WORDS } from './dependency-metadata'
 import { withoutGitGlobalOptions } from './git-invocation'
+import { isReadOnlyCommand, READ_ONLY_CATEGORY, readOnlyMetadata } from './read-only'
 
 export interface NormalizedEvent {
   category: string
@@ -65,7 +66,17 @@ const nxRule: Rule = {
   },
 }
 
+// Reads the step as written, because pipes and redirections decide whether a command only reads. First in the list, or
+// `^git\s+` would take `git log`
+const readOnlyRule: Rule = {
+  match(_cmd, { raw }) {
+    return isReadOnlyCommand(raw) ? { category: READ_ONLY_CATEGORY, metadata: readOnlyMetadata(raw) } : null
+  },
+}
+
 const BASE_RULES: Rule[] = [
+  readOnlyRule,
+
   // ─── Git operations ───────────────────────────────────────────────────────
   makeRule(/^git\s+commit\b/, 'shipping', (_m, _cmd, { raw, original }) => {
     // Read from the step as written, so quoting and multi-line heredoc messages survive (see git-invocation.ts)
@@ -291,15 +302,6 @@ const BASE_RULES: Rule[] = [
     tool: 'bun',
     script: cmd.split(/\s+/)[2],
   })),
-
-  // ─── Code search ─────────────────────────────────────────────────────────
-  makeRule(/^(grep|egrep|fgrep)\b/, 'exploring', (match) => ({ tool: match[1] })),
-  makeRule(/^(rg|ag|ack|ripgrep)\b/, 'exploring', (match) => ({ tool: match[1] })),
-  makeRule(/^find\s/, 'exploring', () => ({ tool: 'find' })),
-
-  // ─── Code read ────────────────────────────────────────────────────────────
-  makeRule(/^(cat|bat|less|more)\s+\S+/, 'exploring', (match) => ({ tool: match[1] })),
-  makeRule(/^(head|tail)\b/, 'exploring', (match) => ({ tool: match[1] })),
 
   // ─── File operations ──────────────────────────────────────────────────────
   makeRule(/^(cp|rsync)\b/, 'files', (match) => ({ tool: match[1] })),

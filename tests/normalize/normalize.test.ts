@@ -82,9 +82,16 @@ describe('normalizeCommand', () => {
     })
 
     it('classifies other git commands as git_other', () => {
-      expect(category('git log --oneline')).toBe('versioning')
-      expect(category('git diff HEAD')).toBe('versioning')
-      expect(category('git status')).toBe('versioning')
+      expect(category('git add .')).toBe('versioning')
+      expect(category('git branch -a')).toBe('versioning')
+    })
+
+    it('classifies git commands that only read as exploring', () => {
+      expect(normalize('git log --oneline')).toMatchObject({ category: 'exploring', metadata: { subcommand: 'log' } })
+      expect(category('git diff HEAD')).toBe('exploring')
+      expect(category('git show abc')).toBe('exploring')
+      expect(category('git status')).toBe('exploring')
+      expect(category('git branch')).toBe('exploring')
     })
   })
 
@@ -791,8 +798,8 @@ describe('normalizeCommand', () => {
       expect(category('git -C /home/user/project pull')).toBe('versioning')
     })
 
-    it('classifies git -C status as git_other', () => {
-      expect(category('git -C /home/user/project status')).toBe('versioning')
+    it('classifies git -C status as exploring', () => {
+      expect(category('git -C /home/user/project status')).toBe('exploring')
     })
 
     it('classifies git -C add as git_other', () => {
