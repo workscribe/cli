@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from 'vitest'
+import { describe, it, expect, beforeAll, vi } from 'vitest'
 import { execFileSync, spawnSync } from 'child_process'
 import fs from 'fs'
 import os from 'os'
@@ -8,7 +8,12 @@ import { injectBinaryPath } from '../../src/capture/shell-hook'
 // The real hook templates, run in real shells against a stub `workscribe` that writes each argument it gets on its
 // own line — so a flag and its value arriving as one argument (zsh doesn't word-split ${x:+--flag "$x"}) shows.
 const TEMPLATES = path.join(__dirname, '..', '..', 'shell')
-const POLL_MS = 2000
+// The shell exits in milliseconds, but its background job can take seconds to write: over 400 runs on an idle Mac the
+// median was 359 ms and the slowest 2.8 s. It's a limit, not a delay: a capture returns as soon as it's written
+const CAPTURE_WAIT_MS = 15_000
+// How long a test waits before believing nothing was captured, the one case that always waits this out
+const NO_CAPTURE_WAIT_MS = 2000
+vi.setConfig({ testTimeout: CAPTURE_WAIT_MS + 5000 })
 // No rc files: zsh -f loads no framework (so no zsh/datetime either), bash --norc reads no ~/.bashrc
 const PLAIN_ZSH = ['zsh', '-f', '-c']
 const PLAIN_BASH = ['bash', '--norc', '-c']
@@ -46,7 +51,8 @@ function makeSandbox(): Sandbox {
   git('init', '-q')
   git('-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '-q', '--allow-empty', '-m', 'init')
   const callsFile = path.join(root, 'calls')
-  const stub = `#!/bin/sh\nfor argument in "$@"; do printf '%s\\n' "$argument"; done > '${callsFile}'\n`
+  // Written aside and moved into place, so a test polling for the file never reads only the first few arguments
+  const stub = `#!/bin/sh\nfor argument in "$@"; do printf '%s\\n' "$argument"; done > '${callsFile}.tmp'\nmv '${callsFile}.tmp' '${callsFile}'\n`
   fs.writeFileSync(path.join(binDir, 'workscribe'), stub, { mode: 0o755 })
   return { repo, head: git('rev-parse', 'HEAD'), callsFile, binDir, home }
 }
@@ -63,8 +69,8 @@ function writePinnedHook(sandbox: Sandbox, template: string): string {
 }
 
 /** The arguments the stub got, once the hook's background job has written them; empty when it never ran. */
-function waitForCalls(callsFile: string): string[] {
-  const deadline = Date.now() + POLL_MS
+function waitForCalls(callsFile: string, waitMs: number): string[] {
+  const deadline = Date.now() + waitMs
   while (Date.now() < deadline) {
     if (fs.existsSync(callsFile)) {
       const content = fs.readFileSync(callsFile, 'utf-8')
@@ -82,9 +88,10 @@ interface Run {
   script: string
   /** Folders put first on PATH — the stub's by default */
   binDirs?: string[]
+  waitMs?: number
 }
 
-function runIn({ sandbox, shell, script, binDirs = [sandbox.binDir] }: Run): string[] {
+function runIn({ sandbox, shell, script, binDirs = [sandbox.binDir], waitMs = CAPTURE_WAIT_MS }: Run): string[] {
   fs.rmSync(sandbox.callsFile, { force: true })
   const result = spawnSync(shell[0], [...shell.slice(1), script], {
     cwd: sandbox.repo,
@@ -92,7 +99,7 @@ function runIn({ sandbox, shell, script, binDirs = [sandbox.binDir] }: Run): str
     encoding: 'utf-8',
   })
   expect(result.stderr).toBe('')
-  return waitForCalls(sandbox.callsFile)
+  return waitForCalls(sandbox.callsFile, waitMs)
 }
 
 /** The value after a flag, or undefined when the flag isn't there. */
@@ -167,7 +174,8 @@ describe.skipIf(!hasShell('bash'))('the bash hook', () => {
 
   it('ignores the rc lines that run before the first prompt', () => {
     // Before the first prompt the DEBUG trap only sees rc-file lines — none of them is the user's command
-    const calls = run(`unset EPOCHREALTIME; source '${hook}'; export AFTER_THE_HOOK=1; _workscribe_precmd`)
+    const script = `unset EPOCHREALTIME; source '${hook}'; export AFTER_THE_HOOK=1; _workscribe_precmd`
+    const calls = runIn({ sandbox, shell: PLAIN_BASH, script, waitMs: NO_CAPTURE_WAIT_MS })
 
     expect(calls).toEqual([])
   })
