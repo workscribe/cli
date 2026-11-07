@@ -1,0 +1,8 @@
+{
+  "timestamp": "2026-11-06T23:50:21.216Z",
+  "hook_event_name": "UserPromptSubmit",
+  "session_id": "<session_id>",
+  "transcript_path": "<transcript_path>",
+  "prompt": "This is a throwaway repo. Using only your terminal tool, run each of these exactly, as separate tool calls, in order. Keep going if one fails. Do not fix anything. Then stop.\n1. true\n2. sh -c 'exit 3'\n3. git add app.txt && git commit --allow-empty -m \"feat: probe rejected\"\n4. cd sub && true\n5. cat <<'PROBE'\nprobe line one\nprobe line two\nPROBE\n6. echo wor154-copilot-marker\n7. sh -c 'sleep 8; exit 4'",
+  "cwd": "/Users/dev/api"
+}

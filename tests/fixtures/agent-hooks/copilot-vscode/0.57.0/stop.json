@@ -1,0 +1,8 @@
+{
+  "timestamp": "2026-11-06T23:54:11.971Z",
+  "hook_event_name": "Stop",
+  "session_id": "<session_id>",
+  "transcript_path": "<transcript_path>",
+  "stop_hook_active": false,
+  "cwd": "/Users/dev/api"
+}

@@ -1,0 +1,16 @@
+{
+  "timestamp": "2026-11-06T23:51:01.524Z",
+  "hook_event_name": "PostToolUse",
+  "session_id": "<session_id>",
+  "transcript_path": "<transcript_path>",
+  "tool_name": "run_in_terminal",
+  "tool_input": {
+    "command": "true",
+    "explanation": "Run the first requested command exactly as specified.",
+    "goal": "Execute probe command 1",
+    "mode": "sync"
+  },
+  "tool_response": "<tool_response>",
+  "tool_use_id": "<tool_use_id>",
+  "cwd": "/Users/dev/api"
+}

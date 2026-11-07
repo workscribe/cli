@@ -1,0 +1,15 @@
+{
+  "timestamp": "2026-11-06T23:55:37.119Z",
+  "hook_event_name": "PostToolUse",
+  "session_id": "<session_id>",
+  "transcript_path": "<transcript_path>",
+  "tool_name": "read_file",
+  "tool_input": {
+    "filePath": "/Users/dev/api/app.txt",
+    "startLine": 1,
+    "endLine": 50
+  },
+  "tool_response": "",
+  "tool_use_id": "<tool_use_id>",
+  "cwd": "/Users/dev/api"
+}

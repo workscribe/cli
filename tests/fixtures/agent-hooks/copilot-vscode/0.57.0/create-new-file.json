@@ -1,0 +1,14 @@
+{
+  "timestamp": "2026-11-06T23:55:43.364Z",
+  "hook_event_name": "PostToolUse",
+  "session_id": "<session_id>",
+  "transcript_path": "<transcript_path>",
+  "tool_name": "create_file",
+  "tool_input": {
+    "filePath": "/Users/dev/api/created.txt",
+    "content": "new"
+  },
+  "tool_response": "",
+  "tool_use_id": "<tool_use_id>",
+  "cwd": "/Users/dev/api"
+}

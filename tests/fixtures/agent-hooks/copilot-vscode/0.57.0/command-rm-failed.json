@@ -1,0 +1,16 @@
+{
+  "timestamp": "2026-11-06T23:56:14.738Z",
+  "hook_event_name": "PostToolUse",
+  "session_id": "<session_id>",
+  "transcript_path": "<transcript_path>",
+  "tool_name": "run_in_terminal",
+  "tool_input": {
+    "command": "rm delete-me.txt",
+    "explanation": "Delete the requested file using the terminal command specified for the final step.",
+    "goal": "Remove delete-me.txt",
+    "mode": "sync"
+  },
+  "tool_response": "<tool_response>",
+  "tool_use_id": "<tool_use_id>",
+  "cwd": "/Users/dev/api"
+}

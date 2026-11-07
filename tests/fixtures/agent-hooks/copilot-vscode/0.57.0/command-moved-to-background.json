@@ -1,0 +1,17 @@
+{
+  "timestamp": "2026-11-06T23:59:29.276Z",
+  "hook_event_name": "PostToolUse",
+  "session_id": "<session_id>",
+  "transcript_path": "<transcript_path>",
+  "tool_name": "run_in_terminal",
+  "tool_input": {
+    "command": "sleep 60",
+    "explanation": "Run the exact sleep command you requested in the terminal.",
+    "goal": "Execute requested sleep command",
+    "mode": "sync",
+    "timeout": 1000
+  },
+  "tool_response": "<tool_response>",
+  "tool_use_id": "<tool_use_id>",
+  "cwd": "/Users/dev/api"
+}

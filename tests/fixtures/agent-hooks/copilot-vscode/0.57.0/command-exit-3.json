@@ -1,0 +1,16 @@
+{
+  "timestamp": "2026-11-06T23:51:51.950Z",
+  "hook_event_name": "PostToolUse",
+  "session_id": "<session_id>",
+  "transcript_path": "<transcript_path>",
+  "tool_name": "run_in_terminal",
+  "tool_input": {
+    "command": "sh -c 'exit 3'",
+    "explanation": "Run the second requested command exactly as specified.",
+    "goal": "Execute probe command 2",
+    "mode": "sync"
+  },
+  "tool_response": "<tool_response>",
+  "tool_use_id": "<tool_use_id>",
+  "cwd": "/Users/dev/api"
+}

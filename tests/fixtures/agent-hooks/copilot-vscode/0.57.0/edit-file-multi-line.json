@@ -1,0 +1,20 @@
+{
+  "timestamp": "2026-11-06T23:55:41.874Z",
+  "hook_event_name": "PostToolUse",
+  "session_id": "<session_id>",
+  "transcript_path": "<transcript_path>",
+  "tool_name": "multi_replace_string_in_file",
+  "tool_input": {
+    "explanation": "Replace the specified words in multi.txt in a single edit operation.",
+    "replacements": [
+      {
+        "filePath": "/Users/dev/api/multi.txt",
+        "oldString": "one\ntwo\nthree",
+        "newString": "1\ntwo\n3"
+      }
+    ]
+  },
+  "tool_response": "",
+  "tool_use_id": "<tool_use_id>",
+  "cwd": "/Users/dev/api"
+}
