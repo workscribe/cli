@@ -8,6 +8,7 @@ import { applyMigrations } from './migrate'
 import { BUSY_TIMEOUT_MS, withImmediateTransaction, type TransactionOptions } from './transaction'
 import type { StoredEngine } from '../ai/engine'
 import { insertEventRecord, type NewEvent } from './event-writer'
+import { mergeIntoRecentEdit, type RecentEdit } from './edit-merge'
 import { saveAnchoredSummary } from './summary-store'
 import { countOtherEventsSince, countOtherEventTools, sinceIso } from './recent-events'
 import { agentSessionIdsOfDate, agentSessionIdsOfEvents, deleteEmptyAgentSessions } from './agent-sessions'
@@ -53,11 +54,8 @@ export function insertEvent(event: NewEvent): void {
   insertEventRecord(getDb(), event)
 }
 
-export function getLastEventForFile(filePath: string, cwd: string): EventRow | undefined {
-  const db = getDb()
-  return db
-    .prepare('SELECT * FROM events WHERE file_path = $file_path AND cwd = $cwd ORDER BY id DESC LIMIT 1')
-    .get({ file_path: filePath, cwd }) as EventRow | undefined
+export function mergeRecentEdit(edit: RecentEdit): boolean {
+  return mergeIntoRecentEdit(getDb(), edit)
 }
 
 export function getLastEvent(): EventRow | undefined {

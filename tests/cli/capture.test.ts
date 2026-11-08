@@ -47,6 +47,8 @@ describe('workscribe _capture', () => {
         exitCode: 0,
         durationMs: 150,
         gitBefore: undefined,
+        linesAdded: null,
+        linesRemoved: null,
       })
     })
 
@@ -58,7 +60,76 @@ describe('workscribe _capture', () => {
         exitCode: null,
         durationMs: null,
         gitBefore: undefined,
+        linesAdded: null,
+        linesRemoved: null,
       })
+    })
+
+    it("passes an edit's line counts", async () => {
+      await makeProgram().parseAsync(
+        [
+          '_capture',
+          '--type',
+          'code_edit',
+          '--file',
+          'a.ts',
+          '--cwd',
+          '/repo',
+          '--lines-added',
+          '12',
+          '--lines-removed',
+          '0',
+        ],
+        { from: 'user' }
+      )
+      expect(mockCaptureCommand).toHaveBeenCalledWith(expect.objectContaining({ linesAdded: 12, linesRemoved: 0 }))
+    })
+
+    it('treats a line count that is not a non-negative integer as unknown', async () => {
+      await makeProgram().parseAsync(
+        [
+          '_capture',
+          '--type',
+          'code_edit',
+          '--file',
+          'a.ts',
+          '--cwd',
+          '/repo',
+          '--lines-added',
+          '-3',
+          '--lines-removed',
+          'x',
+        ],
+        { from: 'user' }
+      )
+      expect(mockCaptureCommand).toHaveBeenCalledWith(expect.objectContaining({ linesAdded: null, linesRemoved: null }))
+    })
+
+    it('still captures an event sent with an option it does not know', async () => {
+      await makeProgram().parseAsync(
+        ['_capture', '--type', 'code_edit', '--file', 'a.ts', '--cwd', '/repo', '--from-newer-extension', 'yes'],
+        { from: 'user' }
+      )
+      expect(mockCaptureCommand).toHaveBeenCalledWith(expect.objectContaining({ type: 'code_edit', file: 'a.ts' }))
+    })
+
+    it('still captures an edit whose line-count flag has no value, with that count unknown', async () => {
+      await makeProgram().parseAsync(
+        [
+          '_capture',
+          '--type',
+          'code_edit',
+          '--file',
+          'a.ts',
+          '--cwd',
+          '/repo',
+          '--lines-removed',
+          '2',
+          '--lines-added',
+        ],
+        { from: 'user' }
+      )
+      expect(mockCaptureCommand).toHaveBeenCalledWith(expect.objectContaining({ linesAdded: null, linesRemoved: 2 }))
     })
 
     it('passes gitBefore when --git-before is provided', async () => {

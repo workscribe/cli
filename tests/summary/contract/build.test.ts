@@ -107,6 +107,27 @@ describe('eventToJson', () => {
       source: 'shell',
     })
   })
+
+  it("exposes an edit's line counts and last edit time, and never its file path", () => {
+    const edit = row({
+      category: 'code_edit',
+      command: '/Users/dev/api/src/a.ts',
+      file_path: '/Users/dev/api/src/a.ts',
+      source: 'vscode',
+      exit_code: null,
+      duration_ms: null,
+      metadata: '{"linesAdded":6,"linesRemoved":2,"lastEditAt":"2026-10-25T09:00:20.000Z"}',
+    })
+
+    expect(eventToJson(edit)).toEqual({
+      capturedAt: '2026-10-25T09:00:00.000Z',
+      category: 'code_edit',
+      metadata: { linesAdded: 6, linesRemoved: 2, lastEditAt: '2026-10-25T09:00:20.000Z' },
+      exitCode: null,
+      durationMs: null,
+      source: 'vscode',
+    })
+  })
 })
 
 describe('threadToJson', () => {
@@ -254,6 +275,23 @@ describe('buildSessionsJson / buildEventsJson', () => {
     expect(Object.keys(json).sort()).toEqual(['date', 'events', 'schemaVersion', 'total'])
     expect(json.total).toBe(3)
     expect(json.events).toHaveLength(2)
+  })
+
+  it("carries an edit's line counts in both documents, and only in its metadata", () => {
+    const edit = row({
+      category: 'code_edit',
+      command: '/Users/dev/api/src/a.ts',
+      file_path: '/Users/dev/api/src/a.ts',
+      source: 'vscode',
+      metadata: '{"linesAdded":6,"linesRemoved":2}',
+    })
+    const sessionEvent = soloThreadToJson([edit]).events[0]
+    const listedEvent = buildEventsJson('2026-10-25', [edit], { includeCategories: [] }).events[0]
+
+    for (const event of [sessionEvent, listedEvent]) {
+      expect(Object.keys(event).sort()).toEqual(EVENT_KEYS)
+      expect(event.metadata).toEqual({ linesAdded: 6, linesRemoved: 2 })
+    }
   })
 
   it('returns an empty list for a day with no events', () => {

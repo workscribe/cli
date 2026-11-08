@@ -5,7 +5,7 @@ vi.mock('fs', () => ({ default: { existsSync: vi.fn() } }))
 vi.mock('../../src/db', () => ({
   insertEvent: vi.fn(),
   getLastEvent: vi.fn(),
-  getLastEventForFile: vi.fn(),
+  mergeRecentEdit: vi.fn(),
   getLastEventForCwd: vi.fn(),
 }))
 
@@ -39,7 +39,7 @@ vi.mock('../../src/config/registry', () => ({
 vi.mock('../../src/utils/paths', () => ({ PAUSE_FLAG_PATH: '/home/user/.workscribe/paused' }))
 
 import fs from 'fs'
-import { insertEvent, getLastEvent, getLastEventForCwd } from '../../src/db'
+import { insertEvent, getLastEvent, getLastEventForCwd, mergeRecentEdit } from '../../src/db'
 import { readConfig } from '../../src/config'
 import { normalizeCommand } from '../../src/normalize/patterns'
 import { shouldFilter, isDuplicate } from '../../src/capture/filter'
@@ -60,6 +60,7 @@ const mockRedact = redact as ReturnType<typeof vi.fn>
 const mockGetRepoContext = getRepoContext as ReturnType<typeof vi.fn>
 const mockGetLastEvent = getLastEvent as ReturnType<typeof vi.fn>
 const mockGetLastEventForCwd = getLastEventForCwd as ReturnType<typeof vi.fn>
+const mockMergeRecentEdit = mergeRecentEdit as ReturnType<typeof vi.fn>
 const mockReadLastAiderPrompt = readLastAiderPrompt as ReturnType<typeof vi.fn>
 
 const BASE_CONFIG = {
@@ -292,6 +293,56 @@ describe('captureCommand — project links', () => {
     expect(mockInsertEvent).toHaveBeenCalledWith(
       expect.objectContaining({ command: 'run --password=[REDACTED]', file_path: '/repo/src/a.ts' })
     )
+  })
+
+  it("stores an edit's line counts", () => {
+    captureCommand({
+      cwd: '/repo',
+      exitCode: null,
+      durationMs: null,
+      type: 'code_edit',
+      file: '/repo/src/a.ts',
+      source: 'vscode',
+      linesAdded: 3,
+      linesRemoved: 1,
+    })
+
+    expect(mockMergeRecentEdit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filePath: '/repo/src/a.ts',
+        cwd: '/repo',
+        source: 'vscode',
+        counts: { linesAdded: 3, linesRemoved: 1 },
+        windowMs: 30_000,
+      })
+    )
+    expect(mockInsertEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ metadata: '{"linesAdded":3,"linesRemoved":1}' })
+    )
+  })
+
+  it('stores unknown counts as null when the sender gave none', () => {
+    captureCommand({ cwd: '/repo', exitCode: null, durationMs: null, type: 'code_edit', file: '/repo/src/a.ts' })
+
+    expect(mockMergeRecentEdit).toHaveBeenCalledWith(expect.objectContaining({ source: null }))
+    expect(mockInsertEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ metadata: '{"linesAdded":null,"linesRemoved":null}' })
+    )
+  })
+
+  it('stores nothing new when the edit merged into a recent one', () => {
+    mockMergeRecentEdit.mockReturnValueOnce(true)
+
+    captureCommand({ cwd: '/repo', exitCode: null, durationMs: null, type: 'code_edit', file: '/repo/src/a.ts' })
+
+    expect(mockInsertEvent).not.toHaveBeenCalled()
+  })
+
+  it('keeps other editor events without metadata, and never merges them', () => {
+    captureCommand({ cwd: '/repo', exitCode: null, durationMs: null, type: 'debug_start', file: '/repo/src/a.ts' })
+
+    expect(mockMergeRecentEdit).not.toHaveBeenCalled()
+    expect(mockInsertEvent).toHaveBeenCalledWith(expect.objectContaining({ metadata: null }))
   })
 
   it('stores a save with no command under its path, without redacting it', () => {

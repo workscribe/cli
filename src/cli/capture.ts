@@ -1,5 +1,6 @@
 import { Command } from 'commander'
 import { captureCommand } from '../capture'
+import { parseLineCount } from '../capture/edit-counts'
 import { debugLog } from '../utils/logger'
 
 // Ends a capture that is still alive this long after starting. The capture itself is synchronous, so the timer can
@@ -19,6 +20,11 @@ export function registerCapture(program: Command): void {
     .option('--type <type>', 'event type override — skips normalization (IDE integrations)')
     .option('--source <source>', 'event source identifier (e.g. vscode, neovim, jupyter)')
     .option('--file <path>', 'file path for code_edit events')
+    // Optional values, and unknown options ignored (a negative count reads as one), so a count sent without a value,
+    // a bad one or a flag from a newer integration counts as unknown instead of failing the capture
+    .option('--lines-added [count]', 'lines a code_edit added')
+    .option('--lines-removed [count]', 'lines a code_edit removed')
+    .allowUnknownOption()
     .action((opts) => {
       // Prevent background process accumulation if the process hangs (e.g. SQLite locked).
       // unref() allows a natural exit to happen immediately without waiting for the timer.
@@ -39,6 +45,8 @@ export function registerCapture(program: Command): void {
           source: opts.source ?? undefined,
           type: opts.type ?? undefined,
           file: opts.file ?? undefined,
+          linesAdded: parseLineCount(opts.linesAdded),
+          linesRemoved: parseLineCount(opts.linesRemoved),
         })
       } catch (err) {
         debugLog('_capture', err)

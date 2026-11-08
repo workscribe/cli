@@ -1,5 +1,6 @@
 import fs from 'fs'
-import { insertEvent, getLastEvent, getLastEventForFile, getLastEventForCwd } from '../db'
+import { insertEvent, getLastEvent, mergeRecentEdit, getLastEventForCwd } from '../db'
+import { editMetadata, type EditCounts } from './edit-counts'
 import { redact } from './redact'
 import { commandHint } from './hint'
 import { getRepoContext } from './git'
@@ -44,6 +45,27 @@ function withMessageFromFile(
   return { ...rest, message: message ? redact(message, extraRedactions) : null }
 }
 
+/**
+ * Repeated edits of a file from the same source within 30 s add their line counts to the first one, so a burst of
+ * auto-saves or agent edits is one event that still adds up to the real change. False when the edit is stored anew.
+ */
+function mergedIntoRecentEdit(edit: {
+  file: string
+  cwd: string
+  source: string | undefined
+  counts: EditCounts
+  capturedAt: string
+}): boolean {
+  return mergeRecentEdit({
+    filePath: edit.file,
+    cwd: edit.cwd,
+    source: edit.source ?? null,
+    counts: edit.counts,
+    editedAt: edit.capturedAt,
+    windowMs: IDE_DEDUP_WINDOW_MS,
+  })
+}
+
 export function captureCommand(opts: {
   command?: string
   cwd: string
@@ -53,6 +75,9 @@ export function captureCommand(opts: {
   source?: string
   type?: string
   file?: string
+  /** A `code_edit`'s line counts; missing means unknown */
+  linesAdded?: number | null
+  linesRemoved?: number | null
   /** The agent conversation a hook command ran in; only shell commands from a hook have one */
   agentSession?: AgentSessionRef
 }): void {
@@ -66,14 +91,15 @@ export function captureCommand(opts: {
   // When --type is provided, the caller has already classified the event.
   // Skip normalization and noise filtering — these are first-party signals.
   if (opts.type) {
-    // For file-save events, deduplicate per-file with a longer window (30s) to
-    // absorb rapid auto-saves of the same file.
-    if (opts.type === 'code_edit' && opts.file) {
-      const lastForFile = getLastEventForFile(opts.file, cwd)
-      if (lastForFile) {
-        const lastTime = new Date(lastForFile.captured_at).getTime()
-        if (Date.now() - lastTime < IDE_DEDUP_WINDOW_MS) return
-      }
+    const isEdit = opts.type === 'code_edit'
+    const counts: EditCounts = { linesAdded: opts.linesAdded ?? null, linesRemoved: opts.linesRemoved ?? null }
+    const capturedAt = new Date().toISOString()
+    if (
+      isEdit &&
+      opts.file &&
+      mergedIntoRecentEdit({ file: opts.file, cwd, source: opts.source, counts, capturedAt })
+    ) {
+      return
     }
 
     // A shell task running in a hooked terminal already got captured with a
@@ -90,7 +116,7 @@ export function captureCommand(opts: {
     const context = getRepoContext(cwd, config)
     const { repoName, branch } = context
     const ideEvent = {
-      captured_at: new Date().toISOString(),
+      captured_at: capturedAt,
       command,
       cwd,
       exit_code: exitCode,
@@ -98,7 +124,7 @@ export function captureCommand(opts: {
       repo_name: repoName,
       branch,
       category: opts.type,
-      metadata: null,
+      metadata: isEdit ? editMetadata(counts) : null,
       source: opts.source ?? null,
       file_path: opts.file ?? null,
     }

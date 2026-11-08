@@ -6,7 +6,7 @@ vi.mock('fs', () => ({ default: { existsSync: vi.fn(() => false) } }))
 vi.mock('../../src/db', () => ({
   insertEvent: vi.fn(),
   getLastEvent: vi.fn(),
-  getLastEventForFile: vi.fn(),
+  mergeRecentEdit: vi.fn(),
   getLastEventForCwd: vi.fn(),
 }))
 // The normaliser reads the config (active profiles) when it loads, so the mock needs a value up front
