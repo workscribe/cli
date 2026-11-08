@@ -102,6 +102,22 @@ describe('eventRowToPayload', () => {
     expect(eventRowToPayload(makeEvent({ metadata: null })).metadata).toEqual({})
   })
 
+  it("carries an edit's line counts and last edit time through unchanged", () => {
+    const edit = makeEvent({
+      category: 'code_edit',
+      command: '/repo/src/a.ts',
+      file_path: '/repo/src/a.ts',
+      source: 'vscode',
+      metadata: '{"linesAdded":6,"linesRemoved":2,"lastEditAt":"2026-08-17T09:00:20.000Z"}',
+    })
+
+    expect(eventRowToPayload(edit).metadata).toEqual({
+      linesAdded: 6,
+      linesRemoved: 2,
+      lastEditAt: '2026-08-17T09:00:20.000Z',
+    })
+  })
+
   it('lifts the hint out of other events and strips hint and tool', () => {
     const row = makeEvent({ category: 'other', metadata: '{"hint":"make deploy","tool":"make","target":"prod"}' })
 

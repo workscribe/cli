@@ -57,5 +57,5 @@ Each session is one project's **thread**: that project's work inside a work bloc
 | `commits` | The main source of outcomes. `source: "git"` has a short `hash` to cite; `"captured"` commits have `hash: null` (amended or rebased). |
 | `events[].category` | What kind of work: `testing`, `building`, `shipping`, `dependencies`, `releasing`, `ai_session`, `code_edit`, `other`, … |
 | `events[].exitCode` | `0` passed, non-zero failed, `null` unknown (commands run by AI tools). A failure followed by a pass means a fix. |
-| `events[].metadata` | Structured detail: `packages` for dependencies, `tool`, `message`, `remote`/`branch` for pushes. |
+| `events[].metadata` | Structured detail: `packages` for dependencies, `tool`, `message`, `remote`/`branch` for pushes; `linesAdded`/`linesRemoved` (`null` when unknown) and `lastEditAt` on `code_edit`. |
 | `events[].hint` | Only on `other` events: a short, redacted start of the command. Infer intent from it; don't quote it. |

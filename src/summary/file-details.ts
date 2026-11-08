@@ -3,6 +3,7 @@
 import path from 'path'
 import type { EventRow } from '../db/types'
 import type { GitCommit } from './git-commits'
+import { parseMetadata } from './event-metadata'
 
 // How many of the session's other files to name; the rest are only counted
 const EDITED_ALONGSIDE_LIMIT = 5
@@ -13,7 +14,7 @@ export interface FileDetails {
   relativePath: string
   firstSavedAt: string
   lastSavedAt: string
-  /** Saves recorded — capture keeps one save per file per 30 s, so not every keystroke save */
+  /** Saves recorded — repeated saves of a file from one source within 30 s are one save, not every keystroke save */
   saveCount: number
   branch: string | null
   commits: GitCommit[]
@@ -29,6 +30,12 @@ export function displayPath(absoluteFilePath: string, repoRoot: string | null): 
   return path.basename(absoluteFilePath)
 }
 
+/** When an edit event last changed its file: a merged event's latest edit, else when it was captured. */
+function lastEditTimeOf(event: EventRow): string {
+  const { lastEditAt } = parseMetadata(event.metadata)
+  return typeof lastEditAt === 'string' ? lastEditAt : event.captured_at
+}
+
 /** Whether a stored path is the file being asked about — the same path, or (when the caller can tell) the same file. */
 export type FileMatcher = (storedPath: string) => boolean
 
@@ -42,9 +49,10 @@ function otherFilesBySaves(sessionEvents: EventRow[], isThisFile: FileMatcher): 
   for (const event of sessionEvents) {
     if (event.category !== CODE_EDIT || !event.file_path || isThisFile(event.file_path)) continue
     const seen = saves.get(event.file_path)
+    const editedAt = lastEditTimeOf(event)
     saves.set(event.file_path, {
       count: (seen?.count ?? 0) + 1,
-      lastSavedAt: seen && seen.lastSavedAt > event.captured_at ? seen.lastSavedAt : event.captured_at,
+      lastSavedAt: seen && seen.lastSavedAt > editedAt ? seen.lastSavedAt : editedAt,
     })
   }
   return [...saves.entries()]
@@ -78,6 +86,7 @@ export function buildFileDetails(options: FileDetailsOptions): FileDetails | nul
   if (saves.length === 0) return null
 
   const savedTimes = saves.map((save) => save.captured_at).sort()
+  const editedTimes = saves.map(lastEditTimeOf).sort()
   // Saves are oldest first, so the last one with a branch is the latest
   const latestBranch = [...saves].reverse().find((save) => save.branch)?.branch ?? null
   const otherFiles = otherFilesBySaves(sessionEvents, isThisFile)
@@ -86,7 +95,7 @@ export function buildFileDetails(options: FileDetailsOptions): FileDetails | nul
     path: filePath,
     relativePath: displayPathOf(filePath),
     firstSavedAt: savedTimes[0],
-    lastSavedAt: savedTimes.at(-1) ?? savedTimes[0],
+    lastSavedAt: editedTimes.at(-1) ?? savedTimes[0],
     saveCount: saves.length,
     branch: latestBranch ?? options.sessionBranch,
     commits: options.commits,

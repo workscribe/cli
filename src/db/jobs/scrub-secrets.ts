@@ -78,7 +78,10 @@ export function scrubEvent({ command, metadata }: StoredText): StoredText | null
   return { command: scrubbedCommand, metadata: scrubbedMetadata }
 }
 
-/** An IDE save's command is its file's path, and it has no metadata. An event with its own command is still checked. */
+/**
+ * An IDE save's command is its file's path, and its metadata is only line counts — no text to scrub. An event with its
+ * own command is still checked.
+ */
 function readEvents(db: MigrationDatabase, afterId: number, limit: number): StoredEvent[] {
   return db
     .prepare(

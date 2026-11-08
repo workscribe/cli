@@ -450,7 +450,8 @@ Commit = {
 Event = {
   capturedAt: string
   category: string                 // testing, building, shipping, dependencies, ai_session, other, …
-  metadata: Record<string, unknown> // structured fields the normaliser extracted (tool, packages, message, …)
+  metadata: Record<string, unknown> // structured fields the normaliser extracted (tool, packages, message, …); on
+                                   // code_edit: linesAdded, linesRemoved (null when unknown), lastEditAt
   hint?: string                    // only on unclassified ("other") events: redacted, ≤120-char command prefix
   exitCode: number | null          // null for commands captured through AI-tool hooks
   durationMs: number | null
@@ -521,8 +522,8 @@ It finds today's work too, without running `workscribe summary` first: if the da
     "path": "/Users/me/api/src/auth.ts",
     "relativePath": "src/auth.ts",           // relative to the repo root, or just the file name
     "firstSavedAt": "2026-08-20T10:05:00.000Z",
-    "lastSavedAt": "2026-08-20T11:40:00.000Z",
-    "saveCount": 6,                          // saves recorded: one per file per 30 seconds at most
+    "lastSavedAt": "2026-08-20T11:40:00.000Z", // the latest edit, including ones added onto an earlier save — up to 30 s after the thread's endedAt
+    "saveCount": 6,                          // saves recorded: one per file, folder and source per 30 seconds at most
     "branch": "feature/auth",
     "commits": [{ "hash": "a1b2c3d", "subject": "add auth middleware", "committedAt": "2026-10-25T09:20:00+01:00" }], // your commits in the thread that changed it
     "editedAlongside": { "files": ["src/routes.ts"], "total": 1 }         // up to 5 other files saved in the thread
@@ -648,7 +649,7 @@ Internal command called by shell hooks and IDE plugins. Not intended for direct 
 IDE integrations call this to record a file-save or debug event without going through the shell:
 
 ```bash
-workscribe _capture --type code_edit --file src/auth.ts --source vscode --cwd /path/to/repo
+workscribe _capture --type code_edit --file src/auth.ts --source vscode --cwd /path/to/repo --lines-added 12 --lines-removed 3
 workscribe _capture --type debug_start --source neovim --cwd /path/to/repo
 workscribe _capture --type task_run --source vscode --cwd /path/to/repo
 ```
@@ -660,10 +661,14 @@ workscribe _capture --type task_run --source vscode --cwd /path/to/repo
 | `--type <type>` | Event type — skips normalization. One of: `code_edit`, `debug_start`, `debug_end`, `task_run` |
 | `--source <source>` | Event source identifier (e.g. `vscode`, `neovim`, `jupyter`) |
 | `--file <path>` | File path for `code_edit` events |
+| `--lines-added [count]` | Lines a `code_edit` added. Anything but a non-negative integer counts as unknown |
+| `--lines-removed [count]` | Lines a `code_edit` removed. Anything but a non-negative integer counts as unknown |
+
+Options `_capture` doesn't know are ignored rather than failing the capture, so an integration can send newer flags. CLI versions up to 3.2 reject them, along with `--lines-added` and `--lines-removed`.
 | `--exit <code>` | Exit code (shell hook only) |
 | `--duration <ms>` | Duration in milliseconds (shell hook only) |
 
-**Deduplication:** `code_edit` events for the same file within 30 seconds are dropped. This absorbs rapid auto-saves without creating duplicate records.
+**Deduplication:** a `code_edit` within 30 seconds of the last event for the same file and folder, when that event is a `code_edit` from the same source, is added onto it: the line counts add up (unknown counts add nothing) and `lastEditAt` moves to the new edit, but the event keeps its time. The window counts from the event's own time, so a long run of saves is one event per 30 seconds. An edit from another source, or after another kind of event on the file, is kept as a new event.
 
 ---
 

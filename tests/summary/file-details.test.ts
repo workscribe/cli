@@ -48,6 +48,31 @@ describe('buildFileDetails', () => {
     })
   })
 
+  it("reports a merged save's latest edit as when the file was last saved", () => {
+    const merged = {
+      ...save(FILE, '2026-10-28T09:40:00.000Z'),
+      metadata: '{"linesAdded":4,"linesRemoved":0,"lastEditAt":"2026-10-28T09:40:25.000Z"}',
+    }
+
+    expect(details([save(FILE, '2026-10-28T09:10:00.000Z'), merged])).toMatchObject({
+      firstSavedAt: '2026-10-28T09:10:00.000Z',
+      lastSavedAt: '2026-10-28T09:40:25.000Z',
+      saveCount: 2,
+    })
+  })
+
+  it('orders tied other files by their latest edit', () => {
+    const earlier = `${ROOT}/src/b.ts`
+    const later = `${ROOT}/src/c.ts`
+    const result = details([
+      save(FILE, '2026-10-28T09:00:00.000Z'),
+      { ...save(earlier, '2026-10-28T09:05:00.000Z'), metadata: '{"lastEditAt":"2026-10-28T09:05:20.000Z"}' },
+      save(later, '2026-10-28T09:05:10.000Z'),
+    ])
+
+    expect(result?.editedAlongside.files).toEqual(['src/b.ts', 'src/c.ts'])
+  })
+
   it("falls back to the session's branch when the saves have none", () => {
     expect(details([save(FILE, '2026-10-28T09:10:00.000Z', null)], 'main')?.branch).toBe('main')
   })
