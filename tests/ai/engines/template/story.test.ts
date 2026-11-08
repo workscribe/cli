@@ -134,6 +134,19 @@ describe('storyLines — activity', () => {
     expect(storyLines(session([save]))).toEqual(['- Edited files', '1 file save in the editor'])
   })
 
+  it("counts an agent's edits as its work, never as saves in the editor", () => {
+    const events = [byAgent('code_edit'), byAgent('code_edit'), event('code_edit')]
+
+    expect(storyLines(session(events))).toEqual([
+      '- Edited files',
+      'With Claude Code (1 session) · 1 file save in the editor',
+    ])
+  })
+
+  it('says files were edited when only an agent edited them', () => {
+    expect(storyLines(session([byAgent('code_edit')]))).toEqual(['- Edited files', 'With Claude Code (1 session)'])
+  })
+
   it('says files were edited when that was all', () => {
     expect(storyLines(session([event('code_edit')], { project: 'api', durationMinutes: 10 }))).toEqual([
       '- Edited files',

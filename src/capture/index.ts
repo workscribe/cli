@@ -45,27 +45,6 @@ function withMessageFromFile(
   return { ...rest, message: message ? redact(message, extraRedactions) : null }
 }
 
-/**
- * Repeated edits of a file from the same source within 30 s add their line counts to the first one, so a burst of
- * auto-saves or agent edits is one event that still adds up to the real change. False when the edit is stored anew.
- */
-function mergedIntoRecentEdit(edit: {
-  file: string
-  cwd: string
-  source: string | undefined
-  counts: EditCounts
-  capturedAt: string
-}): boolean {
-  return mergeRecentEdit({
-    filePath: edit.file,
-    cwd: edit.cwd,
-    source: edit.source ?? null,
-    counts: edit.counts,
-    editedAt: edit.capturedAt,
-    windowMs: IDE_DEDUP_WINDOW_MS,
-  })
-}
-
 export function captureCommand(opts: {
   command?: string
   cwd: string
@@ -78,7 +57,7 @@ export function captureCommand(opts: {
   /** A `code_edit`'s line counts; missing means unknown */
   linesAdded?: number | null
   linesRemoved?: number | null
-  /** The agent conversation a hook command ran in; only shell commands from a hook have one */
+  /** The agent conversation a hook event came from — a command or an edit; editor and shell events have none */
   agentSession?: AgentSessionRef
 }): void {
   // Check pause flag before any I/O
@@ -94,13 +73,22 @@ export function captureCommand(opts: {
     const isEdit = opts.type === 'code_edit'
     const counts: EditCounts = { linesAdded: opts.linesAdded ?? null, linesRemoved: opts.linesRemoved ?? null }
     const capturedAt = new Date().toISOString()
-    if (
-      isEdit &&
-      opts.file &&
-      mergedIntoRecentEdit({ file: opts.file, cwd, source: opts.source, counts, capturedAt })
-    ) {
-      return
-    }
+
+    // Repeated edits of a file from the same source and agent session within 30 s add their line counts to the first
+    // one, so a burst of auto-saves or agent edits is one event that still adds up to the real change
+    const repeatableEdit =
+      isEdit && opts.file
+        ? {
+            filePath: opts.file,
+            cwd,
+            source: opts.source ?? null,
+            agentSession: opts.agentSession,
+            counts,
+            editedAt: capturedAt,
+            windowMs: IDE_DEDUP_WINDOW_MS,
+          }
+        : null
+    if (repeatableEdit && mergeRecentEdit(repeatableEdit)) return
 
     // A shell task running in a hooked terminal already got captured with a
     // real category by the shell hook — skip the generic duplicate.
@@ -129,7 +117,13 @@ export function captureCommand(opts: {
       file_path: opts.file ?? null,
     }
     const dimensions = opts.file ? fileEventDimensions(context, opts.file, config) : eventDimensions(context)
-    insertEvent({ ...ideEvent, dimensions, tickets: ticketsOf(ideEvent, dimensions, config) })
+    // Only a hook passes an agent session, so an agent's edit belongs to its conversation and an editor save to none
+    insertEvent({
+      ...ideEvent,
+      dimensions,
+      tickets: ticketsOf(ideEvent, dimensions, config),
+      agentSession: opts.agentSession,
+    })
     return
   }
 

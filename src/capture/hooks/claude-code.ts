@@ -10,6 +10,38 @@ import { buildHookCommand, HOOK_MARKER, isGuardedCommand, isPinnedCommand, pinne
 
 const CLAUDE_SETTINGS_PATH = path.join(os.homedir(), '.claude', 'settings.json')
 
+/** One Workscribe hook entry in Claude Code's settings: the event, what it matches, and how it runs. */
+interface ExpectedHook {
+  event: string
+  /** Tool events only: which tools fire it. Session events take none */
+  matcher?: string
+  /** Doesn't hold Claude Code up. UserPromptSubmit waits, because it can warn about a credential in the prompt */
+  async: boolean
+}
+
+// Edits as well as commands: a finished Bash call, or a file the agent changed (WOR-136). Failures stay Bash-only,
+// because a failed edit changed nothing
+const TOOL_MATCHER = 'Bash|Edit|Write|MultiEdit|NotebookEdit'
+const FAILURE_MATCHER = 'Bash'
+
+const EXPECTED_HOOKS: ExpectedHook[] = [
+  { event: 'PostToolUse', matcher: TOOL_MATCHER, async: true },
+  // Failed Bash calls only fire this one, with the exit code in `error` — PostToolUse alone never sees a failure
+  { event: 'PostToolUseFailure', matcher: FAILURE_MATCHER, async: true },
+  { event: 'UserPromptSubmit', async: false },
+  // How a session ended, and the agent's own recaps when capture.agentMessages is on. An async SessionEnd hook still
+  // runs to the end when Claude Code 2.1.319 exits: see session-end-async.json in
+  // tests/fixtures/agent-hooks/claude-code/2.1.319/
+  { event: 'Stop', async: true },
+  { event: 'PostCompact', async: true },
+  { event: 'SessionEnd', async: true },
+]
+
+/** The `_hook` arguments for an event; PostToolUse is the default, so its command stays as it always was. */
+function hookArgs(event: string): string {
+  return event === 'PostToolUse' ? HOOK_MARKER : `${HOOK_MARKER} --event ${event}`
+}
+
 function readSettings(): Record<string, unknown> {
   if (!fs.existsSync(CLAUDE_SETTINGS_PATH)) return {}
   try {
@@ -19,32 +51,32 @@ function readSettings(): Record<string, unknown> {
   }
 }
 
-function commandsForEvent(hooks: Record<string, unknown>, eventName: string): string[] {
-  const entries = (hooks[eventName] ?? []) as unknown[]
-  const commands: string[] = []
-  for (const entry of entries) {
-    const entryHooks = ((entry as Record<string, unknown>).hooks ?? []) as unknown[]
-    for (const hookItem of entryHooks) {
-      const hook = hookItem as Record<string, unknown>
-      if (typeof hook.command === 'string' && hook.command.includes(HOOK_MARKER)) {
-        commands.push(hook.command)
-      }
-    }
-  }
-  return commands
+/** A Workscribe command in the settings, with the matcher of the entry holding it (undefined when it has none). */
+interface WorkscribeHook {
+  command: string
+  matcher: unknown
 }
 
-function findWorkscribeHookCommands(settings: Record<string, unknown>): {
-  postToolUse: string[]
-  postToolUseFailure: string[]
-  userPromptSubmit: string[]
-} {
+function workscribeHooksForEvent(hooks: Record<string, unknown>, eventName: string): WorkscribeHook[] {
+  const entries = Array.isArray(hooks[eventName]) ? (hooks[eventName] as unknown[]) : []
+  return entries.flatMap((entry) => {
+    const record = entry as Record<string, unknown>
+    const entryHooks = Array.isArray(record.hooks) ? (record.hooks as unknown[]) : []
+    return entryHooks.flatMap((hookItem) => {
+      const command = (hookItem as Record<string, unknown>).command
+      return typeof command === 'string' && command.includes(HOOK_MARKER) ? [{ command, matcher: record.matcher }] : []
+    })
+  })
+}
+
+function commandsForEvent(hooks: Record<string, unknown>, eventName: string): string[] {
+  return workscribeHooksForEvent(hooks, eventName).map((hook) => hook.command)
+}
+
+/** Workscribe's hooks for each event it installs, by event. */
+function findWorkscribeHooks(settings: Record<string, unknown>): Map<string, WorkscribeHook[]> {
   const hooks = (settings.hooks ?? {}) as Record<string, unknown>
-  return {
-    postToolUse: commandsForEvent(hooks, 'PostToolUse'),
-    postToolUseFailure: commandsForEvent(hooks, 'PostToolUseFailure'),
-    userPromptSubmit: commandsForEvent(hooks, 'UserPromptSubmit'),
-  }
+  return new Map(EXPECTED_HOOKS.map(({ event }) => [event, workscribeHooksForEvent(hooks, event)]))
 }
 
 /**
@@ -87,8 +119,7 @@ function isExecutable(filePath: string): boolean {
 }
 
 function allWorkscribeCommands(): string[] {
-  const { postToolUse, postToolUseFailure, userPromptSubmit } = findWorkscribeHookCommands(readSettings())
-  return [...postToolUse, ...postToolUseFailure, ...userPromptSubmit]
+  return [...findWorkscribeHooks(readSettings()).values()].flat().map((hook) => hook.command)
 }
 
 /**
@@ -153,20 +184,24 @@ function hooksWithoutWorkscribe(hooks: Record<string, unknown>): Record<string, 
   return removedAny ? remaining : null
 }
 
+function isCommandCurrent(command: string): boolean {
+  const nodePath = pinnedNodePath(command)
+  return isPinnedCommand(command) && isGuardedCommand(command) && nodePath !== null && isExecutable(nodePath)
+}
+
 /**
- * Both events have a Workscribe hook, and every one is pinned, guarded, and pinned to a Node.js that still exists.
- * The guard keeps a hook whose Node a version manager removed quiet — and so quietly broken — unless `init` sees it.
+ * Every event has a Workscribe hook, a tool event's hooks match the tools they should, and every command is pinned,
+ * guarded, and pinned to a Node.js that still exists. The guard keeps a hook whose Node a version manager removed
+ * quiet — and so quietly broken — unless `init` sees it.
  */
 function isHookCurrent(): boolean {
-  const commandsByEvent = findWorkscribeHookCommands(readSettings())
-  // An install from before the failure hook (WOR-127) is outdated: its commands never record a failing exit code
-  if (Object.values(commandsByEvent).some((commands) => commands.length === 0)) return false
-  return Object.values(commandsByEvent)
-    .flat()
-    .every((command) => {
-      const nodePath = pinnedNodePath(command)
-      return isPinnedCommand(command) && isGuardedCommand(command) && nodePath !== null && isExecutable(nodePath)
-    })
+  const hooksByEvent = findWorkscribeHooks(readSettings())
+  // An install missing an event, or matching only Bash (before WOR-136), is outdated
+  return EXPECTED_HOOKS.every(({ event, matcher }) => {
+    const hooks = hooksByEvent.get(event) ?? []
+    if (hooks.length === 0) return false
+    return hooks.every((hook) => (matcher === undefined || hook.matcher === matcher) && isCommandCurrent(hook.command))
+  })
 }
 
 export const claudeCodeIntegration: AIHookIntegration = {
@@ -185,48 +220,23 @@ export const claudeCodeIntegration: AIHookIntegration = {
   install() {
     const settings = readSettings()
     const existingHooks = (settings.hooks ?? {}) as Record<string, unknown>
-    const existingPostToolUse = withoutWorkscribeEntries((existingHooks.PostToolUse ?? []) as unknown[])
-    const existingPostToolUseFailure = withoutWorkscribeEntries((existingHooks.PostToolUseFailure ?? []) as unknown[])
-    const existingUserPromptSubmit = withoutWorkscribeEntries((existingHooks.UserPromptSubmit ?? []) as unknown[])
-
     const binaryPath = resolveWorkscribeBinary()
     const command = (args: string) => buildHookCommand({ nodePath: process.execPath, binaryPath, args })
 
-    settings.hooks = {
-      ...existingHooks,
-      PostToolUse: [
-        ...existingPostToolUse,
-        {
-          matcher: 'Bash',
-          hooks: [{ type: 'command', command: command(HOOK_MARKER), async: true }],
-        },
-      ],
-      // Failed Bash calls only fire this one, with the exit code in `error` — PostToolUse alone never sees a failure
-      PostToolUseFailure: [
-        ...existingPostToolUseFailure,
-        {
-          matcher: 'Bash',
-          hooks: [{ type: 'command', command: command(`${HOOK_MARKER} --event PostToolUseFailure`), async: true }],
-        },
-      ],
-      UserPromptSubmit: [
-        ...existingUserPromptSubmit,
-        {
-          hooks: [
-            {
-              type: 'command',
-              command: command(`${HOOK_MARKER} --event UserPromptSubmit`),
-            },
-          ],
-        },
-      ],
-    }
+    const workscribeHooks = Object.fromEntries(
+      EXPECTED_HOOKS.map(({ event, matcher, async }) => {
+        const others = withoutWorkscribeEntries((existingHooks[event] ?? []) as unknown[])
+        const hook = { type: 'command', command: command(hookArgs(event)), ...(async ? { async: true } : {}) }
+        return [event, [...others, { ...(matcher === undefined ? {} : { matcher }), hooks: [hook] }]]
+      })
+    )
+    settings.hooks = { ...existingHooks, ...workscribeHooks }
     fs.mkdirSync(path.dirname(CLAUDE_SETTINGS_PATH), { recursive: true })
     fs.writeFileSync(CLAUDE_SETTINGS_PATH, JSON.stringify(settings, null, 2))
   },
 
-  // Some workscribe hook is present, but not all of them are current (pinned and guarded) — including a
-  // half-installed one where only PostToolUse or only UserPromptSubmit exists
+  // Some workscribe hook is present, but not all of them are current (pinned, guarded, matching the right tools) —
+  // including a half-installed one, or one from before an event was added
   isHookOutdated() {
     return allWorkscribeCommands().length > 0 && !isHookCurrent()
   },

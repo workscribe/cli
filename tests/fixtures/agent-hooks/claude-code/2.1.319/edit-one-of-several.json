@@ -1,0 +1,42 @@
+{
+  "session_id": "<session_id>",
+  "transcript_path": "<transcript_path>",
+  "cwd": "/Users/dev/api",
+  "prompt_id": "<uuid>",
+  "permission_mode": "acceptEdits",
+  "effort": {
+    "level": "medium"
+  },
+  "hook_event_name": "PostToolUse",
+  "tool_name": "Edit",
+  "tool_input": {
+    "file_path": "/Users/dev/api/multi.txt",
+    "old_string": "first",
+    "new_string": "FIRST",
+    "replace_all": false
+  },
+  "tool_response": {
+    "filePath": "/Users/dev/api/multi.txt",
+    "oldString": "first",
+    "newString": "FIRST",
+    "originalFile": "first\nsecond\nthird\n",
+    "structuredPatch": [
+      {
+        "oldStart": 1,
+        "oldLines": 3,
+        "newStart": 1,
+        "newLines": 3,
+        "lines": [
+          "-first",
+          "+FIRST",
+          " second",
+          " third"
+        ]
+      }
+    ],
+    "userModified": false,
+    "replaceAll": false
+  },
+  "tool_use_id": "<tool_use_id>",
+  "duration_ms": 3
+}

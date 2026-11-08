@@ -1,0 +1,15 @@
+{
+  "session_id": "<session_id>",
+  "transcript_path": "<transcript_path>",
+  "cwd": "/Users/dev/api",
+  "prompt_id": "<uuid>",
+  "permission_mode": "acceptEdits",
+  "effort": {
+    "level": "medium"
+  },
+  "hook_event_name": "Stop",
+  "stop_hook_active": false,
+  "last_assistant_message": "I made changes 1–6 across `notes.txt`, `repeated.txt`, `multi.txt` (two Edits, since MultiEdit wasn't available), `new.txt`, `existing.txt` and `book.ipynb`, and step 7 failed as expected with no retry.",
+  "background_tasks": [],
+  "session_crons": []
+}

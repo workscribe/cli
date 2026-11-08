@@ -1,0 +1,44 @@
+{
+  "session_id": "<session_id>",
+  "transcript_path": "<transcript_path>",
+  "cwd": "/Users/dev/api",
+  "prompt_id": "<uuid>",
+  "permission_mode": "acceptEdits",
+  "effort": {
+    "level": "medium"
+  },
+  "hook_event_name": "PostToolUse",
+  "tool_name": "Edit",
+  "tool_input": {
+    "file_path": "/Users/dev/api/notes.txt",
+    "old_string": "line two",
+    "new_string": "line 2a\nline 2b",
+    "replace_all": false
+  },
+  "tool_response": {
+    "filePath": "/Users/dev/api/notes.txt",
+    "oldString": "line two",
+    "newString": "line 2a\nline 2b",
+    "originalFile": "line one\nline two\nline three\nline four\n",
+    "structuredPatch": [
+      {
+        "oldStart": 1,
+        "oldLines": 4,
+        "newStart": 1,
+        "newLines": 5,
+        "lines": [
+          " line one",
+          "-line two",
+          "+line 2a",
+          "+line 2b",
+          " line three",
+          " line four"
+        ]
+      }
+    ],
+    "userModified": false,
+    "replaceAll": false
+  },
+  "tool_use_id": "<tool_use_id>",
+  "duration_ms": 2
+}

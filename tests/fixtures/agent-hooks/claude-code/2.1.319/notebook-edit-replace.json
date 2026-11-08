@@ -1,0 +1,32 @@
+{
+  "session_id": "<session_id>",
+  "transcript_path": "<transcript_path>",
+  "cwd": "/Users/dev/api",
+  "prompt_id": "<uuid>",
+  "permission_mode": "acceptEdits",
+  "effort": {
+    "level": "medium"
+  },
+  "hook_event_name": "PostToolUse",
+  "tool_name": "NotebookEdit",
+  "tool_input": {
+    "notebook_path": "/Users/dev/api/book.ipynb",
+    "cell_id": "c1",
+    "new_source": "y = 2",
+    "edit_mode": "replace"
+  },
+  "tool_response": {
+    "new_source": "y = 2",
+    "old_source": "x = 1\nprint(x)",
+    "cell_type": "code",
+    "language": "python",
+    "edit_mode": "replace",
+    "cell_id": "c1",
+    "error": "",
+    "notebook_path": "/Users/dev/api/book.ipynb",
+    "original_file": "{\"cells\":[{\"cell_type\":\"code\",\"execution_count\":null,\"id\":\"c1\",\"metadata\":{},\"outputs\":[],\"source\":[\"x = 1\\n\",\"print(x)\"]}],\"metadata\":{},\"nbformat\":4,\"nbformat_minor\":5}\n",
+    "updated_file": "{\n \"cells\": [\n  {\n   \"cell_type\": \"code\",\n   \"execution_count\": null,\n   \"id\": \"c1\",\n   \"metadata\": {},\n   \"outputs\": [],\n   \"source\": \"y = 2\"\n  }\n ],\n \"metadata\": {},\n \"nbformat\": 4,\n \"nbformat_minor\": 5\n}"
+  },
+  "tool_use_id": "<tool_use_id>",
+  "duration_ms": 1
+}

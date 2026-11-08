@@ -114,4 +114,60 @@ describe('mergeIntoRecentEdit', () => {
     expect(mergeIntoRecentEdit(db, edit())).toBe(true)
     expect(JSON.parse(storedEvents(db)[0].metadata ?? '')).toMatchObject({ linesAdded: 3, linesRemoved: 1 })
   })
+
+  describe('agent sessions', () => {
+    const CONVERSATION = { source: 'claude-code', sessionId: 'conversation-1' }
+
+    function storeSession(db: DatabaseSync, sessionId: string): number {
+      const row = db
+        .prepare(
+          `INSERT INTO agent_sessions (source, session_id, started_at, last_seen_at)
+           VALUES ('claude-code', ?, ?, ?) RETURNING id`
+        )
+        .get(sessionId, FIRST_EDIT_AT, FIRST_EDIT_AT) as { id: number }
+      return row.id
+    }
+
+    function linkLatestEvent(db: DatabaseSync, agentSessionId: number): void {
+      db.prepare('UPDATE events SET agent_session_id = ? WHERE id = (SELECT MAX(id) FROM events)').run(agentSessionId)
+    }
+
+    const agentEdit = (overrides: Partial<RecentEdit> = {}) =>
+      edit({ source: 'claude-code', agentSession: CONVERSATION, ...overrides })
+
+    it("merges an edit into its own conversation's earlier edit, and moves the session's last-seen time", () => {
+      const db = database()
+      storeEvent(db, { source: 'claude-code' })
+      linkLatestEvent(db, storeSession(db, 'conversation-1'))
+
+      expect(mergeIntoRecentEdit(db, agentEdit())).toBe(true)
+      expect(db.prepare('SELECT last_seen_at FROM agent_sessions').get()).toEqual({
+        last_seen_at: '2026-11-07T10:00:20.000Z',
+      })
+    })
+
+    it("never merges into another conversation's edit", () => {
+      const db = database()
+      storeSession(db, 'conversation-1')
+      storeEvent(db, { source: 'claude-code' })
+      linkLatestEvent(db, storeSession(db, 'conversation-2'))
+
+      expect(mergeIntoRecentEdit(db, agentEdit())).toBe(false)
+    })
+
+    it('never merges an edit whose session has no row yet into an unlinked edit', () => {
+      const db = database()
+      storeEvent(db, { source: 'claude-code' })
+
+      expect(mergeIntoRecentEdit(db, agentEdit())).toBe(false)
+    })
+
+    it("never merges an edit without a session into a conversation's edit", () => {
+      const db = database()
+      storeEvent(db, { source: 'claude-code' })
+      linkLatestEvent(db, storeSession(db, 'conversation-1'))
+
+      expect(mergeIntoRecentEdit(db, edit({ source: 'claude-code' }))).toBe(false)
+    })
+  })
 })

@@ -1,0 +1,8 @@
+{
+  "session_id": "<session_id>",
+  "transcript_path": "<transcript_path>",
+  "cwd": "/Users/dev/api",
+  "prompt_id": "<uuid>",
+  "hook_event_name": "SessionEnd",
+  "reason": "other"
+}

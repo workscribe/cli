@@ -186,6 +186,15 @@ describe('describeActivity — work a coding agent did', () => {
     agentSessionId: 1,
   })
 
+  it("leaves an agent's edits out of the editor's saves", () => {
+    const events = [byAgent('code_edit'), byAgent('code_edit'), event('code_edit')]
+
+    expect(describeActivity(session(events))).toEqual([
+      'Worked with Claude Code (1 session)',
+      'Edited files in the IDE (1 save)',
+    ])
+  })
+
   it('counts the sessions of every event, including ones the summary leaves out', () => {
     const events = [
       byAgent('testing'),

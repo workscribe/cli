@@ -1,0 +1,45 @@
+{
+  "session_id": "<session_id>",
+  "transcript_path": "<transcript_path>",
+  "cwd": "/Users/dev/api",
+  "prompt_id": "<uuid>",
+  "permission_mode": "acceptEdits",
+  "effort": {
+    "level": "medium"
+  },
+  "hook_event_name": "PostToolUse",
+  "tool_name": "Edit",
+  "tool_input": {
+    "file_path": "/Users/dev/api/repeated.txt",
+    "old_string": "alpha",
+    "new_string": "omega",
+    "replace_all": true
+  },
+  "tool_response": {
+    "filePath": "/Users/dev/api/repeated.txt",
+    "oldString": "alpha",
+    "newString": "omega",
+    "originalFile": "alpha\nbeta alpha\ngamma\nalpha\n",
+    "structuredPatch": [
+      {
+        "oldStart": 1,
+        "oldLines": 4,
+        "newStart": 1,
+        "newLines": 4,
+        "lines": [
+          "-alpha",
+          "-beta alpha",
+          "+omega",
+          "+beta omega",
+          " gamma",
+          "-alpha",
+          "+omega"
+        ]
+      }
+    ],
+    "userModified": false,
+    "replaceAll": true
+  },
+  "tool_use_id": "<tool_use_id>",
+  "duration_ms": 1
+}

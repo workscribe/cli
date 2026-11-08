@@ -82,7 +82,8 @@ const SETTINGS_WITH_TWO_GUARDED_HOOKS = JSON.stringify({
   },
 })
 
-const SETTINGS_WITH_BOTH_CURRENT_HOOKS = JSON.stringify({
+// What 2.1 to 3.2 installed: Bash commands and their failures only, with no edits or session events (before WOR-136)
+const SETTINGS_FROM_3_2 = JSON.stringify({
   hooks: {
     PostToolUse: [
       { matcher: 'Bash', hooks: [{ type: 'command', command: guarded('_hook --source claude-code'), async: true }] },
@@ -98,6 +99,36 @@ const SETTINGS_WITH_BOTH_CURRENT_HOOKS = JSON.stringify({
     UserPromptSubmit: [
       { hooks: [{ type: 'command', command: guarded('_hook --source claude-code --event UserPromptSubmit') }] },
     ],
+  },
+})
+
+const TOOL_MATCHER = 'Bash|Edit|Write|MultiEdit|NotebookEdit'
+const sessionHook = (event: string) => ({
+  hooks: [{ type: 'command', command: guarded(`_hook --source claude-code --event ${event}`), async: true }],
+})
+
+const SETTINGS_WITH_CURRENT_HOOKS = JSON.stringify({
+  hooks: {
+    PostToolUse: [
+      {
+        matcher: TOOL_MATCHER,
+        hooks: [{ type: 'command', command: guarded('_hook --source claude-code'), async: true }],
+      },
+    ],
+    PostToolUseFailure: [
+      {
+        matcher: 'Bash',
+        hooks: [
+          { type: 'command', command: guarded('_hook --source claude-code --event PostToolUseFailure'), async: true },
+        ],
+      },
+    ],
+    UserPromptSubmit: [
+      { hooks: [{ type: 'command', command: guarded('_hook --source claude-code --event UserPromptSubmit') }] },
+    ],
+    Stop: [sessionHook('Stop')],
+    PostCompact: [sessionHook('PostCompact')],
+    SessionEnd: [sessionHook('SessionEnd')],
   },
 })
 
@@ -161,9 +192,9 @@ describe('claudeCodeIntegration.isHookInstalled', () => {
     expect(claudeCodeIntegration.isHookInstalled()).toBe(false)
   })
 
-  it('returns true when both PostToolUse and UserPromptSubmit commands are present, pinned and guarded', () => {
+  it('returns true when every event has a pinned, guarded hook matching the right tools', () => {
     mockFs.existsSync.mockReturnValue(true)
-    mockFs.readFileSync.mockReturnValue(SETTINGS_WITH_BOTH_CURRENT_HOOKS)
+    mockFs.readFileSync.mockReturnValue(SETTINGS_WITH_CURRENT_HOOKS)
     expect(claudeCodeIntegration.isHookInstalled()).toBe(true)
   })
 
@@ -258,11 +289,12 @@ describe('claudeCodeIntegration.install', () => {
     expect(written.hooks.PostToolUse[0].hooks[0].async).toBe(true)
   })
 
-  it('sets Bash as the matcher', () => {
+  it('matches file edits as well as Bash commands, and failures of Bash only', () => {
     mockFs.existsSync.mockReturnValue(false)
     claudeCodeIntegration.install()
     const written = JSON.parse(mockFs.writeFileSync.mock.calls[0][1] as string)
-    expect(written.hooks.PostToolUse[0].matcher).toBe('Bash')
+    expect(written.hooks.PostToolUse[0].matcher).toBe(TOOL_MATCHER)
+    expect(written.hooks.PostToolUseFailure[0].matcher).toBe('Bash')
   })
 })
 
@@ -316,13 +348,13 @@ describe('checkHookHealth', () => {
 describe('checkHookHealth — guarded hooks (WOR-120)', () => {
   it('reports a current hook as pinned and guarded', () => {
     mockFs.existsSync.mockReturnValue(true)
-    mockFs.readFileSync.mockReturnValue(SETTINGS_WITH_BOTH_CURRENT_HOOKS)
+    mockFs.readFileSync.mockReturnValue(SETTINGS_WITH_CURRENT_HOOKS)
     expect(checkHookHealth()).toMatchObject({ installed: true, pinned: true, guarded: true, nodeMissing: false })
   })
 
   it('reports when the pinned Node.js is gone — the guard keeps the hook quiet, so status has to say it', () => {
     mockFs.existsSync.mockReturnValue(true)
-    mockFs.readFileSync.mockReturnValue(SETTINGS_WITH_BOTH_CURRENT_HOOKS)
+    mockFs.readFileSync.mockReturnValue(SETTINGS_WITH_CURRENT_HOOKS)
     mockFs.accessSync.mockImplementation(() => {
       throw new Error('ENOENT')
     })
@@ -335,7 +367,8 @@ describe('claudeCodeIntegration.isHookOutdated', () => {
     ['pinned but unguarded hooks from ≤ 2.0.0', SETTINGS_WITH_BOTH_PINNED_HOOKS, true],
     ['bare hooks', SETTINGS_WITH_BOTH_BARE_HOOKS, true],
     ['a half-installed hook (PostToolUse only)', SETTINGS_WITH_POST_TOOL_ONLY, true],
-    ['current hooks', SETTINGS_WITH_BOTH_CURRENT_HOOKS, false],
+    ['current hooks', SETTINGS_WITH_CURRENT_HOOKS, false],
+    ['hooks from 3.2, matching Bash only and missing the session events', SETTINGS_FROM_3_2, true],
     ['no workscribe hook at all', SETTINGS_WITHOUT_HOOK, false],
   ])('%s → %s', (_name, settings, expected) => {
     mockFs.existsSync.mockReturnValue(true)
@@ -347,7 +380,7 @@ describe('claudeCodeIntegration.isHookOutdated', () => {
 describe('a current hook pinned to a Node.js that has since been removed', () => {
   it('is outdated, not installed — so init offers to repair it instead of saying "already installed"', () => {
     mockFs.existsSync.mockReturnValue(true)
-    mockFs.readFileSync.mockReturnValue(SETTINGS_WITH_BOTH_CURRENT_HOOKS)
+    mockFs.readFileSync.mockReturnValue(SETTINGS_WITH_CURRENT_HOOKS)
     mockFs.accessSync.mockImplementation(() => {
       throw new Error('ENOENT')
     })
@@ -366,7 +399,7 @@ describe('claudeCodeIntegration.uninstall', () => {
       JSON.stringify({
         model: 'opus',
         hooks: {
-          ...JSON.parse(SETTINGS_WITH_BOTH_CURRENT_HOOKS).hooks,
+          ...JSON.parse(SETTINGS_WITH_CURRENT_HOOKS).hooks,
           Stop: [{ hooks: [{ type: 'command', command: 'echo done' }] }],
         },
       })
@@ -438,7 +471,7 @@ describe('claudeCodeIntegration — the failure hook (WOR-127)', () => {
 
   it('never duplicates it when installed again', () => {
     mockFs.existsSync.mockReturnValue(true)
-    mockFs.readFileSync.mockReturnValue(SETTINGS_WITH_BOTH_CURRENT_HOOKS)
+    mockFs.readFileSync.mockReturnValue(SETTINGS_WITH_CURRENT_HOOKS)
 
     claudeCodeIntegration.install()
 
@@ -455,9 +488,66 @@ describe('claudeCodeIntegration — the failure hook (WOR-127)', () => {
 
   it('removes it on uninstall along with the others', () => {
     mockFs.existsSync.mockReturnValue(true)
-    mockFs.readFileSync.mockReturnValue(SETTINGS_WITH_BOTH_CURRENT_HOOKS)
+    mockFs.readFileSync.mockReturnValue(SETTINGS_WITH_CURRENT_HOOKS)
 
     expect(claudeCodeIntegration.uninstall?.()).toBe('removed')
     expect(writtenSettings()).toEqual({})
+  })
+})
+
+describe('claudeCodeIntegration — agent edits and sessions (WOR-136)', () => {
+  const SESSION_EVENTS = ['Stop', 'PostCompact', 'SessionEnd']
+
+  function installedHooks(): Record<string, { matcher?: string; hooks: { command: string; async?: boolean }[] }[]> {
+    claudeCodeIntegration.install()
+    return JSON.parse(mockFs.writeFileSync.mock.calls.at(-1)?.[1] as string).hooks
+  }
+
+  it('installs the session events, async and with no matcher, each naming its event', () => {
+    mockFs.existsSync.mockReturnValue(false)
+    const hooks = installedHooks()
+
+    for (const event of SESSION_EVENTS) {
+      expect(hooks[event]).toEqual([
+        { hooks: [{ type: 'command', command: guarded(`_hook --source claude-code --event ${event}`), async: true }] },
+      ])
+    }
+  })
+
+  it('writes what it then counts as current', () => {
+    mockFs.existsSync.mockReturnValue(false)
+    const hooks = installedHooks()
+    mockFs.existsSync.mockReturnValue(true)
+    mockFs.readFileSync.mockReturnValue(JSON.stringify({ hooks }))
+
+    expect(claudeCodeIntegration.isHookInstalled()).toBe(true)
+    expect(claudeCodeIntegration.isHookOutdated?.()).toBe(false)
+  })
+
+  it('updates a 3.2 install in place, never duplicating an entry', () => {
+    mockFs.existsSync.mockReturnValue(true)
+    mockFs.readFileSync.mockReturnValue(SETTINGS_FROM_3_2)
+    const hooks = installedHooks()
+
+    for (const entries of Object.values(hooks)) expect(entries).toHaveLength(1)
+    expect(hooks.PostToolUse[0].matcher).toBe(TOOL_MATCHER)
+  })
+
+  it('counts a hook whose matcher was edited back to Bash as outdated', () => {
+    const settings = JSON.parse(SETTINGS_WITH_CURRENT_HOOKS)
+    settings.hooks.PostToolUse[0].matcher = 'Bash'
+    mockFs.existsSync.mockReturnValue(true)
+    mockFs.readFileSync.mockReturnValue(JSON.stringify(settings))
+
+    expect(claudeCodeIntegration.isHookOutdated?.()).toBe(true)
+  })
+
+  it('removes the session events on uninstall', () => {
+    mockFs.existsSync.mockReturnValue(true)
+    mockFs.readFileSync.mockReturnValue(SETTINGS_WITH_CURRENT_HOOKS)
+
+    expect(claudeCodeIntegration.uninstall?.()).toBe('removed')
+    const written = JSON.parse(mockFs.writeFileSync.mock.calls.at(-1)?.[1] as string)
+    expect(written).not.toHaveProperty('hooks')
   })
 })
