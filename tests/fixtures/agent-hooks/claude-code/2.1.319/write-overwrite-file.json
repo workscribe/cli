@@ -1,0 +1,38 @@
+{
+  "session_id": "<session_id>",
+  "transcript_path": "<transcript_path>",
+  "cwd": "/Users/dev/api",
+  "prompt_id": "<uuid>",
+  "permission_mode": "acceptEdits",
+  "effort": {
+    "level": "medium"
+  },
+  "hook_event_name": "PostToolUse",
+  "tool_name": "Write",
+  "tool_input": {
+    "file_path": "/Users/dev/api/existing.txt",
+    "content": "replaced\n"
+  },
+  "tool_response": {
+    "type": "update",
+    "filePath": "/Users/dev/api/existing.txt",
+    "content": "replaced\n",
+    "structuredPatch": [
+      {
+        "oldStart": 1,
+        "oldLines": 2,
+        "newStart": 1,
+        "newLines": 1,
+        "lines": [
+          "-old content",
+          "-second line",
+          "+replaced"
+        ]
+      }
+    ],
+    "originalFile": "old content\nsecond line\n",
+    "userModified": false
+  },
+  "tool_use_id": "<tool_use_id>",
+  "duration_ms": 5
+}

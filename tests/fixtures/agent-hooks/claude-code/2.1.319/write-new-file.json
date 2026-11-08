@@ -1,0 +1,26 @@
+{
+  "session_id": "<session_id>",
+  "transcript_path": "<transcript_path>",
+  "cwd": "/Users/dev/api",
+  "prompt_id": "<uuid>",
+  "permission_mode": "acceptEdits",
+  "effort": {
+    "level": "medium"
+  },
+  "hook_event_name": "PostToolUse",
+  "tool_name": "Write",
+  "tool_input": {
+    "file_path": "/Users/dev/api/new.txt",
+    "content": "one\ntwo\nthree\n"
+  },
+  "tool_response": {
+    "type": "create",
+    "filePath": "/Users/dev/api/new.txt",
+    "content": "one\ntwo\nthree\n",
+    "structuredPatch": [],
+    "originalFile": null,
+    "userModified": false
+  },
+  "tool_use_id": "<tool_use_id>",
+  "duration_ms": 1
+}

@@ -9,6 +9,7 @@ Last run: 2026-11-06, on macOS, with shell hook v2 and the zsh hook installed.
 
 | Agent and surface | Status | Fixtures |
 |---|---|---|
+| Claude Code: edits and session events | Measured on 2.1.319 | `claude-code/2.1.319/` |
 | Antigravity CLI (`agy`) | Measured on 1.5.0 | `antigravity/1.5.0/` |
 | Antigravity IDE and 2.0 | Not run: not installed | None |
 | Copilot in VS Code | Measured on built-in `copilot-chat` 0.57.0, VS Code 1.129.0 | `copilot-vscode/0.57.0/` |
@@ -88,6 +89,22 @@ Last run: 2026-11-06, on macOS, with shell hook v2 and the zsh hook installed.
   time, so the cause is unknown. The merge can't assume a save follows its edit at once.
 - **Worth knowing:** a pending Workscribe alert is printed by the shell hook into the terminal, so it reached the agent in
   `tool_response` on every command.
+
+## Claude Code 2.1.319: edits and session events
+
+Bash payloads are in `tests/fixtures/claude-code-hooks/` (2.1.311, WOR-127). This run, with `claude -p
+--setting-sources project` so only the scratch project's recorder hooks fired, covers the rest (WOR-136).
+
+| Question | Measured |
+|---|---|
+| Edit tools | `Edit` (including `replace_all`), `Write` and `NotebookEdit`. **No `MultiEdit`**: asked for one, the agent reported it wasn't available and used two `Edit` calls |
+| Line counts | `Edit` and `Write` send `tool_response.structuredPatch`, unified-diff hunks whose `+`/`-` lines give exact counts, a replace-all included. A `Write` of a new file sends `type: "create"` and an empty patch, so its lines come from `content`. `NotebookEdit` sends the cell's `old_source` and `new_source`, and no patch |
+| Text to never store | `old_string`, `new_string`, `content`, `originalFile`, the patch's lines, and the notebook's `original_file`/`updated_file` |
+| Failed edit | An `Edit` whose text wasn't found fired neither `PostToolUse` nor `PostToolUseFailure` |
+| `Stop` | `last_assistant_message`, the turn's final reply, plus `stop_hook_active`, `background_tasks` and `session_crons` |
+| `PostCompact` | `trigger` (`manual` for `/compact`) and `compact_summary`, about 3,000 characters with `<analysis>` and `<summary>` blocks. Recorded by resuming the session with `claude -p --resume <id> "/compact"` |
+| `SessionEnd` | `reason`: `other` for both `-p` runs. An async `SessionEnd` hook that slept 2 s before recording still wrote its recording, about 2 s after the synchronous one, so it ran to the end. Interactive exits weren't tried |
+| Session id | `session_id`, the same on edits, `Stop`, `PostCompact` and `SessionEnd`, and kept by `--resume` |
 
 ## Summary for later tickets
 
