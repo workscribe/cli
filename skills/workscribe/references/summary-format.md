@@ -22,7 +22,7 @@ Up to **7**, each starting with `- `, most important first:
 3. Test and build outcomes: "Resolved failing tests (now passing)", "Build still failing" — only when `exitCode` shows it; `null` exit codes are unknown, not failures
 4. Dependencies added or removed, releases and deploys, pushes — when they matter
 
-Write outcomes in plain past tense ("Fixed…", "Added…", "Shipped…"). Fold routine steps (installing, pushing, re-running) into the outcome they served. Never list commands, file names or the AI tool used. If several commits are steps toward one change, describe the change once.
+Write outcomes in plain past tense ("Fixed…", "Added…", "Shipped…"). Fold routine steps (installing, pushing, re-running) into the outcome they served. Never list commands or file names. If several commits are steps toward one change, describe the change once.
 
 ## Example
 
