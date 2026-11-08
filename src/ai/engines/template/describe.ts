@@ -88,11 +88,12 @@ export function describeReleases(events: EventPayload[]): string | null {
   return tools.length > 0 ? `Released / deployed (${tools.join(', ')})` : 'Released / deployed'
 }
 
+/** Where the session pushed. A push that failed (rejected, no upstream) pushed nothing. */
 export function describePushes(events: EventPayload[]): string | null {
   const targets = unique(
     eventsOf(events, 'shipping').flatMap((event) => {
       const [remote] = stringsIn([event.metadata.remote])
-      if (!remote) return []
+      if (!remote || isFailedExit(event.exitCode)) return []
       const [branch] = stringsIn([event.metadata.branch])
       return [branch ? `${remote}/${branch}` : remote]
     })

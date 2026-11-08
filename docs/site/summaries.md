@@ -28,7 +28,7 @@ Each section reads as a short story of what you did:
 - **Then the work on each branch**, in the order you worked on them. A session that touched several branches groups each one under a plain `On <branch>:` line; a session on one branch needs none, since the heading names it. Each branch leads with:
   1. its commits: the messages Workscribe captured, plus your commits from `git log` in the session's repo, each placed on the branch you were on when you made it. A `git commit` that failed (rejected by a hook, nothing staged) is never listed.
   2. how tests and builds turned out: "Tests now passing" when they went from failing to passing, "Tests failing" when the last run failed. It says what happened, not how many runs there were.
-  3. dependencies added or removed, then releases and pushes
+  3. dependencies added or removed, then releases and pushes. A push that failed (rejected, or no upstream yet) is never listed.
 - **One closing line for how you worked:** "With Claude Code (2 sessions) · 3 file saves in the editor". It names each coding agent and counts its sessions, not its commands, so anything you copy or send by webhook says which tool you used. Agents without session ids are named with no count, and saves need the VS Code extension.
 
 - **Branch moves, in plain language,** after each branch's work, so you can retrace what you did (or undo it) without remembering the commands:
