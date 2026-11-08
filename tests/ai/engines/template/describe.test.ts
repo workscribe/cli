@@ -4,6 +4,7 @@ import {
   countIncludedEvents,
   describeActivity,
   describeOutcome,
+  describePushes,
 } from '../../../../src/ai/engines/template/describe'
 import { TEST_WORDING } from '../../../../src/ai/engines/template/constants'
 import { event, session } from './fixtures'
@@ -23,6 +24,27 @@ describe('collectCommits', () => {
     ]
 
     expect(collectCommits(events)).toEqual(['fix: token validation', 'add refresh endpoint'])
+  })
+})
+
+describe('describePushes', () => {
+  it('skips a push that failed, which pushed nothing', () => {
+    const events = [
+      event('shipping', { remote: 'origin', branch: null }, 128),
+      event('shipping', { remote: 'origin', branch: 'feat/x' }),
+    ]
+
+    expect(describePushes(events)).toBe('Pushed to origin/feat/x')
+  })
+
+  it('keeps a push whose exit code is unknown', () => {
+    expect(describePushes([event('shipping', { remote: 'origin', branch: 'main' }, null)])).toBe(
+      'Pushed to origin/main'
+    )
+  })
+
+  it('is null when every push failed', () => {
+    expect(describePushes([event('shipping', { remote: 'origin', branch: 'main' }, 1)])).toBeNull()
   })
 })
 
