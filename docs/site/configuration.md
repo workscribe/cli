@@ -42,8 +42,10 @@ The setting applies to activity captured from then on — events already stored 
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `capture.ignore` | string[] | `["cd", "ls", "pwd", …]` | Commands to ignore — matched against the base command of each step. A compound command is ignored only when every step is: `cd app && ls` is dropped, `cd app && npm test` is captured |
-| `capture.aiTools` | boolean | `true` | Set to `false` to disable all AI session capture (shell hook events and PostToolUse hook) |
+| `capture.aiTools` | boolean | `true` | Set to `false` to disable all AI session capture: shell hook events, and everything the Claude Code hook records (commands, edits, how sessions end, recaps) |
 | `capture.includeAiderPrompt` | boolean | `true` | Set to `false` to skip reading Aider's history file for last-prompt context |
+| `capture.agentEdits` | boolean | `true` | Files a coding agent changes, with how many lines it added and removed — never the text. Set to `false` to stop recording them; the agent's commands are still recorded |
+| `capture.agentMessages` | boolean | `false` | Set to `true` to keep the agent's own words: its latest recap of a turn and its latest compaction summary, per session. Redacted, at most 2000 characters each, and dropped whole when they look like they hold a credential. Kept on your machine; nothing shows them yet |
 
 The default ignore list: `cd`, `ls`, `ll`, `la`, `ls -la`, `ls -l`, `ls -a`, `pwd`, `clear`, `exit`, `history`, `man`.
 
@@ -56,6 +58,12 @@ workscribe config set capture.aiTools false
 
 # Stop reading Aider's history file for prompt context
 workscribe config set capture.includeAiderPrompt false
+
+# Stop recording the files coding agents change
+workscribe config set capture.agentEdits false
+
+# Keep the agent's own recaps (off by default)
+workscribe config set capture.agentMessages true
 ```
 
 ---

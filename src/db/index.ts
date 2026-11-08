@@ -11,7 +11,15 @@ import { insertEventRecord, type NewEvent } from './event-writer'
 import { mergeIntoRecentEdit, type RecentEdit } from './edit-merge'
 import { saveAnchoredSummary } from './summary-store'
 import { countOtherEventsSince, countOtherEventTools, sinceIso } from './recent-events'
-import { agentSessionIdsOfDate, agentSessionIdsOfEvents, deleteEmptyAgentSessions } from './agent-sessions'
+import {
+  agentSessionIdsOfDate,
+  agentSessionIdsOfEvents,
+  deleteEmptyAgentSessions,
+  recordAgentMessage,
+  recordAgentSessionEnd,
+  type AgentMessageKind,
+  type AgentSessionRef,
+} from './agent-sessions'
 import { THREAD_ANCHOR_SOURCE, type ThreadAnchor } from '../summary/anchors'
 export type { EventRow } from './types'
 
@@ -56,6 +64,14 @@ export function insertEvent(event: NewEvent): void {
 
 export function mergeRecentEdit(edit: RecentEdit): boolean {
   return mergeIntoRecentEdit(getDb(), edit)
+}
+
+export function recordAgentSessionEnding(session: AgentSessionRef & { endedAt: string; reason: string | null }): void {
+  recordAgentSessionEnd(getDb(), session)
+}
+
+export function recordAgentSessionMessage(message: AgentSessionRef & { kind: AgentMessageKind; text: string }): void {
+  recordAgentMessage(getDb(), message)
 }
 
 export function getLastEvent(): EventRow | undefined {

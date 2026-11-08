@@ -2,7 +2,7 @@
 // shipped and how you moved between branches — and the agent and editor activity in one closing line. Nothing is
 // cut or folded: every commit and every move is told, so the story is a full record you can retrace. Pure.
 import { formatSessionHeading } from '../../../summary/heading'
-import { describeAgents } from './agents'
+import { describeAgents, editorSavesOf } from './agents'
 import { STORY_BUILD_WORDING, STORY_TEST_WORDING } from './constants'
 import {
   describeDependencies,
@@ -79,7 +79,8 @@ function branchBullets(group: BranchGroup): string[] {
  */
 function describeActivityLine(allEvents: EventPayload[], events: EventPayload[]): string | null {
   const agents = describeAgents(allEvents)
-  const saves = eventsOf(events, 'code_edit').length
+  // An agent's edits aren't saves in the editor: they're the agent's work, which the agent part names
+  const saves = editorSavesOf(events).length
   const parts = [
     agents === null ? null : `With ${agents}`,
     saves > 0 ? `${pluralize(saves, 'file save')} in the editor` : null,

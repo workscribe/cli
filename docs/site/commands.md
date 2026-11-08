@@ -252,7 +252,7 @@ Codex and GitHub Copilot read the same folder, so they share one copy.
 - Installed skills aren't updated automatically when you upgrade the CLI — `workscribe status` flags an outdated copy, and `workscribe skill install` (or `workscribe init`) refreshes it.
 
 **Whose activity gets captured:** the skill works the same in every agent — it summarizes whatever Workscribe captured — but how much of the agent's own work is captured differs:
-- **Claude Code**: its commands are captured through the Claude Code session hook (`workscribe init` offers it), with each command's exit code — so summaries can say whether the tests and builds it ran passed. A hook installed by an earlier version doesn't capture failed commands at all; `workscribe init` offers to update it.
+- **Claude Code**: its commands are captured through the Claude Code session hook (`workscribe init` offers it), with each command's exit code — so summaries can say whether the tests and builds it ran passed. The hook also records the files it edits, with line counts, and when each conversation ended; its recaps only with [`capture.agentMessages`](/configuration#capture). A hook installed by Workscribe 3.2 or earlier captures commands only; `workscribe init` offers to update it.
 - **GitHub Copilot and Cursor**: their agents run commands in the VS Code or Cursor integrated terminal, so the shell hook most likely captures them.
 - **Codex**: it runs commands in its own process, so only launching `codex` is recorded.
 
@@ -493,7 +493,7 @@ workscribe context --file src/auth.ts --json
 
 **Without `--file`:** shows the current git repo's latest thread — date, duration, branch, event count, and its summary: one the agent skill saved for it, one an AI provider wrote in 1.x, or else the template. The repo is the project capture links its events to, so changing `projects` or `git.qualifyRepoName` doesn't lose its history.
 
-**With `--file`:** narrows to the thread holding the latest save of that path in your editor. This is what powers the [VS Code extension](https://marketplace.visualstudio.com/items?itemName=workscribe.workscribe)'s status bar "last worked on" indicator — surfacing "3 days ago" when you switch to a file you haven't touched recently. Neovim and other editor integrations aren't built yet.
+**With `--file`:** narrows to the thread holding the latest change to that file, a save in your editor or an edit by a coding agent such as Claude Code. This is what powers the [VS Code extension](https://marketplace.visualstudio.com/items?itemName=workscribe.workscribe)'s status bar "last worked on" indicator — surfacing "3 days ago" when you switch to a file you haven't touched recently. Neovim and other editor integrations aren't built yet.
 
 It finds today's work too, without running `workscribe summary` first: if the day hasn't been grouped since its latest activity, `context` groups it. It answers within a couple of seconds even when another Workscribe command is busy with the database, or git is slow — at worst from the day as it was last grouped, or without the file's commits.
 

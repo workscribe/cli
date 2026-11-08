@@ -428,18 +428,25 @@ describe('captureCommand — agent sessions', () => {
     expect(mockInsertEvent).toHaveBeenCalledWith(expect.objectContaining({ agentSession: undefined }))
   })
 
-  it('never links an editor event to one, even when given one', () => {
+  it("links an agent's edit to its session, and passes it to the merge", () => {
     captureCommand({
       cwd: '/repo',
       exitCode: null,
       durationMs: null,
       type: 'code_edit',
       file: '/repo/src/a.ts',
+      source: 'claude-code',
       agentSession: CONVERSATION,
     })
 
-    expect(mockInsertEvent).toHaveBeenCalledOnce()
-    expect(mockInsertEvent.mock.calls[0][0]).not.toHaveProperty('agentSession')
+    expect(mockMergeRecentEdit).toHaveBeenCalledWith(expect.objectContaining({ agentSession: CONVERSATION }))
+    expect(mockInsertEvent).toHaveBeenCalledWith(expect.objectContaining({ agentSession: CONVERSATION }))
+  })
+
+  it('links an editor save to no session', () => {
+    captureCommand({ cwd: '/repo', exitCode: null, durationMs: null, type: 'code_edit', file: '/repo/src/a.ts' })
+
+    expect(mockInsertEvent).toHaveBeenCalledWith(expect.objectContaining({ agentSession: undefined }))
   })
 })
 

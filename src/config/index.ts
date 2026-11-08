@@ -34,6 +34,10 @@ export interface WorkscribeConfig {
     aiTools: boolean
     includeAiderPrompt: boolean
     profiles: string[]
+    // Coding agents' file edits: the path and line counts, never the text. On by default, like editor saves
+    agentEdits: boolean
+    // Coding agents' own recaps and compaction summaries: free text, so off by default; redacted and capped when on
+    agentMessages: boolean
   }
   redact: {
     extra: string[]
@@ -76,6 +80,8 @@ const DEFAULTS: WorkscribeConfig = {
     aiTools: true,
     includeAiderPrompt: true,
     profiles: [],
+    agentEdits: true,
+    agentMessages: false,
   },
   redact: {
     extra: [],

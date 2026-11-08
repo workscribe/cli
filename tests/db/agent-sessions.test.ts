@@ -3,7 +3,13 @@ import { DatabaseSync } from 'node:sqlite'
 import { applyMigrations } from '../../src/db/migrate'
 import { MIGRATIONS } from '../../src/db/migrations'
 import { insertEventRecord, type NewEvent } from '../../src/db/event-writer'
-import { agentSessionIdsOfDate, agentSessionIdsOfEvents, deleteEmptyAgentSessions } from '../../src/db/agent-sessions'
+import {
+  agentSessionIdsOfDate,
+  agentSessionIdsOfEvents,
+  deleteEmptyAgentSessions,
+  recordAgentMessage,
+  recordAgentSessionEnd,
+} from '../../src/db/agent-sessions'
 
 // Migration 006 normalises stored events using the user's config — keep it off the real one
 vi.mock('../../src/config', () => ({ readConfig: vi.fn(() => ({ capture: { aiTools: true } })) }))
@@ -141,6 +147,75 @@ describe('agent sessions', () => {
     expect((sessions(db) as { session_id: string }[]).map((row) => row.session_id)).toEqual([
       'conversation-2',
       'no-events-yet',
+    ])
+  })
+})
+
+describe('how agent sessions end, and their messages', () => {
+  const endings = (db: DatabaseSync) =>
+    db.prepare('SELECT session_id, ended_at, end_reason, recap, compact_summary FROM agent_sessions').all()
+
+  it('records when and why a session ended', () => {
+    const db = database()
+    insertEventRecord(db, event({ agentSession: CONVERSATION }))
+
+    recordAgentSessionEnd(db, { ...CONVERSATION, endedAt: '2026-10-31T09:30:00.000Z', reason: 'other' })
+
+    expect(endings(db)).toEqual([
+      expect.objectContaining({ ended_at: '2026-10-31T09:30:00.000Z', end_reason: 'other' }),
+    ])
+  })
+
+  it('keeps the latest recap and compaction summary apart', () => {
+    const db = database()
+    insertEventRecord(db, event({ agentSession: CONVERSATION }))
+
+    recordAgentMessage(db, { ...CONVERSATION, kind: 'recap', text: 'first' })
+    recordAgentMessage(db, { ...CONVERSATION, kind: 'recap', text: 'latest' })
+    recordAgentMessage(db, { ...CONVERSATION, kind: 'compactSummary', text: 'summary' })
+
+    expect(endings(db)).toEqual([expect.objectContaining({ recap: 'latest', compact_summary: 'summary' })])
+  })
+
+  it('creates no session for a conversation that captured nothing', () => {
+    const db = database()
+
+    recordAgentSessionEnd(db, { ...CONVERSATION, endedAt: '2026-10-31T09:30:00.000Z', reason: 'other' })
+    recordAgentMessage(db, { ...CONVERSATION, kind: 'recap', text: 'nothing captured' })
+
+    expect(endings(db)).toEqual([])
+  })
+
+  it('is no longer ended once the conversation is resumed', () => {
+    const db = database()
+    insertEventRecord(db, event({ agentSession: CONVERSATION }))
+    recordAgentSessionEnd(db, { ...CONVERSATION, endedAt: '2026-10-31T09:30:00.000Z', reason: 'other' })
+
+    insertEventRecord(db, event({ captured_at: '2026-10-31T11:00:00.000Z', agentSession: CONVERSATION }))
+
+    expect(endings(db)).toEqual([expect.objectContaining({ ended_at: null, end_reason: null })])
+  })
+
+  it('stays ended for an event from before it ended that arrives late', () => {
+    const db = database()
+    insertEventRecord(db, event({ agentSession: CONVERSATION }))
+    recordAgentSessionEnd(db, { ...CONVERSATION, endedAt: '2026-10-31T09:30:00.000Z', reason: 'other' })
+
+    insertEventRecord(db, event({ captured_at: '2026-10-31T09:10:00.000Z', agentSession: CONVERSATION }))
+
+    expect(endings(db)).toEqual([expect.objectContaining({ ended_at: '2026-10-31T09:30:00.000Z' })])
+  })
+
+  // An async tool hook fired before SessionEnd can still be stamped a moment after it
+  it('stays ended for a tool event stamped just after the end', () => {
+    const db = database()
+    insertEventRecord(db, event({ agentSession: CONVERSATION }))
+    recordAgentSessionEnd(db, { ...CONVERSATION, endedAt: '2026-10-31T09:30:00.000Z', reason: 'other' })
+
+    insertEventRecord(db, event({ captured_at: '2026-10-31T09:30:02.000Z', agentSession: CONVERSATION }))
+
+    expect(endings(db)).toEqual([
+      expect.objectContaining({ ended_at: '2026-10-31T09:30:00.000Z', end_reason: 'other' }),
     ])
   })
 })

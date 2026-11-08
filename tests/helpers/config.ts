@@ -14,6 +14,8 @@ export function createTestConfig(overrides: Partial<WorkscribeConfig> = {}): Wor
       aiTools: true,
       includeAiderPrompt: true,
       profiles: [],
+      agentEdits: true,
+      agentMessages: false,
     },
     redact: { extra: [] },
     summary: { format: 'markdown' },

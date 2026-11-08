@@ -1,6 +1,6 @@
 import { isFailedExit } from '../../../summary/commits'
 import { buildExcludedSet } from '../../../summary/exclusions'
-import { describeAgents } from './agents'
+import { describeAgents, editorSavesOf } from './agents'
 import { BUILD_WORDING, MAX_COMMIT_BULLETS, MAX_LISTED_PACKAGES, MAX_SESSION_BULLETS, TEST_WORDING } from './constants'
 import { eventsOf, pluralize, stringsIn, unique } from './utils'
 import type { EventPayload, SessionPayload } from '../../types'
@@ -108,7 +108,7 @@ function describeAgentWork(events: EventPayload[]): string | null {
 }
 
 function describeEdits(events: EventPayload[]): string | null {
-  const saves = eventsOf(events, 'code_edit').length
+  const saves = editorSavesOf(events).length
   return saves > 0 ? `Edited files in the IDE (${pluralize(saves, 'save')})` : null
 }
 
