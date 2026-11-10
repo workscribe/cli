@@ -12,6 +12,11 @@ export function isAgentEvent(event: Pick<EventPayload, 'source'>): boolean {
   return event.source !== undefined && AGENT_NAMES.has(event.source)
 }
 
+/** The display name of the coding agent behind a hook source (`claude-code` → "Claude Code"), or null for a non-agent. */
+export function agentNameOf(source: string | undefined): string | null {
+  return (source !== undefined && AGENT_NAMES.get(source)) || null
+}
+
 /** The file saves a person made in their editor — `code_edit` events no coding agent made. */
 export function editorSavesOf(events: EventPayload[]): EventPayload[] {
   return events.filter((event) => event.category === 'code_edit' && !isAgentEvent(event))
@@ -22,14 +27,27 @@ function joinNames(names: string[]): string {
   return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
 }
 
-/**
- * "Claude Code (2 sessions)", "Claude Code and Cursor (3 sessions)", or null when no agent worked on these events. The
- * count is the distinct sessions: an event with no session id adds nothing, and with none at all there's no count.
- */
-export function describeAgents(events: EventPayload[]): string | null {
+export interface AgentWork {
+  /** "Claude Code", "Claude Code and Cursor" */
+  names: string
+  /** The distinct agent sessions: an event with no session id adds nothing */
+  sessionIds: Set<number>
+}
+
+/** The coding agents that worked on these events, or null when none did. */
+export function agentWorkOf(events: EventPayload[]): AgentWork | null {
   const agentEvents = events.filter(isAgentEvent)
   if (agentEvents.length === 0) return null
-  const names = [...new Set(agentEvents.map((event) => AGENT_NAMES.get(event.source as string) as string))]
-  const sessionIds = new Set(agentEvents.flatMap((event) => event.agentSessionId ?? []))
-  return sessionIds.size > 0 ? `${joinNames(names)} (${pluralize(sessionIds.size, 'session')})` : joinNames(names)
+  const names = [...new Set(agentEvents.flatMap((event) => agentNameOf(event.source) ?? []))]
+  return { names: joinNames(names), sessionIds: new Set(agentEvents.flatMap((event) => event.agentSessionId ?? [])) }
+}
+
+/**
+ * "Claude Code (2 sessions)", "Claude Code and Cursor (3 sessions)", or null when no agent worked on these events. The
+ * count is the distinct sessions: with no session id at all there's no count.
+ */
+export function describeAgents(events: EventPayload[]): string | null {
+  const work = agentWorkOf(events)
+  if (work === null) return null
+  return work.sessionIds.size > 0 ? `${work.names} (${pluralize(work.sessionIds.size, 'session')})` : work.names
 }

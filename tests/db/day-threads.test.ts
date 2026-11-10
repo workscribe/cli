@@ -74,10 +74,13 @@ describe('readDayThreads', () => {
     ])
     expect(block.threads[0].agentSessions).toEqual([
       {
+        id: expect.any(Number),
         source: 'claude-code',
         sessionId: 'abc-123',
         startedAt: '2026-10-28T12:09:00.000Z',
         lastSeenAt: '2026-10-28T12:09:00.000Z',
+        endedAt: null,
+        recap: null,
       },
     ])
     expect(block.threads[1].agentSessions).toEqual([])

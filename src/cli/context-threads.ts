@@ -6,6 +6,7 @@ import type { EventRow } from '../db/types'
 import { isDatabaseLocked, withReadTransaction } from '../db/transaction'
 import { getThreadEvents, readBlockHoldingEvent } from '../db/thread-store'
 import { isReadyForThreads } from '../db/day-threads'
+import { getAgentSessionsOfEvents, type AgentSessionInfo } from '../db/agent-sessions'
 import {
   findLatestFileSave,
   findLatestProjectEvent,
@@ -25,6 +26,8 @@ export interface ThreadAnswer {
   context: ThreadContext
   /** The thread's events, for the template summary and the file details */
   events: EventRow[]
+  /** The agent conversations those events came from, with their recaps */
+  agentSessions: AgentSessionInfo[]
 }
 
 /** The thread holding the event, from one snapshot — so another process rebuilding the day can't split the read. */
@@ -50,7 +53,11 @@ function readBuiltThread(eventId: number): ThreadAnswer | null {
         holding.events.map((blockEvent) => blockEvent.id)
       ),
     })
-    return { threadId: thread.id, context, events }
+    const agentSessions = getAgentSessionsOfEvents(
+      db,
+      events.map((event) => event.id)
+    )
+    return { threadId: thread.id, context, events, agentSessions }
   })
 }
 

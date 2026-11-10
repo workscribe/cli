@@ -1,6 +1,7 @@
 import { isFailedExit } from '../../../summary/commits'
 import { buildExcludedSet } from '../../../summary/exclusions'
 import { describeAgents, editorSavesOf } from './agents'
+import { describeChangedFiles } from './changes'
 import { BUILD_WORDING, MAX_COMMIT_BULLETS, MAX_LISTED_PACKAGES, MAX_SESSION_BULLETS, TEST_WORDING } from './constants'
 import { eventsOf, pluralize, stringsIn, unique } from './utils'
 import type { EventPayload, SessionPayload } from '../../types'
@@ -101,15 +102,16 @@ export function describePushes(events: EventPayload[]): string | null {
   return targets.length > 0 ? `Pushed to ${targets.join(', ')}` : null
 }
 
+/** The files changed, or — for edits stored before their file was kept — how many saves the editor made. */
+function describeEdits(events: EventPayload[]): string | null {
+  const saves = editorSavesOf(events).length
+  return describeChangedFiles(events) ?? (saves > 0 ? `Edited files in the IDE (${pluralize(saves, 'save')})` : null)
+}
+
 /** The coding agents in the session — read from all its events, including ones the summary leaves out. */
 function describeAgentWork(events: EventPayload[]): string | null {
   const agents = describeAgents(events)
   return agents === null ? null : `Worked with ${agents}`
-}
-
-function describeEdits(events: EventPayload[]): string | null {
-  const saves = editorSavesOf(events).length
-  return saves > 0 ? `Edited files in the IDE (${pluralize(saves, 'save')})` : null
 }
 
 /** Notes are always kept; everything else follows the same exclusions as the AI payload. */

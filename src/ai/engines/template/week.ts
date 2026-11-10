@@ -77,6 +77,10 @@ function distinctCommits(commits: BranchGroup['commits']): BranchGroup['commits'
   })
 }
 
+function distinctAgentSessions(sessions: BranchGroup['agentSessions']): BranchGroup['agentSessions'] {
+  return [...new Map(sessions.map((session) => [session.id, session])).values()]
+}
+
 /** A thread's branch group merged into what the week has for that branch so far. */
 function mergeBranch(existing: BranchAccumulator | undefined, group: BranchGroup, date: string): BranchAccumulator {
   const dates = new Set(group.events.map((event) => localDateOf(event.capturedAt)))
@@ -88,6 +92,7 @@ function mergeBranch(existing: BranchAccumulator | undefined, group: BranchGroup
       events: [...existing.group.events, ...group.events],
       commits: distinctCommits([...existing.group.commits, ...group.commits]),
       moves: [...existing.group.moves, ...group.moves],
+      agentSessions: distinctAgentSessions([...existing.group.agentSessions, ...group.agentSessions]),
     },
     dates: new Set([...existing.dates, ...dates]),
   }

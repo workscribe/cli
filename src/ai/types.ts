@@ -7,6 +7,8 @@ export interface EventPayload {
   hint?: string
   /** Who captured the event (e.g. `claude-code` for a command a coding agent ran) — absent for plain shell commands. */
   source?: string
+  /** The file a `code_edit` changed. Local only: the story counts files by it and never prints it. */
+  filePath?: string
   /** The agent session the event belongs to (`agent_sessions.id`, so only meaningful within one database), if any */
   agentSessionId?: number
   exitCode: number | null
@@ -16,6 +18,14 @@ export interface EventPayload {
   capturedAt: string
   /** Branch-moving git work the command did (a branch created, a stash, a rebase, a discard) — only when it succeeded */
   gitMoves?: GitMove[]
+}
+
+/** An agent conversation a session's events came from; `recap` is null unless one is stored and shown. */
+export interface AgentSessionPayload {
+  id: number
+  source: string
+  lastSeenAt: string
+  recap: string | null
 }
 
 export interface SessionPayload {
@@ -34,6 +44,8 @@ export interface SessionPayload {
   /** For a thread: its project's id, so the week groups projects by identity; null outside any project */
   projectId?: number | null
   events: EventPayload[]
+  /** The agent conversations its events came from (ids match `EventPayload.agentSessionId`) */
+  agentSessions?: AgentSessionPayload[]
   /** The session's commits, each under the branch it was made on — captured ones, plus git's when it was asked */
   commits: StoryCommit[]
 }

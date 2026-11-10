@@ -2,7 +2,9 @@
 // shipped and how you moved between branches — and the agent and editor activity in one closing line. Nothing is
 // cut or folded: every commit and every move is told, so the story is a full record you can retrace. Pure.
 import { formatSessionHeading } from '../../../summary/heading'
-import { describeAgents, editorSavesOf } from './agents'
+import { agentWorkOf, editorSavesOf, isAgentEvent } from './agents'
+import { changedFilesOf, describeChangedFiles } from './changes'
+import { latestRecapOf, shortRecap } from './recap'
 import { STORY_BUILD_WORDING, STORY_TEST_WORDING } from './constants'
 import {
   describeDependencies,
@@ -14,7 +16,7 @@ import {
 } from './describe'
 import { describeBranchMoves } from './branch-moves'
 import { eventsOf, pluralize, toBulletList } from './utils'
-import type { EventPayload, SessionPayload } from '../../types'
+import type { AgentSessionPayload, EventPayload, SessionPayload } from '../../types'
 import type { StoryCommit } from '../../../summary/story-commits'
 import type { OutcomeWording } from './types'
 
@@ -25,11 +27,19 @@ export interface BranchGroup {
   commits: StoryCommit[]
   /** Branch moves (a branch created, a stash moved, a rebase, a discard) that happened on this branch */
   moves: string[]
+  /** The agent conversations this branch's events came from, with their recaps */
+  agentSessions: AgentSessionPayload[]
 }
 
 interface BranchBullets {
   branch: string | null
   bullets: string[]
+}
+
+/** The session's agent conversations that these events came from. */
+function agentSessionsOf(session: SessionPayload, events: EventPayload[]): AgentSessionPayload[] {
+  const ids = new Set(events.flatMap((event) => event.agentSessionId ?? []))
+  return (session.agentSessions ?? []).filter((agentSession) => ids.has(agentSession.id))
 }
 
 /**
@@ -40,7 +50,7 @@ interface BranchBullets {
 function groupByBranch(session: SessionPayload, events: EventPayload[]): BranchGroup[] {
   const order = session.branches.length > 0 ? session.branches : [null]
   const groups = new Map<string | null, BranchGroup>(
-    order.map((branch) => [branch, { branch, events: [], commits: [], moves: [] }])
+    order.map((branch) => [branch, { branch, events: [], commits: [], moves: [], agentSessions: [] }])
   )
   const groupOf = (branch: string | null): BranchGroup | undefined =>
     groups.get(branch !== null && groups.has(branch) ? branch : order[0])
@@ -49,6 +59,7 @@ function groupByBranch(session: SessionPayload, events: EventPayload[]): BranchG
     if (event.branch !== null && groups.has(event.branch)) current = event.branch
     groups.get(current)?.events.push(event)
   }
+  for (const group of groups.values()) group.agentSessions = agentSessionsOf(session, group.events)
   for (const commit of session.commits) groupOf(commit.branch)?.commits.push(commit)
   for (const move of describeBranchMoves(session.events)) groupOf(move.branch)?.moves.push(move.line)
   return [...groups.values()]
@@ -64,6 +75,7 @@ function describeResult(events: EventPayload[], wording: OutcomeWording): string
 function branchBullets(group: BranchGroup): string[] {
   return [
     ...group.commits.map((commit) => `Committed: ${commit.subject}`),
+    describeChangedFiles(group.events),
     describeResult(group.events, STORY_TEST_WORDING),
     describeResult(group.events, STORY_BUILD_WORDING),
     ...describeDependencies(group.events, { withRunCount: false }),
@@ -74,15 +86,33 @@ function branchBullets(group: BranchGroup): string[] {
 }
 
 /**
- * "With Claude Code (2 sessions) · 3 file saves in the editor" — how, not what, so it comes last. Agents are read from
- * every event (`allEvents`), excluded categories too; saves from the included `events`.
+ * "With Claude Code: added branch-move reading (2 sessions, 14 files changed)" when an agent session left a recap,
+ * else "With Claude Code (2 sessions)". Agents are read from every event (`allEvents`), excluded categories too.
  */
-function describeActivityLine(allEvents: EventPayload[], events: EventPayload[]): string | null {
-  const agents = describeAgents(allEvents)
+function describeAgentPart(allEvents: EventPayload[], agentSessions: AgentSessionPayload[]): string | null {
+  const work = agentWorkOf(allEvents)
+  if (work === null) return null
+  const sessionCount = pluralize(work.sessionIds.size, 'session')
+  const recap = latestRecapOf(agentSessions.filter((agentSession) => work.sessionIds.has(agentSession.id)))
+  if (recap === null) return `With ${work.names}${work.sessionIds.size > 0 ? ` (${sessionCount})` : ''}`
+  const files = changedFilesOf(allEvents.filter(isAgentEvent))?.total.files ?? 0
+  const counts = [
+    work.sessionIds.size > 0 ? sessionCount : null,
+    files > 0 ? `${pluralize(files, 'file')} changed` : null,
+  ].filter((count): count is string => count !== null)
+  return `With ${work.names}: ${shortRecap(recap)}${counts.length > 0 ? ` (${counts.join(', ')})` : ''}`
+}
+
+/** "With Claude Code (2 sessions) · 3 file saves in the editor" — how, not what, so it comes last. */
+function describeActivityLine(
+  allEvents: EventPayload[],
+  events: EventPayload[],
+  agentSessions: AgentSessionPayload[]
+): string | null {
   // An agent's edits aren't saves in the editor: they're the agent's work, which the agent part names
   const saves = editorSavesOf(events).length
   const parts = [
-    agents === null ? null : `With ${agents}`,
+    describeAgentPart(allEvents, agentSessions),
     saves > 0 ? `${pluralize(saves, 'file save')} in the editor` : null,
   ].filter((part): part is string => part !== null)
   return parts.length > 0 ? parts.join(' · ') : null
@@ -109,7 +139,7 @@ export function storyLines(session: SessionPayload, includeCategories: string[] 
   const groups = groupByBranch(session, events)
     .map((group) => ({ branch: group.branch, bullets: branchBullets(group) }))
     .filter((group) => group.bullets.length > 0)
-  const activityLine = describeActivityLine(session.events, events)
+  const activityLine = describeActivityLine(session.events, events, session.agentSessions ?? [])
   const closing = activityLine === null ? [] : [activityLine]
 
   if (notes.length === 0 && groups.length === 0) {
@@ -144,6 +174,6 @@ export function storyOfBranch(
   const events = includedEvents(group.events, includeCategories)
   return {
     bullets: [...describeNotes(events), ...branchBullets({ ...group, events })],
-    activity: describeActivityLine(group.events, events),
+    activity: describeActivityLine(group.events, events, group.agentSessions),
   }
 }
