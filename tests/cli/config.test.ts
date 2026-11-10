@@ -9,10 +9,12 @@ vi.mock('../../src/config', () => ({
 
 vi.mock('../../src/db', () => ({ getDb: vi.fn(() => ({})) }))
 vi.mock('../../src/db/jobs/ticket-refs', () => ({ requestTicketRelink: vi.fn() }))
+vi.mock('../../src/db/agent-sessions', () => ({ clearAgentMessages: vi.fn() }))
 
 import { Command } from 'commander'
 import { readConfig, writeConfig, getConfigValue, setConfigValue } from '../../src/config'
 import { requestTicketRelink } from '../../src/db/jobs/ticket-refs'
+import { clearAgentMessages } from '../../src/db/agent-sessions'
 import { log } from '../../src/utils/logger'
 import { registerConfig } from '../../src/cli/config'
 
@@ -167,6 +169,35 @@ describe('workscribe config', () => {
       ).rejects.toThrow('database is locked')
 
       expect(mockWriteConfig).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('config set capture.agentMessages', () => {
+    const setTo = (value: boolean) => {
+      mockReadConfig.mockReturnValue(BASE_CONFIG)
+      mockSetConfigValue.mockReturnValue({ ...BASE_CONFIG, capture: { agentMessages: value } })
+      return makeProgram().parseAsync(['config', 'set', 'capture.agentMessages', String(value)], { from: 'user' })
+    }
+
+    it('forgets the stored recaps, in the database before config.json, when turned off', async () => {
+      const order: string[] = []
+      vi.mocked(clearAgentMessages).mockImplementationOnce(() => {
+        order.push('database')
+      })
+      mockWriteConfig.mockImplementationOnce(() => {
+        order.push('config')
+      })
+
+      await setTo(false)
+
+      expect(order).toEqual(['database', 'config'])
+    })
+
+    it('keeps them when turned on', async () => {
+      await setTo(true)
+
+      expect(clearAgentMessages).not.toHaveBeenCalled()
+      expect(mockWriteConfig).toHaveBeenCalled()
     })
   })
 })

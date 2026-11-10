@@ -39,6 +39,11 @@ export interface WorkscribeConfig {
     // Coding agents' own recaps and compaction summaries: free text, so off by default; redacted and capped when on
     agentMessages: boolean
   }
+  skill: {
+    // Whether `sessions --json` gives the agent skill the agents' recaps, which are free text. Off by default; it
+    // only matters while capture.agentMessages keeps them
+    includeAgentMessages: boolean
+  }
   redact: {
     extra: string[]
   }
@@ -82,6 +87,9 @@ const DEFAULTS: WorkscribeConfig = {
     profiles: [],
     agentEdits: true,
     agentMessages: false,
+  },
+  skill: {
+    includeAgentMessages: false,
   },
   redact: {
     extra: [],

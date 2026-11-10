@@ -6,8 +6,10 @@ import { log } from '../utils/logger'
 import { getDb } from '../db'
 import { requestTicketRelink } from '../db/jobs/ticket-refs'
 import { ticketPatternProblem } from '../capture/tickets'
+import { clearAgentMessages } from '../db/agent-sessions'
 
 const TICKET_PATTERN_KEY = 'tickets.pattern'
+const AGENT_MESSAGES_KEY = 'capture.agentMessages'
 
 /**
  * Sets the ticket pattern: the database first — the pattern the history is linked with, and a restart of the
@@ -59,6 +61,8 @@ export function registerConfig(program: Command): void {
       }
       const config = readConfig()
       const updated = setConfigValue(config, key, value)
+      // Turning the agent's words off forgets the ones kept. The database first, so a locked one leaves the setting on
+      if (key === AGENT_MESSAGES_KEY && updated.capture.agentMessages === false) clearAgentMessages(getDb())
       writeConfig(updated)
       const isSensitive =
         key.toLowerCase().includes('key') || key.toLowerCase().includes('secret') || key.toLowerCase().includes('token')

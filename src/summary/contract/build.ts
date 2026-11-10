@@ -4,9 +4,13 @@ import { collectNotes, contractEvents } from './utils'
 import { collectCapturedCommits, mergeCommits } from '../commits'
 import { minutesBetween } from '../../sessions/grouper'
 import { toActiveMinutes } from '../../sessions/blocks'
+import { knownCount, sumKnown } from '../../ai/engines/template/changes'
+import { parseMetadata } from '../event-metadata'
 import type { EventRow } from '../../db/types'
+import type { AgentSessionInfo } from '../../db/agent-sessions'
 import type { DayBlock, DayThread } from '../../db/day-threads'
 import type {
+  AgentSessionJson,
   BlockJson,
   EventJson,
   EventsJson,
@@ -30,11 +34,44 @@ export function eventToJson(row: EventRow): EventJson {
   }
 }
 
+/** What the thread's events from one agent conversation add up to: commands, files, lines — never paths. */
+function agentSessionCounts(
+  events: EventRow[]
+): Pick<AgentSessionJson, 'commandCount' | 'filesChanged' | 'linesAdded' | 'linesRemoved'> {
+  const edits = events.filter((event) => event.category === 'code_edit')
+  const sumOf = (field: 'linesAdded' | 'linesRemoved') =>
+    sumKnown(edits.map((edit) => knownCount(parseMetadata(edit.metadata)[field])))
+  return {
+    commandCount: events.length - edits.length,
+    filesChanged: new Set(edits.flatMap((edit) => edit.file_path ?? [])).size,
+    linesAdded: sumOf('linesAdded'),
+    linesRemoved: sumOf('linesRemoved'),
+  }
+}
+
+/** Field by field, so a field added to `AgentSessionInfo` never reaches the contract unasked. */
+function agentSessionToJson(
+  session: AgentSessionInfo,
+  threadEvents: EventRow[],
+  { includeRecap }: { includeRecap: boolean }
+): AgentSessionJson {
+  const ownEvents = threadEvents.filter((event) => event.agent_session_id === session.id)
+  return {
+    source: session.source,
+    sessionId: session.sessionId,
+    startedAt: session.startedAt,
+    lastSeenAt: session.lastSeenAt,
+    endedAt: session.endedAt,
+    ...agentSessionCounts(ownEvents),
+    ...(includeRecap && session.recap ? { recap: session.recap } : {}),
+  }
+}
+
 /** One thread of a block as a session of the contract. */
 export function threadToJson(
   thread: DayThread,
   block: DayBlock,
-  { location, git, includeCategories }: SessionJsonOptions
+  { location, git, includeCategories, includeAgentRecaps }: SessionJsonOptions
 ): SessionJson {
   return {
     key: thread.key,
@@ -51,13 +88,9 @@ export function threadToJson(
     eventCount: thread.eventCount,
     blockId: block.id,
     alongside: block.threads.filter((other) => other.id !== thread.id).map((other) => other.key),
-    // Field by field, so a field added to `AgentSessionInfo` (WOR-136 adds more) never reaches the contract unasked
-    agentSessions: thread.agentSessions.map(({ source, sessionId, startedAt, lastSeenAt }) => ({
-      source,
-      sessionId,
-      startedAt,
-      lastSeenAt,
-    })),
+    agentSessions: thread.agentSessions.map((agentSession) =>
+      agentSessionToJson(agentSession, thread.events, { includeRecap: includeAgentRecaps === true })
+    ),
     tickets: thread.tickets,
     notes: collectNotes(thread.events),
     commits: mergeCommits(collectCapturedCommits(thread.events), git.commits, git.othersSubjects),

@@ -27,6 +27,16 @@ export interface AgentSessionJson {
   sessionId: string
   startedAt: string
   lastSeenAt: string
+  /** When the agent ended it; null if it hasn't (or never said) */
+  endedAt: string | null
+  /** What the thread's events from this conversation add up to — never their paths */
+  commandCount: number
+  filesChanged: number
+  /** The sum of the known counts of its edits; null when none had counts */
+  linesAdded: number | null
+  linesRemoved: number | null
+  /** The agent's latest recap. Only there when `skill.includeAgentMessages` and `capture.agentMessages` are on. */
+  recap?: string
 }
 
 /** A session is one project's thread inside a work block. */
@@ -96,6 +106,8 @@ export interface SessionJsonOptions {
   location: LocationContext
   git: SessionGitInfo
   includeCategories: string[]
+  /** Whether agent recaps go into `agentSessions` */
+  includeAgentRecaps?: boolean
 }
 
 export interface EventsJsonOptions {
