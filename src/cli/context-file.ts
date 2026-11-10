@@ -1,5 +1,6 @@
 // The I/O behind `context --file --json`'s file details, and the time limits the whole command answers within.
 import type { EventRow } from '../db/types'
+import type { AgentSessionInfo } from '../db/agent-sessions'
 import { buildFileDetails, displayPath, savesOf, type FileDetails, type FileMatcher } from '../summary/file-details'
 import { getFileCommits } from '../summary/git-commits'
 import { resolvedPath } from '../utils/working-directory'
@@ -12,6 +13,8 @@ export const GIT_BUDGET_MS = 2000
 /** The stretch of work `context --file` answers with: the thread's events and span. */
 export interface FileSpan {
   events: EventRow[]
+  /** The agent conversations the events came from, with their recaps */
+  agentSessions?: AgentSessionInfo[]
   branch: string | null
   startedAt: string
   endedAt: string
@@ -24,7 +27,11 @@ function sameFileAs(filePath: string): FileMatcher {
   return (storedPath) => storedPath === filePath || resolvedPath(storedPath) === fileOnDisk
 }
 
-export function getFileDetails(filePath: string, span: FileSpan): FileDetails | null {
+export function getFileDetails(
+  filePath: string,
+  span: FileSpan,
+  { showRecaps = false }: { showRecaps?: boolean } = {}
+): FileDetails | null {
   const isThisFile = sameFileAs(filePath)
   // Found through a non-save event: nothing to say about the file, so don't spend the git budget
   if (savesOf(span.events, isThisFile).length === 0) return null
@@ -42,6 +49,8 @@ export function getFileDetails(filePath: string, span: FileSpan): FileDetails | 
     sessionBranch: span.branch,
     commits,
     isThisFile,
+    agentSessions: span.agentSessions,
+    showRecaps,
     displayPathOf: (storedPath) => displayPath(resolvedPath(storedPath), repoRoot),
   })
 }

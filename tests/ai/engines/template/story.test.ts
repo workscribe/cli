@@ -154,6 +154,39 @@ describe('storyLines — activity', () => {
     ])
   })
 
+  it('tells the changed files per branch, the editor and the agent apart', () => {
+    const saved = { ...event('code_edit', { linesAdded: 200, linesRemoved: 40 }), source: 'vscode', filePath: '/a.ts' }
+    const edited = {
+      ...byAgent('code_edit'),
+      metadata: { linesAdded: 120, linesRemoved: 45 },
+      filePath: '/b.ts',
+    }
+
+    expect(storyLines(session([saved, edited]))).toEqual([
+      '- Changed 2 files (+320 −85): 1 in the editor (+200 −40), 1 with Claude Code (+120 −45)',
+      'With Claude Code (1 session) · 1 file save in the editor',
+    ])
+  })
+
+  it("closes with the agent's recap and counts when a session left one", () => {
+    const edited = { ...byAgent('code_edit'), metadata: { linesAdded: 1, linesRemoved: 0 }, filePath: '/b.ts' }
+    const agentSessions = [
+      { id: 1, source: 'claude-code', lastSeenAt: '2026-10-20T10:00:00Z', recap: 'Added reading. Done.' },
+    ]
+
+    expect(storyLines(session([byAgent('testing', 0), edited], { agentSessions }))).toEqual([
+      '- Changed 1 file (+1 −0) with Claude Code',
+      '- Tests passing',
+      'With Claude Code: Added reading (1 session, 1 file changed)',
+    ])
+  })
+
+  it('leaves the closing line as it was when the recap is not there', () => {
+    const agentSessions = [{ id: 1, source: 'claude-code', lastSeenAt: '2026-10-20T10:00:00Z', recap: null }]
+
+    expect(storyLines(session([byAgent('testing', 0)], { agentSessions }))).toContain('With Claude Code (1 session)')
+  })
+
   it('never prints raw hints or commands', () => {
     const events = [
       { ...byAgent('other'), hint: 'pnpm nx test shell --skip-nx-cache 2>&1 | tail -40' },

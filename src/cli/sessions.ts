@@ -38,6 +38,8 @@ function printSessionsJson(date: string, blocks: DayBlock[]): void {
   const options = {
     location: locationContextFrom(config),
     includeCategories: config.summary?.includeCategories ?? [],
+    // Recaps are free text: the skill gets them only when stored and asked for
+    includeAgentRecaps: config.capture.agentMessages === true && config.skill.includeAgentMessages === true,
   }
   const lookupGit = createThreadGitLookup()
   const sessionJsons = blocks.flatMap((block) =>

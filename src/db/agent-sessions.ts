@@ -85,19 +85,29 @@ export function recordAgentMessage(
   })
 }
 
+/** Forgets every stored recap and compaction summary — when the agent's words are no longer kept. */
+export function clearAgentMessages(db: MigrationDatabase): void {
+  db.prepare('UPDATE agent_sessions SET recap = NULL, compact_summary = NULL').run()
+}
+
 /** What `sessions --json` says about an agent session: never its working folder. */
 export interface AgentSessionInfo {
+  id: number
   source: string
   sessionId: string
   startedAt: string
   lastSeenAt: string
+  endedAt: string | null
+  /** The agent's latest recap; stored only with `capture.agentMessages`. Never in a contract unless asked for. */
+  recap: string | null
 }
 
 /** The distinct agent sessions these events came from, oldest first. */
 export function getAgentSessionsOfEvents(db: MigrationDatabase, eventIds: number[]): AgentSessionInfo[] {
   return db
     .prepare(
-      `SELECT source, session_id AS sessionId, started_at AS startedAt, last_seen_at AS lastSeenAt FROM agent_sessions
+      `SELECT id, source, session_id AS sessionId, started_at AS startedAt, last_seen_at AS lastSeenAt,
+              ended_at AS endedAt, recap FROM agent_sessions
        WHERE id IN (SELECT agent_session_id FROM events WHERE id IN (SELECT value FROM json_each(?)))
        ORDER BY started_at, id`
     )

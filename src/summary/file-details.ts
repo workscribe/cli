@@ -4,6 +4,9 @@ import path from 'path'
 import type { EventRow } from '../db/types'
 import type { GitCommit } from './git-commits'
 import { parseMetadata } from './event-metadata'
+import { agentNameOf } from '../ai/engines/template/agents'
+import { addKnown, knownCount, sumKnown } from '../ai/engines/template/changes'
+import type { AgentSessionInfo } from '../db/agent-sessions'
 
 // How many of the session's other files to name; the rest are only counted
 const EDITED_ALONGSIDE_LIMIT = 5
@@ -19,6 +22,33 @@ export interface FileDetails {
   branch: string | null
   commits: GitCommit[]
   editedAlongside: { files: string[]; total: number }
+  /** Of those saves, the ones made in the editor and the ones a coding agent made */
+  editorSaves: number
+  agentEdits: number
+  /** The sum of the known line counts of all its edits; null when none had counts */
+  linesAdded: number | null
+  linesRemoved: number | null
+  /** Who changed it, one entry per source (`vscode`, `claude-code`) */
+  changedBy: FileChangedBy[]
+  /** The agent conversations that edited it. A recap appears only while `capture.agentMessages` is on. */
+  agentSessions: FileAgentSession[]
+}
+
+export interface FileChangedBy {
+  source: string | null
+  /** The agent's name ("Claude Code"); null for the editor */
+  agent: string | null
+  count: number
+  linesAdded: number | null
+  linesRemoved: number | null
+}
+
+export interface FileAgentSession {
+  source: string
+  agent: string | null
+  startedAt: string
+  endedAt: string | null
+  recap: string | null
 }
 
 /** A file relative to its repo root when it's inside it, else its name. Pass resolved paths on both sides. */
@@ -69,6 +99,45 @@ export interface FileDetailsOptions {
   displayPathOf: (storedPath: string) => string
   /** Which stored paths are this file; by default only `filePath` itself */
   isThisFile?: FileMatcher
+  /** The thread's agent conversations; those that edited this file are told, with a recap only if `showRecaps` */
+  agentSessions?: AgentSessionInfo[]
+  showRecaps?: boolean
+}
+
+/** Who made the saves, with the line counts they added up to. */
+function changedByOf(saves: EventRow[]): FileChangedBy[] {
+  const bySource = new Map<string | null, FileChangedBy>()
+  for (const save of saves) {
+    const { linesAdded, linesRemoved } = parseMetadata(save.metadata)
+    const seen = bySource.get(save.source) ?? {
+      source: save.source,
+      agent: agentNameOf(save.source ?? undefined),
+      count: 0,
+      linesAdded: null,
+      linesRemoved: null,
+    }
+    bySource.set(save.source, {
+      ...seen,
+      count: seen.count + 1,
+      linesAdded: addKnown(seen.linesAdded, knownCount(linesAdded)),
+      linesRemoved: addKnown(seen.linesRemoved, knownCount(linesRemoved)),
+    })
+  }
+  return [...bySource.values()]
+}
+
+/** The agent conversations behind these saves, oldest first. */
+function agentSessionsOf(saves: EventRow[], sessions: AgentSessionInfo[], showRecaps: boolean): FileAgentSession[] {
+  const ids = new Set(saves.flatMap((save) => save.agent_session_id ?? []))
+  return sessions
+    .filter((session) => ids.has(session.id))
+    .map((session) => ({
+      source: session.source,
+      agent: agentNameOf(session.source),
+      startedAt: session.startedAt,
+      endedAt: session.endedAt,
+      recap: showRecaps ? session.recap : null,
+    }))
 }
 
 /** The session's saves of this file, oldest first. */
@@ -90,6 +159,8 @@ export function buildFileDetails(options: FileDetailsOptions): FileDetails | nul
   // Saves are oldest first, so the last one with a branch is the latest
   const latestBranch = [...saves].reverse().find((save) => save.branch)?.branch ?? null
   const otherFiles = otherFilesBySaves(sessionEvents, isThisFile)
+  const changedBy = changedByOf(saves)
+  const agentEdits = changedBy.filter((who) => who.agent !== null).reduce((total, who) => total + who.count, 0)
 
   return {
     path: filePath,
@@ -103,5 +174,11 @@ export function buildFileDetails(options: FileDetailsOptions): FileDetails | nul
       files: otherFiles.slice(0, EDITED_ALONGSIDE_LIMIT).map(displayPathOf),
       total: otherFiles.length,
     },
+    editorSaves: saves.length - agentEdits,
+    agentEdits,
+    linesAdded: sumKnown(changedBy.map((who) => who.linesAdded)),
+    linesRemoved: sumKnown(changedBy.map((who) => who.linesRemoved)),
+    changedBy,
+    agentSessions: agentSessionsOf(saves, options.agentSessions ?? [], options.showRecaps === true),
   }
 }

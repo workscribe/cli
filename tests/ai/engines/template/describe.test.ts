@@ -195,6 +195,12 @@ describe('describeActivity — work a coding agent did', () => {
     ])
   })
 
+  it('tells the files changed, by the editor and the agent, once their paths are known', () => {
+    const saved = { ...event('code_edit', { linesAdded: 3, linesRemoved: 1 }), source: 'vscode', filePath: '/a.ts' }
+
+    expect(describeActivity(session([saved]))).toEqual(['Changed 1 file (+3 −1)'])
+  })
+
   it('counts the sessions of every event, including ones the summary leaves out', () => {
     const events = [
       byAgent('testing'),

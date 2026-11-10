@@ -5,7 +5,8 @@ import { parseMetadata } from './event-metadata'
 import { storyCommitsOf } from './story-commits'
 import { isFailedCommand } from './commits'
 import { gitMovesOf } from '../normalize/git-move'
-import type { EventPayload, SessionPayload } from '../ai/types'
+import type { AgentSessionPayload, EventPayload, SessionPayload } from '../ai/types'
+import type { AgentSessionInfo } from '../db/agent-sessions'
 import type { EventRow } from '../db/types'
 import type { WorkscribeConfig } from '../config'
 import type { GitCommit } from './git-commits'
@@ -18,10 +19,18 @@ import { UNKNOWN_LOCATION } from './heading'
 export interface LocationContext {
   projects: Record<string, string>
   homeDir: string
+  /** Whether stored agent recaps go into the payload: only while `capture.agentMessages` is on */
+  showAgentRecaps?: boolean
 }
 
-export function locationContextFrom(config: Pick<WorkscribeConfig, 'projects'>): LocationContext {
-  return { projects: config.projects ?? {}, homeDir: os.homedir() }
+export function locationContextFrom(
+  config: Pick<WorkscribeConfig, 'projects'> & Partial<Pick<WorkscribeConfig, 'capture'>>
+): LocationContext {
+  return {
+    projects: config.projects ?? {},
+    homeDir: os.homedir(),
+    showAgentRecaps: config.capture?.agentMessages === true,
+  }
 }
 
 const DEFAULT_LOCATION_CONTEXT: LocationContext = { projects: {}, homeDir: os.homedir() }
@@ -54,6 +63,7 @@ export function eventRowToPayload(row: EventRow): EventPayload {
     capturedAt: row.captured_at,
     ...(row.source ? { source: row.source } : {}),
     ...(row.agent_session_id == null ? {} : { agentSessionId: row.agent_session_id }),
+    ...(row.category === 'code_edit' && row.file_path ? { filePath: row.file_path } : {}),
     ...gitMovesField(row),
   }
   if (row.category !== 'other' || typeof metadata.hint !== 'string') return payload
@@ -131,6 +141,17 @@ export interface SessionPayloadOptions {
   context?: LocationContext
   /** The session's commits from `git log`, or null when git wasn't asked — captured ones are always used */
   gitCommits?: GitCommit[] | null
+  /** The agent conversations the events came from */
+  agentSessions?: AgentSessionInfo[]
+}
+
+function toAgentSessionPayloads(sessions: AgentSessionInfo[], context: LocationContext): AgentSessionPayload[] {
+  return sessions.map(({ id, source, lastSeenAt, recap }) => ({
+    id,
+    source,
+    lastSeenAt,
+    recap: context.showAgentRecaps === true ? recap : null,
+  }))
 }
 
 /** A stretch of work as the template tells it: the thread `context` answers with, or a thread of the day. */
@@ -143,7 +164,7 @@ export interface PayloadSpan extends WorkEvents {
 export function spanToPayload(
   span: PayloadSpan,
   date: string,
-  { context = DEFAULT_LOCATION_CONTEXT, gitCommits = null }: SessionPayloadOptions = {}
+  { context = DEFAULT_LOCATION_CONTEXT, gitCommits = null, agentSessions = [] }: SessionPayloadOptions = {}
 ): SessionPayload {
   return {
     date,
@@ -154,6 +175,7 @@ export function spanToPayload(
     endTime: formatDate(span.endedAt),
     durationMinutes: span.durationMinutes,
     events: span.events.map(eventRowToPayload),
+    ...(agentSessions.length > 0 ? { agentSessions: toAgentSessionPayloads(agentSessions, context) } : {}),
     commits: storyCommitsOf(span.events, gitCommits),
   }
 }
@@ -166,7 +188,7 @@ export function threadToPayload(
 ): SessionPayload {
   const durationMinutes = minutesBetween(thread.startedAt, thread.endedAt)
   return {
-    ...spanToPayload({ ...thread, durationMinutes }, block.date, options),
+    ...spanToPayload({ ...thread, durationMinutes }, block.date, { ...options, agentSessions: thread.agentSessions }),
     activeMinutes: toActiveMinutes(thread.activeSlots),
     projectId: thread.projectId,
     alongside: block.threads

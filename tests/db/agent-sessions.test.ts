@@ -6,7 +6,9 @@ import { insertEventRecord, type NewEvent } from '../../src/db/event-writer'
 import {
   agentSessionIdsOfDate,
   agentSessionIdsOfEvents,
+  clearAgentMessages,
   deleteEmptyAgentSessions,
+  getAgentSessionsOfEvents,
   recordAgentMessage,
   recordAgentSessionEnd,
 } from '../../src/db/agent-sessions'
@@ -175,6 +177,28 @@ describe('how agent sessions end, and their messages', () => {
     recordAgentMessage(db, { ...CONVERSATION, kind: 'compactSummary', text: 'summary' })
 
     expect(endings(db)).toEqual([expect.objectContaining({ recap: 'latest', compact_summary: 'summary' })])
+  })
+
+  it('forgets every recap and compaction summary, keeping the sessions', () => {
+    const db = database()
+    insertEventRecord(db, event({ agentSession: CONVERSATION }))
+    recordAgentMessage(db, { ...CONVERSATION, kind: 'recap', text: 'latest' })
+    recordAgentMessage(db, { ...CONVERSATION, kind: 'compactSummary', text: 'summary' })
+
+    clearAgentMessages(db)
+
+    expect(endings(db)).toEqual([expect.objectContaining({ recap: null, compact_summary: null })])
+  })
+
+  it('lists the session with its id, ending and recap for the events it came from', () => {
+    const db = database()
+    insertEventRecord(db, event({ agentSession: CONVERSATION }))
+    recordAgentMessage(db, { ...CONVERSATION, kind: 'recap', text: 'latest' })
+    recordAgentSessionEnd(db, { ...CONVERSATION, endedAt: '2026-10-31T09:30:00.000Z', reason: 'other' })
+
+    expect(getAgentSessionsOfEvents(db, [1])).toEqual([
+      expect.objectContaining({ id: 1, endedAt: '2026-10-31T09:30:00.000Z', recap: 'latest' }),
+    ])
   })
 
   it('creates no session for a conversation that captured nothing', () => {

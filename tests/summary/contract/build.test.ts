@@ -194,21 +194,71 @@ describe('threadToJson', () => {
     })
   })
 
-  it('lists the agent sessions the thread came from, never their working folder', () => {
-    const agentSessions = [
-      {
-        source: 'claude-code',
-        sessionId: 'abc-123',
-        startedAt: '2026-10-25T09:00:00.000Z',
-        lastSeenAt: '2026-10-25T09:40:00.000Z',
-      },
+  describe('agentSessions', () => {
+    const AGENT_SESSION_KEYS = [
+      'commandCount',
+      'endedAt',
+      'filesChanged',
+      'lastSeenAt',
+      'linesAdded',
+      'linesRemoved',
+      'sessionId',
+      'source',
+      'startedAt',
     ]
-    const json = soloThreadToJson([capturedRow('npm test')], {
-      agentSessions: [{ ...agentSessions[0], cwd: '/Users/dev/secret' } as (typeof agentSessions)[0]],
+    const agentSession = {
+      id: 7,
+      source: 'claude-code',
+      sessionId: 'abc-123',
+      startedAt: '2026-10-25T09:00:00.000Z',
+      lastSeenAt: '2026-10-25T09:40:00.000Z',
+      endedAt: '2026-10-25T09:41:00.000Z',
+      recap: 'Fixed the token check. Tests pass.',
+    }
+    const agentEdit = (filePath: string, counts: object) =>
+      row({
+        category: 'code_edit',
+        file_path: filePath,
+        source: 'claude-code',
+        agent_session_id: 7,
+        metadata: JSON.stringify(counts),
+      })
+    const events = [
+      capturedRow('npm test', { agent_session_id: 7 }),
+      agentEdit('/Users/dev/secret/a.ts', { linesAdded: 10, linesRemoved: 2 }),
+      agentEdit('/Users/dev/secret/b.ts', { linesAdded: 5, linesRemoved: null }),
+      agentEdit('/Users/dev/secret/a.ts', { linesAdded: 1, linesRemoved: 1 }),
+      capturedRow('npm test'),
+    ]
+    const toJson = (includeAgentRecaps: boolean) => {
+      const member = thread(events, { agentSessions: [{ ...agentSession, cwd: '/Users/dev/secret' } as never] })
+      return threadToJson(member, block([member]), { ...OPTIONS, includeAgentRecaps })
+    }
+
+    it('adds up what the conversation did, never its working folder or file paths', () => {
+      const json = toJson(false)
+
+      expect(json.agentSessions).toEqual([
+        {
+          source: 'claude-code',
+          sessionId: 'abc-123',
+          startedAt: agentSession.startedAt,
+          lastSeenAt: agentSession.lastSeenAt,
+          endedAt: agentSession.endedAt,
+          commandCount: 1,
+          filesChanged: 2,
+          linesAdded: 16,
+          linesRemoved: 3,
+        },
+      ])
+      expect(Object.keys(json.agentSessions[0]).sort()).toEqual(AGENT_SESSION_KEYS)
+      expect(JSON.stringify(json)).not.toContain('/Users/dev/secret')
     })
 
-    expect(json.agentSessions).toEqual(agentSessions)
-    expect(JSON.stringify(json)).not.toContain('/Users/dev/secret')
+    it('adds the recap only when asked for', () => {
+      expect(toJson(true).agentSessions[0].recap).toBe(agentSession.recap)
+      expect(toJson(false).agentSessions[0]).not.toHaveProperty('recap')
+    })
   })
 
   it('merges git commits with captured ones and moves notes out of events', () => {

@@ -435,6 +435,12 @@ AgentSession = {           // an agent conversation some of the thread's events 
   sessionId: string        // the agent's id for the conversation
   startedAt: string
   lastSeenAt: string
+  endedAt: string | null   // when the agent ended it; null if it hasn't, or never said
+  commandCount: number     // what the thread's events from this conversation add up to
+  filesChanged: number     // distinct files it edited — never their paths
+  linesAdded: number | null   // the known line counts of its edits; null when none had any
+  linesRemoved: number | null
+  recap?: string           // the agent's latest recap. Only with skill.includeAgentMessages and capture.agentMessages both on
 }
 
 Commit = {
@@ -523,7 +529,19 @@ It finds today's work too, without running `workscribe summary` first: if the da
     "relativePath": "src/auth.ts",           // relative to the repo root, or just the file name
     "firstSavedAt": "2026-08-20T10:05:00.000Z",
     "lastSavedAt": "2026-08-20T11:40:00.000Z", // the latest edit, including ones added onto an earlier save — up to 30 s after the thread's endedAt
-    "saveCount": 6,                          // saves recorded: one per file, folder and source per 30 seconds at most
+    "saveCount": 6,                          // changes recorded, by you or a coding agent: one per file, folder and source per 30 seconds at most
+    "editorSaves": 4,                        // of those, saves in your editor
+    "agentEdits": 2,                         // and edits by a coding agent such as Claude Code
+    "linesAdded": 87,                        // lines added and removed over all of them (the known counts); null when none had counts
+    "linesRemoved": 12,
+    "changedBy": [                           // who changed it, one entry per source
+      { "source": "vscode", "agent": null, "count": 4, "linesAdded": 30, "linesRemoved": 5 },
+      { "source": "claude-code", "agent": "Claude Code", "count": 2, "linesAdded": 57, "linesRemoved": 7 }
+    ],
+    "agentSessions": [                       // the agent conversations that edited it
+      { "source": "claude-code", "agent": "Claude Code", "startedAt": "2026-08-20T10:30:00.000Z", "endedAt": "2026-08-20T11:41:00.000Z",
+        "recap": "Added auth middleware" }   // recap: null unless capture.agentMessages is on
+    ],
     "branch": "feature/auth",
     "commits": [{ "hash": "a1b2c3d", "subject": "add auth middleware", "committedAt": "2026-10-25T09:20:00+01:00" }], // your commits in the thread that changed it
     "editedAlongside": { "files": ["src/routes.ts"], "total": 1 }         // up to 5 other files saved in the thread

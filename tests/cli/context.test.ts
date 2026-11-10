@@ -61,6 +61,7 @@ const COMMIT_EVENT = row({
 // A file's context is its own project's thread, with the projects worked alongside it (WOR-149)
 const THREAD_ANSWER = {
   threadId: 12,
+  agentSessions: [],
   context: {
     repoName: 'workscribe/landing-page',
     date: '2026-10-28',
@@ -175,12 +176,17 @@ describe('workscribe context --file', () => {
 
     await makeProgram().parseAsync(['context', '--file', '/repo/README.md', '--json'], { from: 'user' })
 
-    expect(getFileDetails).toHaveBeenCalledWith('/repo/README.md', {
-      events: [save],
-      branch: 'feature/auth',
-      startedAt: '2026-10-28T12:31:00.000Z',
-      endedAt: '2026-10-28T13:48:00.000Z',
-    })
+    expect(getFileDetails).toHaveBeenCalledWith(
+      '/repo/README.md',
+      {
+        events: [save],
+        agentSessions: [],
+        branch: 'feature/auth',
+        startedAt: '2026-10-28T12:31:00.000Z',
+        endedAt: '2026-10-28T13:48:00.000Z',
+      },
+      { showRecaps: false }
+    )
   })
 
   it('adds the file details to --json, keeping every existing field', async () => {

@@ -12,6 +12,30 @@ function week(days: { date: string; sessions: SessionPayload[] }[]) {
 }
 
 describe('weekByProject', () => {
+  it("keeps an agent's recap when a branch's days are merged", () => {
+    const agentEvent = (capturedAt: string, agentSessionId: number) => ({
+      ...at(event('testing'), capturedAt, 'main'),
+      source: 'claude-code',
+      agentSessionId,
+    })
+    const day = (capturedAt: string, agentSessionId: number, recap: string | null) =>
+      session([agentEvent(capturedAt, agentSessionId)], {
+        project: 'cli',
+        projectId: 1,
+        branches: ['main'],
+        agentSessions: [{ id: agentSessionId, source: 'claude-code', lastSeenAt: capturedAt, recap }],
+      })
+
+    const [project] = weekByProject(
+      week([
+        { date: '2026-11-02', sessions: [day('2026-11-02T10:00:00.000Z', 1, 'Fixed the token check')] },
+        { date: '2026-11-03', sessions: [day('2026-11-03T10:00:00.000Z', 2, null)] },
+      ])
+    )
+
+    expect(project.branches[0].activity).toBe('With Claude Code: Fixed the token check (2 sessions)')
+  })
+
   it('gathers each project across the week, then each branch, with the days it was worked on', () => {
     const monday = session([at(event('testing'), '2026-11-02T10:00:00.000Z', 'main')], {
       project: 'cli',
