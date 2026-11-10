@@ -3,12 +3,13 @@ import type { BatchResult, DataJob, JobVerification } from './types'
 import { BUSY_TIMEOUT_MS } from '../transaction'
 import { deleteMetaValue, getMetaValue, setMetaValue } from './store'
 import { commandHint } from '../../capture/hint'
+import { storableAgentMessage } from '../../capture/agent-messages'
 import { REDACTED_TEXT, redact } from '../../capture/redact'
 import { debugLog } from '../../utils/logger'
 
-// Applies today's built-in redaction to what was stored before it existed (WOR-167). A job can't read the config, so
-// `redact.extra` only ever reaches new events. Rows with nothing to redact are never written. Bump the version when the
-// built-in patterns widen, so the history gets the new ones too.
+// Applies today's built-in redaction to what was stored before it existed (WOR-167), and to agent recaps (WOR-137). A
+// job can't read the config, so `redact.extra` only ever reaches new events. Rows with nothing to redact are never
+// written. Bump the version when the built-in patterns widen, so the history gets the new ones too.
 
 const JOB_NAME = 'scrub-secrets'
 const VERIFY_PAGE_SIZE = 500
@@ -142,12 +143,40 @@ function cleanUpFile(db: MigrationDatabase): void {
   }
 }
 
+/**
+ * A stored recap or compaction summary as it would be stored today: redacted, and gone when the secret check flags it.
+ * The same rule that stops a flagged message on the way in, applied to what was stored before it widened.
+ */
+function scrubAgentMessage(message: string): string | null {
+  return storableAgentMessage(message, [])
+}
+
+/** The agent sessions are few, so their messages are scrubbed in one pass before the events. */
+function scrubAgentMessages(db: MigrationDatabase): void {
+  const sessions = db.prepare('SELECT id, recap, compact_summary AS compactSummary FROM agent_sessions').all() as {
+    id: number
+    recap: string | null
+    compactSummary: string | null
+  }[]
+  const update = db.prepare('UPDATE agent_sessions SET recap = ?, compact_summary = ? WHERE id = ?')
+  const scrubbed = (message: string | null) => (message === null ? null : scrubAgentMessage(message))
+  for (const session of sessions) {
+    const recap = scrubbed(session.recap)
+    const compactSummary = scrubbed(session.compactSummary)
+    if (recap !== session.recap || compactSummary !== session.compactSummary)
+      update.run(recap, compactSummary, session.id)
+  }
+}
+
 export const scrubSecretsJob: DataJob = {
   name: JOB_NAME,
-  version: 1,
-  description: 'Remove secrets from stored commands and metadata',
+  version: 2,
+  description: 'Remove secrets from stored commands, metadata and agent recaps',
   // Redacting what's already redacted changes nothing, so a rerun only needs the file cleaned again
-  prepare: (db) => setMetaValue(db, CLEANUP_KEY, CLEANUP_NEEDS_VACUUM),
+  prepare: (db) => {
+    scrubAgentMessages(db)
+    setMetaValue(db, CLEANUP_KEY, CLEANUP_NEEDS_VACUUM)
+  },
   runBatch,
   verify,
   cleanup: { isPending: (db) => getMetaValue(db, CLEANUP_KEY) !== null, run: cleanUpFile },

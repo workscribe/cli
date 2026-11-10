@@ -327,3 +327,37 @@ describe('scrub-secrets job — the database file itself', () => {
     db.close()
   })
 })
+
+describe('agent recaps', () => {
+  const insertAgentSession = (db: DatabaseSync, recap: string | null, compactSummary: string | null) =>
+    db
+      .prepare(
+        `INSERT INTO agent_sessions (source, session_id, cwd, started_at, last_seen_at, recap, compact_summary)
+         VALUES ('claude-code', ?, '/code/cli', '2026-10-28T12:00:00.000Z', '2026-10-28T12:00:00.000Z', ?, ?)`
+      )
+      .run(`conversation-${Math.random()}`, recap, compactSummary)
+  const messages = (db: DatabaseSync) =>
+    db.prepare('SELECT recap, compact_summary AS compactSummary FROM agent_sessions ORDER BY id').all()
+
+  it('drops a stored recap or compaction summary the secret check flags, keeping the other', () => {
+    const db = database()
+    insertAgentSession(db, `Ran it with --password=${SECRET}`, 'A summary with nothing to hide')
+    insertAgentSession(db, null, 'Used key AKIAIOSFODNN7EXAMPLE to deploy')
+
+    run(db)
+
+    expect(messages(db)).toEqual([
+      { recap: null, compactSummary: 'A summary with nothing to hide' },
+      { recap: null, compactSummary: null },
+    ])
+  })
+
+  it('leaves a recap with nothing to remove as it is', () => {
+    const db = database()
+    insertAgentSession(db, 'Added branch-move reading to summaries.', null)
+
+    run(db)
+
+    expect(messages(db)).toEqual([{ recap: 'Added branch-move reading to summaries.', compactSummary: null }])
+  })
+})
