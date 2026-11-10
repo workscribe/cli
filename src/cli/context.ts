@@ -45,8 +45,15 @@ function toContextJson(view: ContextView): SessionContextJson {
 
 /** `context --file --json`: the answer, plus what it says about this file (`file` is null without saves of it). */
 function toFileContextJson(view: ContextView, filePath: string): SessionContextJson & { file: FileDetails | null } {
-  const span: FileSpan = { events: view.events, branch: view.branch, startedAt: view.startedAt, endedAt: view.endedAt }
-  return { ...toContextJson(view), file: getFileDetails(filePath, span) }
+  const span: FileSpan = {
+    events: view.events,
+    agentSessions: view.agentSessions,
+    branch: view.branch,
+    startedAt: view.startedAt,
+    endedAt: view.endedAt,
+  }
+  const showRecaps = readConfig().capture.agentMessages === true
+  return { ...toContextJson(view), file: getFileDetails(filePath, span, { showRecaps }) }
 }
 
 function printContext(view: ContextView, heading: string): void {

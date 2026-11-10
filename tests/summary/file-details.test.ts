@@ -45,6 +45,80 @@ describe('buildFileDetails', () => {
       branch: 'feat/docs',
       commits: [],
       editedAlongside: { files: ['src/a.ts'], total: 1 },
+      editorSaves: 2,
+      agentEdits: 0,
+      linesAdded: null,
+      linesRemoved: null,
+      changedBy: [{ source: 'vscode', agent: null, count: 2, linesAdded: null, linesRemoved: null }],
+      agentSessions: [],
+    })
+  })
+
+  describe('who changed the file', () => {
+    const edit = (source: string, counts: object | null, agentSessionId?: number): EventRow => ({
+      ...save(FILE, '2026-10-28T09:10:00.000Z'),
+      source,
+      metadata: counts === null ? null : JSON.stringify(counts),
+      agent_session_id: agentSessionId,
+    })
+    const agentSession = {
+      id: 7,
+      source: 'claude-code',
+      sessionId: 'abc',
+      startedAt: '2026-10-28T09:00:00.000Z',
+      lastSeenAt: '2026-10-28T10:00:00.000Z',
+      endedAt: null,
+      recap: 'Fixed the readme',
+    }
+
+    it('tells editor saves and agent edits apart, with line counts', () => {
+      const result = details([
+        edit('vscode', { linesAdded: 4, linesRemoved: 1 }),
+        edit('claude-code', { linesAdded: 10, linesRemoved: null }, 7),
+        edit('claude-code', { linesAdded: 2, linesRemoved: 2 }, 7),
+      ])
+
+      expect(result).toMatchObject({
+        saveCount: 3,
+        editorSaves: 1,
+        agentEdits: 2,
+        linesAdded: 16,
+        linesRemoved: 3,
+        changedBy: [
+          { source: 'vscode', agent: null, count: 1, linesAdded: 4, linesRemoved: 1 },
+          { source: 'claude-code', agent: 'Claude Code', count: 2, linesAdded: 12, linesRemoved: 2 },
+        ],
+      })
+    })
+
+    it('tells the agent sessions that edited it, with the recap only when asked', () => {
+      const events = [edit('claude-code', null, 7)]
+      const withoutRecap = buildFileDetails({
+        filePath: FILE,
+        sessionEvents: events,
+        sessionBranch: 'main',
+        commits: [],
+        displayPathOf: relativeToRoot,
+        agentSessions: [agentSession],
+      })
+      const withRecap = buildFileDetails({
+        filePath: FILE,
+        sessionEvents: events,
+        sessionBranch: 'main',
+        commits: [],
+        displayPathOf: relativeToRoot,
+        agentSessions: [agentSession],
+        showRecaps: true,
+      })
+
+      expect(withoutRecap?.agentSessions).toEqual([
+        { source: 'claude-code', agent: 'Claude Code', startedAt: agentSession.startedAt, endedAt: null, recap: null },
+      ])
+      expect(withRecap?.agentSessions[0].recap).toBe('Fixed the readme')
+    })
+
+    it('leaves out agent sessions that did not edit it', () => {
+      expect(details([edit('vscode', null)])?.agentSessions).toEqual([])
     })
   })
 
