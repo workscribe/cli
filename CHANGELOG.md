@@ -1,5 +1,22 @@
 # Changelog
 
+## [3.3.0](https://github.com/workscribe/cli/compare/v3.2.0...v3.3.0) (2026-11-15)
+
+### Features
+
+* **capture:** record Claude Code edits, session endings and recaps ([2ec26ac](https://github.com/workscribe/cli/commit/2ec26ac636bc00f1e707a45ebac195d1e81caa58))
+* **capture:** record line counts on edits and add up repeated saves ([c376206](https://github.com/workscribe/cli/commit/c376206af736d66c0e8f266a2fb50f535c06807a))
+* **context:** say who changed a file and what agents touched it ([2e58c2e](https://github.com/workscribe/cli/commit/2e58c2e8a6243b175d8462939b75fd46e3d3de33))
+* **db:** scrub secrets from stored agent recaps ([59de6d7](https://github.com/workscribe/cli/commit/59de6d793527c530b38da3d9d4a4e70bb26208ce))
+* **history:** add the workscribe history command ([d038d25](https://github.com/workscribe/cli/commit/d038d25c398183c1ac455f56f77d343e7c7a4b4c))
+* **history:** read a repo's git commands, moves and recovery ([90f6a21](https://github.com/workscribe/cli/commit/90f6a21e1d9a84be39c2d6b635b47c855b9a68b8))
+* **sessions:** add counts and opt-in recaps to agentSessions ([50061c6](https://github.com/workscribe/cli/commit/50061c62498ffb8bdf3a98748cf525c8c6359927))
+* **summary:** tell what changed and what the agent said in the story ([c5def56](https://github.com/workscribe/cli/commit/c5def56c030cd38dcf4e5a5185fa126ffb021fbc))
+
+### Bug Fixes
+
+* **summary:** leave failed pushes out of the template summary ([0262aa3](https://github.com/workscribe/cli/commit/0262aa3353c7e73891ac5b88acb2a82b6ceb696a))
+
 ## [3.2.0](https://github.com/workscribe/cli/compare/v3.1.0...v3.2.0) (2026-11-07)
 
 ### Features
