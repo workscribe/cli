@@ -13,3 +13,13 @@ export function getCommitsSince(sha: string, cwd: string): string[] {
     return []
   }
 }
+
+/** The subject of the commit `HEAD` points to, or null when git can't say (no repo, no commits, too slow). */
+export function latestCommitSubject(cwd: string): string | null {
+  try {
+    const subject = execSync('git log -1 --format=%s', { cwd, timeout: 3000 }).toString().trim()
+    return subject === '' ? null : subject
+  } catch {
+    return null
+  }
+}

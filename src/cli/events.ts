@@ -5,6 +5,7 @@ import { log } from '../utils/logger'
 import { todayDate, parseDate, formatDate } from '../utils/format'
 import { loadAIToolRegistry } from '../config/registry'
 import { readConfig } from '../config'
+import { exitBadge } from './exit-badge'
 import { buildEventsJson } from '../summary/contract/build'
 
 const CATEGORY_COLORS: Record<string, (s: string) => string> = {
@@ -79,7 +80,6 @@ export function registerEvents(program: Command): void {
         const time = formatDate(event.captured_at)
         const category = colorFn(event.category.padEnd(20))
         const repo = event.repo_name ? chalk.dim(` [${event.repo_name}]`) : ''
-        const exitBadge = event.exit_code && event.exit_code !== 0 ? chalk.red(` ✗${event.exit_code}`) : ''
 
         let cmdDisplay: string
         if (event.category === 'ai_session') {
@@ -96,7 +96,7 @@ export function registerEvents(program: Command): void {
           cmdDisplay = chalk.dim(event.command.slice(0, 55))
         }
 
-        log.plain(`  ${chalk.dim(time)}  ${category}  ${cmdDisplay}${repo}${exitBadge}`)
+        log.plain(`  ${chalk.dim(time)}  ${category}  ${cmdDisplay}${repo}${exitBadge(event.exit_code)}`)
       }
 
       if (limit < events.length) {

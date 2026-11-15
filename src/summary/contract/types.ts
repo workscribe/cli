@@ -8,6 +8,7 @@ export interface EventJson {
   metadata: Record<string, unknown>
   /** Redacted, ≤120-char prefix of the command — only on unclassified (`other`) events. */
   hint?: string
+  /** 0 passed, another code failed, -1 failed with no code known, null unknown (agent hooks that report none, interrupts) */
   exitCode: number | null
   durationMs: number | null
   source: string | null
@@ -122,6 +123,7 @@ export interface HistoryEntryJson {
   /** `shell`, `editor`, or the coding agent's name */
   source: string
   isGit: boolean
+  /** As on an event: -1 is a failure with no code known, null is unknown */
   exitCode: number | null
   /** The branch moves it made, in plain language */
   moves: string[]
