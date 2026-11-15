@@ -1,11 +1,12 @@
 import { branchesOf, eventRowToPayload, mostFrequentCwd, sessionBranch, sessionLocation } from '../payload'
-import { EVENTS_SCHEMA_VERSION, SESSIONS_SCHEMA_VERSION } from './constants'
+import { EVENTS_SCHEMA_VERSION, HISTORY_SCHEMA_VERSION, SESSIONS_SCHEMA_VERSION } from './constants'
 import { collectNotes, contractEvents } from './utils'
 import { collectCapturedCommits, mergeCommits } from '../commits'
 import { minutesBetween } from '../../sessions/grouper'
 import { toActiveMinutes } from '../../sessions/blocks'
 import { knownCount, sumKnown } from '../../ai/engines/template/changes'
 import { parseMetadata } from '../event-metadata'
+import type { History, HistoryEntry } from '../history'
 import type { EventRow } from '../../db/types'
 import type { AgentSessionInfo } from '../../db/agent-sessions'
 import type { DayBlock, DayThread } from '../../db/day-threads'
@@ -18,6 +19,8 @@ import type {
   SessionJson,
   SessionJsonOptions,
   SessionsJson,
+  HistoryEntryJson,
+  HistoryJson,
 } from './types'
 
 /** Never includes the full command, the event's cwd or an IDE file path. */
@@ -124,5 +127,28 @@ export function buildEventsJson(
     date,
     total: events.length,
     events: events.slice(0, limit).map(eventToJson),
+  }
+}
+
+function historyEntryToJson(entry: HistoryEntry): HistoryEntryJson {
+  return {
+    capturedAt: entry.capturedAt,
+    branch: entry.branch,
+    source: entry.source,
+    isGit: entry.isGit,
+    exitCode: entry.exitCode,
+    moves: entry.moves,
+    recovery: entry.recovery,
+  }
+}
+
+/** `history --json`: the entries without their commands, which stay in the text view. */
+export function buildHistoryJson(repo: string, since: string, history: History): HistoryJson {
+  return {
+    schemaVersion: HISTORY_SCHEMA_VERSION,
+    repo,
+    since,
+    entries: history.entries.map(historyEntryToJson),
+    leftStashed: history.leftStashed,
   }
 }

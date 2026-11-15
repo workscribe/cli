@@ -108,7 +108,7 @@ Your activity leaves your machine only when **you ask your coding agent to summa
 
 ## JSON output for coding agents
 
-`workscribe sessions --json` and `workscribe events --json` expose the structured data described above — categories, structured fields, unclassified-command hints and commit subjects — plus, for each session, its repo path, the directory most commands ran in, and the ids the agent gave the conversations its events came from (never those conversations' folders). They never include full commands, per-event working directories or IDE file paths. The output goes wherever you or your tools send it: when a coding-agent skill reads it, it is sent to that agent's model provider.
+`workscribe sessions --json` and `workscribe events --json` expose the structured data described above — categories, structured fields, unclassified-command hints and commit subjects — plus, for each session, its repo path, the directory most commands ran in, and the ids the agent gave the conversations its events came from (never those conversations' folders). They never include full commands, per-event working directories or IDE file paths. `workscribe history` shows your stored, redacted git commands in the terminal, locally; its `--json` has none of them. The output goes wherever you or your tools send it: when a coding-agent skill reads it, it is sent to that agent's model provider.
 
 ### The Workscribe agent skill
 

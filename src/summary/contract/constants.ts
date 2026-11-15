@@ -6,3 +6,4 @@
 /** 2: sessions are project threads inside work blocks (WOR-147). */
 export const SESSIONS_SCHEMA_VERSION = 2
 export const EVENTS_SCHEMA_VERSION = 1
+export const HISTORY_SCHEMA_VERSION = 1

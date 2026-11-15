@@ -1,4 +1,4 @@
-import type { EVENTS_SCHEMA_VERSION, SESSIONS_SCHEMA_VERSION } from './constants'
+import type { EVENTS_SCHEMA_VERSION, HISTORY_SCHEMA_VERSION, SESSIONS_SCHEMA_VERSION } from './constants'
 import type { LocationContext } from '../payload'
 import type { GitCommit } from '../git-commits'
 
@@ -113,4 +113,28 @@ export interface SessionJsonOptions {
 export interface EventsJsonOptions {
   limit?: number
   includeCategories: string[]
+}
+
+/** One command in a repo's history. No command text, folder or file path: the JSON is read by other tools. */
+export interface HistoryEntryJson {
+  capturedAt: string
+  branch: string | null
+  /** `shell`, `editor`, or the coding agent's name */
+  source: string
+  isGit: boolean
+  exitCode: number | null
+  /** The branch moves it made, in plain language */
+  moves: string[]
+  /** Where git itself can show what it changed */
+  recovery: string[]
+}
+
+export interface HistoryJson {
+  schemaVersion: typeof HISTORY_SCHEMA_VERSION
+  repo: string
+  /** The start of the window, as an ISO timestamp */
+  since: string
+  entries: HistoryEntryJson[]
+  /** Stashes nobody restored in the window */
+  leftStashed: string[]
 }

@@ -136,16 +136,24 @@ function applyStashMove(stashes: PendingStash[], move: GitMove, branch: string |
   }
 }
 
+/** The moves told for each event (same order as the events), and the stashes still waiting at the end. */
+export interface EventMoves {
+  perEvent: BranchMoveLine[][]
+  leftStashed: BranchMoveLine[]
+}
+
 /**
- * Every branch move in the session, in order, each under the branch it happened on: a stash restored on another
+ * The branch-move lines of each event, in order, each under the branch it happened on: a stash restored on another
  * branch reads as uncommitted changes moved between them, and a new branch says what it was created from (the
  * branch you were on before). A plain switch gets no line — the story's `On <branch>:` lines already say it.
+ * Stashes nobody restored come back separately, as they belong to no event.
  */
-export function describeBranchMoves(events: EventPayload[]): BranchMoveLine[] {
-  const lines: BranchMoveLine[] = []
+export function describeEventMoves(events: EventPayload[]): EventMoves {
+  const perEvent: BranchMoveLine[][] = []
   let stashes: PendingStash[] = []
   let previousBranch: string | null = null
   for (const event of events) {
+    const lines: BranchMoveLine[] = []
     const branches = branchesDuring(event, previousBranch)
     const wasFileCheckout = isFileCheckout(event, previousBranch)
     for (const [index, move] of (event.gitMoves ?? []).entries()) {
@@ -155,9 +163,18 @@ export function describeBranchMoves(events: EventPayload[]): BranchMoveLine[] {
       const line = stashStep.line ?? describeMove({ move, branch: branches[index], fromBranch, wasFileCheckout })
       if (line) lines.push(line)
     }
+    perEvent.push(lines)
     if (event.branch !== null) previousBranch = event.branch
   }
   // A stash nobody restored is still waiting in `git stash list`; an applied one is there too, but you used it
-  const leftStashed = stashes.filter((pending) => !pending.isApplied)
-  return [...lines, ...leftStashed.map((stash) => ({ branch: stash.branch, line: 'Left changes stashed (git stash)' }))]
+  const leftStashed = stashes
+    .filter((pending) => !pending.isApplied)
+    .map((stash) => ({ branch: stash.branch, line: 'Left changes stashed (git stash)' }))
+  return { perEvent, leftStashed }
+}
+
+/** Every branch move in the session, in order — see `describeEventMoves`. */
+export function describeBranchMoves(events: EventPayload[]): BranchMoveLine[] {
+  const { perEvent, leftStashed } = describeEventMoves(events)
+  return [...perEvent.flat(), ...leftStashed]
 }
