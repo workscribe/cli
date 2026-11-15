@@ -36,6 +36,11 @@ vi.mock('../../src/config/registry', () => ({
   ]),
 }))
 
+vi.mock('../../src/capture/hooks/overlaps', () => ({
+  agentSourcesWith: vi.fn(),
+  allAgentSources: vi.fn(() => ['claude-code', 'cursor', 'copilot-vscode']),
+}))
+
 vi.mock('../../src/utils/paths', () => ({ PAUSE_FLAG_PATH: '/home/user/.workscribe/paused' }))
 
 import fs from 'fs'
@@ -48,6 +53,7 @@ import { getRepoContext } from '../../src/capture/git'
 import { readCommitMessageFile } from '../../src/capture/commit-message-file'
 import { getCommitsSince, latestCommitSubject } from '../../src/capture/git-snapshot'
 import { readLastAiderPrompt } from '../../src/capture/aider'
+import { agentSourcesWith } from '../../src/capture/hooks/overlaps'
 import { captureCommand } from '../../src/capture'
 
 const mockFs = fs as unknown as Record<string, ReturnType<typeof vi.fn>>
@@ -61,6 +67,7 @@ const mockGetRepoContext = getRepoContext as ReturnType<typeof vi.fn>
 const mockGetLastEvent = getLastEvent as ReturnType<typeof vi.fn>
 const mockGetLastEventForCwd = getLastEventForCwd as ReturnType<typeof vi.fn>
 const mockMergeRecentEdit = mergeRecentEdit as ReturnType<typeof vi.fn>
+const mockAgentSourcesWith = agentSourcesWith as ReturnType<typeof vi.fn>
 const mockReadLastAiderPrompt = readLastAiderPrompt as ReturnType<typeof vi.fn>
 
 const BASE_CONFIG = {
@@ -82,6 +89,7 @@ beforeEach(() => {
   mockGetRepoContext.mockReturnValue({ repoName: 'myapp', branch: 'main', root: '/repo', remote: null })
   mockNormalize.mockReturnValue({ category: 'shipping', metadata: {} })
   mockReadLastAiderPrompt.mockReturnValue(null)
+  mockAgentSourcesWith.mockReturnValue([])
 })
 
 describe('captureCommand — capture.aiTools kill switch', () => {
@@ -316,6 +324,117 @@ describe('captureCommand — bounded stored command', () => {
     })
 
     expect(mockInsertEvent).toHaveBeenCalledWith(expect.objectContaining({ command: 'cat <<EOF\nEOF' }))
+  })
+})
+
+describe('captureCommand — one action, one event (WOR-160)', () => {
+  const AGENT_SOURCES = ['claude-code', 'cursor', 'copilot-vscode']
+  const lastRow = (source: string | null) => ({
+    command: 'npm test',
+    cwd: '/repo',
+    captured_at: new Date().toISOString(),
+    source,
+  })
+
+  it('gives a shell command no merge rule while no agent shares the shell hook', () => {
+    captureCommand({ command: 'npm test', cwd: '/repo', exitCode: 0, durationMs: 10 })
+
+    expect(mockInsertEvent.mock.calls[0][0].merge).toBeUndefined()
+  })
+
+  it('has a shell command look for the rows of agents that share the shell hook', () => {
+    mockAgentSourcesWith.mockImplementation((overlap: string) =>
+      overlap === 'shellCommands' ? ['copilot-vscode'] : []
+    )
+
+    captureCommand({ command: 'npm test', cwd: '/repo', exitCode: 0, durationMs: 10 })
+
+    expect(mockInsertEvent.mock.calls[0][0].merge).toEqual({ kind: 'shell-command', agentSources: ['copilot-vscode'] })
+  })
+
+  it('has an agent command always look for another agent’s copy, and for the shell row when its terminal shares the hook', () => {
+    captureCommand({
+      command: 'npm test',
+      cwd: '/repo',
+      exitCode: 0,
+      durationMs: 10,
+      source: 'cursor',
+      overlaps: {},
+    })
+    captureCommand({
+      command: 'npm test',
+      cwd: '/repo',
+      exitCode: 0,
+      durationMs: 10,
+      source: 'copilot-vscode',
+      overlaps: { shellCommands: true },
+    })
+
+    expect(mockInsertEvent.mock.calls[0][0].merge).toEqual({
+      kind: 'agent-command',
+      sharesShell: false,
+      agentSources: AGENT_SOURCES,
+    })
+    expect(mockInsertEvent.mock.calls[1][0].merge).toEqual({
+      kind: 'agent-command',
+      sharesShell: true,
+      agentSources: AGENT_SOURCES,
+    })
+  })
+
+  it('gives a command from another tool, with a source of its own, no shell rule', () => {
+    mockAgentSourcesWith.mockReturnValue(['copilot-vscode'])
+
+    captureCommand({ command: 'npm test', cwd: '/repo', exitCode: 0, durationMs: 10, source: 'aider' })
+
+    expect(mockInsertEvent.mock.calls[0][0].merge).toBeUndefined()
+  })
+
+  it('lets a row from a source it merges with through the duplicate check', () => {
+    mockAgentSourcesWith.mockReturnValue(['copilot-vscode'])
+    mockGetLastEvent.mockReturnValue(lastRow('copilot-vscode'))
+    mockIsDuplicate.mockReturnValue(true)
+
+    captureCommand({ command: 'npm test', cwd: '/repo', exitCode: 0, durationMs: 10 })
+
+    expect(mockInsertEvent).toHaveBeenCalledOnce()
+  })
+
+  it('still drops a duplicate from a source it can’t merge with', () => {
+    mockGetLastEvent.mockReturnValue(lastRow('copilot-vscode'))
+    mockIsDuplicate.mockReturnValue(true)
+
+    captureCommand({ command: 'npm test', cwd: '/repo', exitCode: 0, durationMs: 10 })
+
+    expect(mockInsertEvent).not.toHaveBeenCalled()
+  })
+
+  it('has an agent edit and an editor save look for each other', () => {
+    mockAgentSourcesWith.mockImplementation((overlap: string) => (overlap === 'editorSaves' ? ['copilot-vscode'] : []))
+    const edit = { cwd: '/repo', exitCode: null, durationMs: null, type: 'code_edit', file: '/repo/a.ts' }
+
+    captureCommand({ ...edit, source: 'copilot-vscode', overlaps: { editorSaves: true } })
+    captureCommand({ ...edit, source: 'vscode' })
+
+    expect(mockInsertEvent.mock.calls[0][0].merge).toEqual({
+      kind: 'agent-edit',
+      sharesSaves: true,
+      agentSources: AGENT_SOURCES,
+    })
+    expect(mockInsertEvent.mock.calls[1][0].merge).toEqual({ kind: 'editor-save', agentSources: ['copilot-vscode'] })
+  })
+
+  it('gives a save no merge rule while no agent shares the editor’s saves', () => {
+    captureCommand({
+      cwd: '/repo',
+      exitCode: null,
+      durationMs: null,
+      type: 'code_edit',
+      file: '/repo/a.ts',
+      source: 'vscode',
+    })
+
+    expect(mockInsertEvent.mock.calls[0][0].merge).toBeUndefined()
   })
 })
 

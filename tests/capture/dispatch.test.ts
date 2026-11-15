@@ -13,6 +13,7 @@ vi.mock('../../src/capture/hooks', () => ({
     'claude-code': { parse: vi.fn(() => null) },
     stub: { parse: vi.fn(), checksCommits: false },
     checked: { parse: vi.fn(), checksCommits: true },
+    overlapping: { parse: vi.fn(), overlaps: { shellCommands: true, editorSaves: true } },
   },
 }))
 
@@ -59,6 +60,7 @@ describe('dispatchHook', () => {
       durationMs: 40,
       source: 'stub',
       agentSession: { source: 'stub', sessionId: 'conversation-1' },
+      overlaps: {},
     })
   })
 
@@ -80,6 +82,17 @@ describe('dispatchHook', () => {
 
     expect(vi.mocked(captureCommand).mock.calls[0][0]).toMatchObject({ verifyCommit: true })
     expect(vi.mocked(captureCommand).mock.calls[1][0]).not.toHaveProperty('verifyCommit')
+  })
+
+  it('passes on the overlaps an integration declares, and none when it declares none', () => {
+    parse('overlapping').mockReturnValue(COMMAND)
+    parse('stub').mockReturnValue(COMMAND)
+
+    dispatchHook('{}', 'PostToolUse', 'overlapping')
+    dispatchHook('{}', 'PostToolUse', 'stub')
+
+    expect(vi.mocked(captureCommand).mock.calls[0][0].overlaps).toEqual({ shellCommands: true, editorSaves: true })
+    expect(vi.mocked(captureCommand).mock.calls[1][0].overlaps).toEqual({})
   })
 
   it('drops an unknown source, and a payload the parser has no event for', () => {
@@ -135,6 +148,7 @@ describe('dispatchHook', () => {
       linesAdded: 3,
       linesRemoved: 1,
       agentSession: { source: 'stub', sessionId: 's' },
+      overlaps: {},
     })
 
     vi.mocked(captureCommand).mockClear()

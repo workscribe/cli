@@ -2,7 +2,8 @@ import type { EventRow } from '../db/types'
 import { isWorkscribeOnlyCommand } from './workscribe-command'
 import { commandSteps, isGlueStep } from './command-steps'
 
-function normalizeForFilter(cmd: string): string {
+/** A command with its whitespace collapsed and trimmed: how commands are compared for noise and duplicates. */
+export function normalizeForFilter(cmd: string): string {
   return cmd.trim().replace(/\s+/g, ' ')
 }
 

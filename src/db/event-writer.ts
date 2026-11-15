@@ -3,6 +3,8 @@ import { isDatabaseLocked, withImmediateTransaction } from './transaction'
 import { writeEventDimensions, type EventDimensions } from './dimensions'
 import { upsertAgentSession, type AgentSessionRef } from './agent-sessions'
 import { linkEventTickets, type TicketKeys } from './tickets'
+import { mergeIntoRecentEvent } from './event-merge'
+import type { EventMerge } from '../capture/merge-rules'
 import { debugLog } from '../utils/logger'
 
 export interface NewEvent {
@@ -23,10 +25,12 @@ export interface NewEvent {
   agentSession?: AgentSessionRef
   /** The ticket keys it names, linked along with its project (`ticketKeysOf`) */
   tickets?: TicketKeys
+  /** What to look for among stored events before inserting: the same action seen by another capture path */
+  merge?: EventMerge
 }
 
 function insertEventRow(db: MigrationDatabase, event: NewEvent, agentSessionId: number | null = null): number {
-  const { dimensions: _dimensions, agentSession: _agentSession, tickets: _tickets, ...columns } = event
+  const { dimensions: _dimensions, agentSession: _agentSession, tickets: _tickets, merge: _merge, ...columns } = event
   const result = db
     .prepare(
       `INSERT INTO events (captured_at, command, cwd, exit_code, duration_ms, repo_name, branch, category, metadata, source, file_path, agent_session_id)
@@ -38,6 +42,8 @@ function insertEventRow(db: MigrationDatabase, event: NewEvent, agentSessionId: 
 
 /** The event, its agent session, its project links and its tickets, written in order inside the caller's transaction. */
 function insertLinkedEvent(db: MigrationDatabase, event: NewEvent): void {
+  // The same action may already be stored by another capture path: it gains this event's source instead
+  if (mergeIntoRecentEvent(db, event)) return
   const agentSessionId = event.agentSession
     ? upsertAgentSession(db, { ...event.agentSession, cwd: event.cwd, capturedAt: event.captured_at })
     : null
@@ -49,10 +55,10 @@ function insertLinkedEvent(db: MigrationDatabase, event: NewEvent): void {
 /**
  * Stores an event and its links — its project, its tickets and its agent session — in one transaction. If linking fails, the
  * event is stored without links rather than lost. A lock that never came free is thrown, as a plain insert would
- * have been: no second wait. An event with nothing to link is one plain insert.
+ * have been: no second wait. An event with nothing to link and no merge rule is one plain insert.
  */
 export function insertEventRecord(db: MigrationDatabase, event: NewEvent): void {
-  if (!event.dimensions?.project && !event.agentSession) {
+  if (!event.dimensions?.project && !event.agentSession && !event.merge) {
     insertEventRow(db, event)
     return
   }
