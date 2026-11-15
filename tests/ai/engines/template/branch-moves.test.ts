@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { describeBranchMoves } from '../../../../src/ai/engines/template/branch-moves'
+import { describeBranchMoves, describeEventMoves } from '../../../../src/ai/engines/template/branch-moves'
 import { storyLines } from '../../../../src/ai/engines/template/story'
 import { gitMovesOf } from '../../../../src/normalize/git-move'
 import { event, onBranch, session } from './fixtures'
@@ -179,5 +179,31 @@ describe('storyLines — branch moves', () => {
     expect(storyLines(session([git('git reset --hard', 'feature/auth')]))).toEqual([
       '- Discarded local changes (git reset --hard)',
     ])
+  })
+})
+
+describe('describeEventMoves', () => {
+  it('tells each event its own moves, and keeps stashes nobody restored apart', () => {
+    const events = [
+      onBranch('main', event('testing')),
+      git('git stash && git switch -c feat/x', 'feat/x'),
+      git('git reset --hard', 'feat/x'),
+    ]
+
+    expect(describeEventMoves(events)).toEqual({
+      perEvent: [
+        [],
+        [{ branch: 'feat/x', line: 'Created feat/x from main' }],
+        [{ branch: 'feat/x', line: 'Discarded local changes (git reset --hard)' }],
+      ],
+      leftStashed: [{ branch: 'main', line: 'Left changes stashed (git stash)' }],
+    })
+  })
+
+  it('flattens to the same lines as describeBranchMoves', () => {
+    const events = [git('git stash', 'main'), git('git switch feat/x', 'feat/x'), git('git stash pop', 'feat/x')]
+    const { perEvent, leftStashed } = describeEventMoves(events)
+
+    expect([...perEvent.flat(), ...leftStashed]).toEqual(describeBranchMoves(events))
   })
 })
