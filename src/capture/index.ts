@@ -10,6 +10,9 @@ import { readLastAiderPrompt } from './aider'
 import { normalizeCommand } from '../normalize/patterns'
 import { readConfig } from '../config'
 import { shouldFilter, isDuplicate } from './filter'
+import { canMergeAcrossSources } from './merge-rules'
+import { mergeRuleOf } from './event-merge-rule'
+import type { HookOverlaps } from './hooks/types'
 import { boundedCommand } from './command-steps'
 import { IDE_DEDUP_WINDOW_MS, TASK_RUN_DEDUP_WINDOW_MS } from './ide'
 import { PAUSE_FLAG_PATH } from '../utils/paths'
@@ -70,6 +73,8 @@ export function captureCommand(opts: {
   agentSession?: AgentSessionRef
   /** The source's hooks report no failure for commands: a commit with no exit code is checked against `HEAD` */
   verifyCommit?: boolean
+  /** Given by every agent hook event (empty when it overlaps with nothing): what else records the same action */
+  overlaps?: HookOverlaps
 }): void {
   // Check pause flag before any I/O
   if (fs.existsSync(PAUSE_FLAG_PATH)) return
@@ -135,6 +140,7 @@ export function captureCommand(opts: {
       dimensions,
       tickets: ticketsOf(ideEvent, dimensions, config),
       agentSession: opts.agentSession,
+      merge: mergeRuleOf(opts),
     })
     return
   }
@@ -150,8 +156,11 @@ export function captureCommand(opts: {
   const storedCommand = boundedCommand(safeCommand)
 
   // 3. Deduplicate: same command + same cwd within 5 seconds
+  // A row from a source this one merges with isn't a duplicate to drop: the merge below gives it this event's source
+  const merge = mergeRuleOf(opts)
   const last = getLastEvent()
-  if (isDuplicate(storedCommand, cwd, last ?? undefined)) return
+  const isMergeable = merge !== undefined && canMergeAcrossSources(merge, opts.source ?? null, last?.source ?? null)
+  if (!isMergeable && isDuplicate(storedCommand, cwd, last ?? undefined)) return
 
   // 4. Normalize to typed event — first, because the repo depends on which step did the work
   const { category, metadata: normalizedMetadata, matchedStep } = normalizeCommand(safeCommand)
@@ -218,5 +227,6 @@ export function captureCommand(opts: {
     dimensions,
     tickets: ticketsOf(shellEvent, dimensions, config),
     agentSession: opts.agentSession,
+    merge,
   })
 }

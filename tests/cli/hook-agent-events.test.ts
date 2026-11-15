@@ -75,6 +75,7 @@ describe('_hook — agent edits', () => {
       linesAdded: 2,
       linesRemoved: 1,
       agentSession: SESSION,
+      overlaps: {},
     })
   })
 

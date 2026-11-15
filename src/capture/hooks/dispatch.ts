@@ -38,7 +38,7 @@ function handlePrompt(event: Of<'prompt'>, source: string | undefined): void {
   )
 }
 
-function handleEdit(event: Of<'edit'>, source: string | undefined): void {
+function handleEdit(event: Of<'edit'>, source: string | undefined, integration: AIHookIntegration): void {
   if (readConfig().capture.agentEdits === false) return
   // A file the agent changed: its path and line counts, never the text, as an edit of its conversation
   captureCommand({
@@ -51,6 +51,7 @@ function handleEdit(event: Of<'edit'>, source: string | undefined): void {
     linesAdded: event.linesAdded,
     linesRemoved: event.linesRemoved,
     agentSession: agentSessionOf(event.sessionId, source),
+    overlaps: integration.overlaps ?? {},
   })
 }
 
@@ -62,6 +63,7 @@ function handleCommand(event: Of<'command'>, source: string | undefined, integra
     durationMs: event.durationMs,
     source,
     agentSession: agentSessionOf(event.sessionId, source),
+    overlaps: integration.overlaps ?? {},
     ...(integration.checksCommits ? { verifyCommit: true } : {}),
   })
 }
@@ -97,7 +99,7 @@ function store(event: HookEvent, source: string | undefined, integration: AIHook
   if (event.kind === 'prompt') return handlePrompt(event, source)
   if (readConfig().capture.aiTools === false) return
   if (event.kind === 'command') return handleCommand(event, source, integration)
-  if (event.kind === 'edit') return handleEdit(event, source)
+  if (event.kind === 'edit') return handleEdit(event, source, integration)
   handleSessionEvent(event, source)
 }
 

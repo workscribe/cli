@@ -141,6 +141,7 @@ describe('_hook integration', () => {
       exitCode: 0,
       durationMs: null,
       source: 'claude-code',
+      overlaps: {},
     })
   })
 
