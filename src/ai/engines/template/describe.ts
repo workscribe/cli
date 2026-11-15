@@ -30,13 +30,13 @@ export function describeCommits(commits: string[]): string[] {
 }
 
 /**
- * How test or build runs turned out. Commands captured through AI-tool hooks have no exit code, so they never decide
- * the outcome; with no exit code known at all, the runs just ran. Null when there were none.
+ * How test or build runs turned out. A run with no known exit code never decides the outcome, so an earlier pass or
+ * failure doesn't stand for it: when the latest run's code is unknown, the runs just ran. Null when there were none.
  */
 export function outcomeOf(runs: EventPayload[]): Outcome | null {
   if (runs.length === 0) return null
+  if (runs[runs.length - 1].exitCode === null) return 'ran'
   const knownExitCodes = runs.map((run) => run.exitCode).filter((exitCode): exitCode is number => exitCode !== null)
-  if (knownExitCodes.length === 0) return 'ran'
   if (knownExitCodes[knownExitCodes.length - 1] !== 0) return 'failing'
   if (knownExitCodes.some((exitCode) => exitCode !== 0)) return 'resolved'
   return 'passing'
