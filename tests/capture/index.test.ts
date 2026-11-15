@@ -22,7 +22,7 @@ vi.mock('../../src/capture/redact', () => ({ redact: vi.fn() }))
 
 vi.mock('../../src/capture/git', () => ({ getRepoContext: vi.fn() }))
 
-vi.mock('../../src/capture/git-snapshot', () => ({ getCommitsSince: vi.fn() }))
+vi.mock('../../src/capture/git-snapshot', () => ({ getCommitsSince: vi.fn(), latestCommitSubject: vi.fn() }))
 
 vi.mock('../../src/capture/aider', () => ({ readLastAiderPrompt: vi.fn() }))
 
@@ -46,7 +46,7 @@ import { shouldFilter, isDuplicate } from '../../src/capture/filter'
 import { redact } from '../../src/capture/redact'
 import { getRepoContext } from '../../src/capture/git'
 import { readCommitMessageFile } from '../../src/capture/commit-message-file'
-import { getCommitsSince } from '../../src/capture/git-snapshot'
+import { getCommitsSince, latestCommitSubject } from '../../src/capture/git-snapshot'
 import { readLastAiderPrompt } from '../../src/capture/aider'
 import { captureCommand } from '../../src/capture'
 
@@ -513,5 +513,44 @@ describe('captureCommand — where the work happened', () => {
     captureCommand({ command: 'claude', cwd: '/r/api', exitCode: 0, durationMs: 10, gitBefore: 'abc123' })
 
     expect(getCommitsSince).toHaveBeenCalledWith('abc123', '/r/api')
+  })
+})
+
+describe('captureCommand — the commit check, for a source that reports no failure', () => {
+  const commit = { command: 'git commit -m "fix: bug"', cwd: '/repo', exitCode: null, durationMs: null }
+
+  beforeEach(() => {
+    mockNormalize.mockReturnValue({ category: 'shipping', metadata: { message: 'fix: bug' } })
+  })
+
+  it('stores -1 for a commit HEAD does not show, so it never reads as committed', () => {
+    vi.mocked(latestCommitSubject).mockReturnValue('an earlier commit')
+
+    captureCommand({ ...commit, verifyCommit: true })
+
+    expect(mockInsertEvent.mock.calls[0][0].exit_code).toBe(-1)
+  })
+
+  it('leaves a commit that landed unknown', () => {
+    vi.mocked(latestCommitSubject).mockReturnValue('fix: bug')
+
+    captureCommand({ ...commit, verifyCommit: true })
+
+    expect(mockInsertEvent.mock.calls[0][0].exit_code).toBeNull()
+  })
+
+  it('never asks git for a source that did not turn it on', () => {
+    captureCommand(commit)
+
+    expect(latestCommitSubject).not.toHaveBeenCalled()
+    expect(mockInsertEvent.mock.calls[0][0].exit_code).toBeNull()
+  })
+
+  it('never asks git about a command that is not a commit', () => {
+    mockNormalize.mockReturnValue({ category: 'testing', metadata: {} })
+
+    captureCommand({ ...commit, command: 'npm test', verifyCommit: true })
+
+    expect(latestCommitSubject).not.toHaveBeenCalled()
   })
 })

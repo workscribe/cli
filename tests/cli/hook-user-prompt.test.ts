@@ -8,7 +8,8 @@ vi.mock('../../src/db/alerts', () => ({ insertAlert: vi.fn() }))
 
 import { EventEmitter } from 'events'
 import { Command } from 'commander'
-import { parseUserPromptPayload, registerHook } from '../../src/cli/hook'
+import { registerHook } from '../../src/cli/hook'
+import { parseUserPromptPayload } from '../../src/capture/hooks/claude-code-payload'
 import { containsSecrets } from '../../src/capture/detect-secrets'
 import { insertAlert } from '../../src/db/alerts'
 

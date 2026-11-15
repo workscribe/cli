@@ -12,6 +12,7 @@ import { buildHistory, type History, type HistoryEntry } from '../summary/histor
 import { buildHistoryJson } from '../summary/contract/build'
 import { requireThreadData } from './thread-day'
 import { fail } from './fail'
+import { exitBadge } from './exit-badge'
 
 const DEFAULT_SINCE = '24h'
 
@@ -22,10 +23,9 @@ function printNothing(isJson: boolean, message: string): void {
 
 function printEntry(entry: HistoryEntry): void {
   const branch = entry.branch ? chalk.dim(` [${entry.branch}]`) : ''
-  const failed = entry.exitCode !== null && entry.exitCode !== 0 ? chalk.red(` ✗${entry.exitCode}`) : ''
   const source = entry.source === 'shell' ? '' : chalk.dim(` (${entry.source})`)
   const command = entry.isGit ? entry.command : chalk.dim(entry.command)
-  log.plain(`  ${chalk.dim(formatDate(entry.capturedAt))}  ${command}${branch}${source}${failed}`)
+  log.plain(`  ${chalk.dim(formatDate(entry.capturedAt))}  ${command}${branch}${source}${exitBadge(entry.exitCode)}`)
   for (const move of entry.moves) log.plain(`      ${chalk.cyan('→')} ${move}`)
   for (const pointer of entry.recovery) log.plain(`      ${chalk.dim(`to look back: ${pointer}`)}`)
 }

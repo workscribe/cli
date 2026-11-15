@@ -12,7 +12,7 @@ import {
   removeFishCompletions,
   removeHook,
 } from '../capture/shell-hook'
-import { claudeCodeIntegration } from '../capture/hooks/claude-code'
+import { AI_HOOK_INTEGRATIONS } from '../capture/hooks'
 import { log } from '../utils/logger'
 import { SKILL_AGENTS } from '../skills/agents'
 import { removeSkills } from '../skills/actions'
@@ -25,7 +25,7 @@ function completionRcFiles(): string[] {
 
 const CHRONICLE_RC_FILES = ['.zshrc', '.bashrc']
 
-/** Removes everything else `init` adds to your shell and tools: completions and the Claude Code session hook. */
+/** Removes everything else `init` adds to your shell and tools: completions and each coding agent's session hook. */
 function removeCompletionsAndToolHooks(): void {
   for (const rcFile of completionRcFiles()) {
     if (removeCompletions(rcFile)) log.success(`Shell completions removed from ${rcFile}`)
@@ -36,13 +36,17 @@ function removeCompletionsAndToolHooks(): void {
   }
   if (removeFishCompletions()) log.success('Fish completions removed')
 
-  // Not only when Claude Code is on PATH — someone who removed Claude Code can still have the hook in its settings
-  const outcome = claudeCodeIntegration.uninstall?.()
-  if (outcome === 'removed') log.success('Claude Code session hook removed from ~/.claude/settings.json')
-  if (outcome === 'unreadable') {
-    log.warn(
-      "Couldn't read ~/.claude/settings.json, so the Claude Code session hook was left in place. Fix the file's JSON, then run: workscribe uninstall --hooks-only"
-    )
+  // Not only when the agent is on PATH — someone who removed it can still have the hook in its settings
+  for (const integration of Object.values(AI_HOOK_INTEGRATIONS)) {
+    const outcome = integration.uninstall()
+    if (outcome === 'removed') {
+      log.success(`${integration.displayName} session hook removed from ${integration.settingsPath}`)
+    }
+    if (outcome === 'unreadable') {
+      log.warn(
+        `Couldn't read ${integration.settingsPath}, so the ${integration.displayName} session hook was left in place. Fix the file's JSON, then run: workscribe uninstall --hooks-only`
+      )
+    }
   }
 }
 

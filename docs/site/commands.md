@@ -500,7 +500,7 @@ Event = {
   metadata: Record<string, unknown> // structured fields the normaliser extracted (tool, packages, message, …); on
                                    // code_edit: linesAdded, linesRemoved (null when unknown), lastEditAt
   hint?: string                    // only on unclassified ("other") events: redacted, ≤120-char command prefix
-  exitCode: number | null          // null for commands captured through AI-tool hooks
+  exitCode: number | null          // 0 passed; another code failed; -1 failed, no code known; null unknown (agent hooks that report none, interrupts)
   durationMs: number | null
   source: string | null            // shell, claude-code, vscode, …
 }

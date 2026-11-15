@@ -2,10 +2,12 @@ import { describe, it, expect } from 'vitest'
 import { spawnSync } from 'child_process'
 import {
   buildHookCommand,
+  hookMarker,
+  isWorkscribeHook,
   isGuardedCommand,
   isPinnedCommand,
   pinnedNodePath,
-} from '../../src/capture/hooks/claude-code-command'
+} from '../../src/capture/hooks/hook-command'
 
 const PINNED = buildHookCommand({
   nodePath: '/opt/node/bin/node',
@@ -103,5 +105,29 @@ describe('the guarded commands in a real shell', () => {
       }
     )
     expect(result.status).not.toBe(0)
+  })
+})
+
+describe('hookMarker and isWorkscribeHook', () => {
+  it('names the source the hook reports', () => {
+    expect(hookMarker('claude-code')).toBe('_hook --source claude-code')
+  })
+
+  it.each([
+    [PINNED, true],
+    [BARE, true],
+    ['workscribe _hook --source claude-code --event Stop || true', true],
+    ['workscribe _hook --source claude-code', true],
+    ['workscribe _hook --source claude-codex', false],
+    ['echo hello', false],
+  ])('%s → %s for claude-code', (command, expected) => {
+    expect(isWorkscribeHook(command, 'claude-code')).toBe(expected)
+  })
+
+  it("never lets one agent's name claim another's hooks", () => {
+    const vscode = 'workscribe _hook --source copilot-vscode || true'
+
+    expect(isWorkscribeHook(vscode, 'copilot')).toBe(false)
+    expect(isWorkscribeHook(vscode, 'copilot-vscode')).toBe(true)
   })
 })

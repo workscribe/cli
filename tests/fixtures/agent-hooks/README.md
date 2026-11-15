@@ -158,3 +158,16 @@ database by itself.
    ```sh
    node scripts/agent-capture/sanitize-fixture.js <recording.json> <scratch folder> <source>/<version>/<scenario>.json
    ```
+
+## Adding an agent's integration
+
+1. Add its `hook` value to `src/config/ai-tools.json` (the value is the `--source` its events are stored under).
+2. Write `src/capture/hooks/<agent>.ts`: an `AIHookIntegration` with `parse(raw, event)` returning one `HookEvent`
+   (`src/capture/hooks/event.ts`) or null, `install` / `uninstall` / `checkHealth` over its settings file (use
+   `config-file.ts` and `hook-command.ts`: unparseable files are left alone, existing ones backed up, hooks recognised
+   with `isWorkscribeHook`), and `settingsPath` for messages.
+3. Register it in `src/capture/hooks/index.ts`. `_hook`, `init`, `status` and `uninstall` pick it up from there.
+4. Pin its payloads as fixtures here, and test `parse` over them.
+5. Give a command an outcome from what the payload really says: an exit code, `{ kind: 'failed' }` (stored as `-1`)
+   when it only says the command failed, otherwise `{ kind: 'unknown' }`. If the payload has no failure signal for
+   commands, set `checksCommits: true` so a `git commit` is compared with `HEAD`.

@@ -16,6 +16,10 @@ describe('collectCommits', () => {
     expect(collectCommits(events)).toEqual(['landed'])
   })
 
+  it('skips a commit that failed with no exit code known (-1), so it never reads as committed', () => {
+    expect(collectCommits([event('shipping', { message: 'rejected, no code' }, -1)])).toEqual([])
+  })
+
   it('collects git commit messages and AI-session commits in order without repeats', () => {
     const events = [
       event('shipping', { message: 'fix: token validation' }),
@@ -70,9 +74,31 @@ describe('describeOutcome', () => {
   })
 
   it('counts runs with no exit code without letting them decide the outcome', () => {
-    const runs = [event('testing', {}, 1), event('testing', {}, 0), event('testing', {}, null)]
+    const runs = [event('testing', {}, 1), event('testing', {}, null), event('testing', {}, 0)]
 
     expect(describeOutcome(runs, TEST_WORDING)).toBe('Resolved failing tests (3 runs, now passing)')
+  })
+
+  it.each([
+    ['[1, 0, null]', [1, 0, null]],
+    ['[1, null]', [1, null]],
+    ['[0, null]', [0, null]],
+  ])('never claims a result when the latest run has no exit code: %s', (_label, codes) => {
+    const runs = codes.map((code) => event('testing', {}, code))
+
+    expect(describeOutcome(runs, TEST_WORDING)).toBe(`Ran tests (${codes.length} runs)`)
+  })
+
+  it('says the runs ran, not that they failed, when the latest was interrupted after a failure', () => {
+    expect(describeOutcome([event('testing', {}, 1), event('testing', {}, null)], TEST_WORDING)).toBe(
+      'Ran tests (2 runs)'
+    )
+  })
+
+  it('still reports a pass after an earlier run with no exit code', () => {
+    expect(describeOutcome([event('testing', {}, null), event('testing', {}, 0)], TEST_WORDING)).toBe(
+      'Tests passing (2 runs)'
+    )
   })
 
   it('says the tests ran when no run has an exit code', () => {

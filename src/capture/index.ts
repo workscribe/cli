@@ -4,7 +4,8 @@ import { editMetadata, type EditCounts } from './edit-counts'
 import { redact } from './redact'
 import { commandHint } from './hint'
 import { getRepoContext } from './git'
-import { getCommitsSince } from './git-snapshot'
+import { getCommitsSince, latestCommitSubject } from './git-snapshot'
+import { exitCodeAfterCommitCheck } from './commit-check'
 import { readLastAiderPrompt } from './aider'
 import { normalizeCommand } from '../normalize/patterns'
 import { readConfig } from '../config'
@@ -45,6 +46,13 @@ function withMessageFromFile(
   return { ...rest, message: message ? redact(message, extraRedactions) : null }
 }
 
+/** `HEAD`'s subject for a commit check, redacted like the stored message it's compared with. */
+function redactedHeadSubject(category: string, workDirectory: string, extraRedactions: string[]): string | null {
+  if (category !== 'shipping') return null
+  const subject = latestCommitSubject(workDirectory)
+  return subject === null ? null : redact(subject, extraRedactions)
+}
+
 export function captureCommand(opts: {
   command?: string
   cwd: string
@@ -59,6 +67,8 @@ export function captureCommand(opts: {
   linesRemoved?: number | null
   /** The agent conversation a hook event came from — a command or an edit; editor and shell events have none */
   agentSession?: AgentSessionRef
+  /** The source's hooks report no failure for commands: a commit with no exit code is checked against `HEAD` */
+  verifyCommit?: boolean
 }): void {
   // Check pause flag before any I/O
   if (fs.existsSync(PAUSE_FLAG_PATH)) return
@@ -177,12 +187,20 @@ export function captureCommand(opts: {
     }
   }
 
-  // 7. Persist
+  // 7. Persist — a commit a source can't report on is checked against HEAD, after the command has run
+  const storedExitCode = opts.verifyCommit
+    ? exitCodeAfterCommitCheck({
+        exitCode,
+        category,
+        metadata,
+        headSubject: redactedHeadSubject(category, workDirectory, config.redact.extra),
+      })
+    : exitCode
   const shellEvent = {
     captured_at: new Date().toISOString(),
     command: safeCommand,
     cwd,
-    exit_code: exitCode,
+    exit_code: storedExitCode,
     duration_ms: durationMs,
     repo_name: repoName,
     branch,

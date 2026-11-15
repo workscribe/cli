@@ -10,7 +10,8 @@ import { EventEmitter } from 'events'
 import { Command } from 'commander'
 import { captureCommand } from '../../src/capture'
 import { readConfig } from '../../src/config'
-import { parseHookPayload, registerHook } from '../../src/cli/hook'
+import { registerHook } from '../../src/cli/hook'
+import { parseHookPayload } from '../../src/capture/hooks/claude-code-payload'
 
 const mockCapture = captureCommand as ReturnType<typeof vi.fn>
 const mockReadConfig = readConfig as ReturnType<typeof vi.fn>

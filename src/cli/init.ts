@@ -28,6 +28,7 @@ import {
   injectBinaryPath,
 } from '../capture/shell-hook'
 import { AI_HOOK_INTEGRATIONS } from '../capture/hooks'
+import type { AIHookIntegration } from '../capture/hooks/types'
 import { getPublicCommands } from './completions'
 import { detectAgents } from '../skills/detect'
 import { readInstallState } from '../skills/installer'
@@ -221,6 +222,17 @@ async function refreshCompletions(shell: Shell, program: Command): Promise<void>
   log.success(`Shell completions updated in ${shell.rcFile}`)
 }
 
+/** Installs a tool's hook and says what happened — never "installed" over a settings file it had to leave alone. */
+function reportInstall(integration: AIHookIntegration, doneWord: 'installed' | 'updated'): void {
+  if (integration.install() === 'unreadable') {
+    log.warn(
+      `Couldn't read ${integration.settingsPath}, so the ${integration.displayName} session hook was left alone. Fix the file's JSON, then run workscribe init again`
+    )
+    return
+  }
+  log.success(`${integration.displayName} session hook ${doneWord}`)
+}
+
 // ── Step 4: AI tools ──────────────────────────────────────────────────────
 async function runAIToolsStep(): Promise<void> {
   step(4, TOTAL_STEPS, 'Detecting AI coding tools')
@@ -248,8 +260,7 @@ async function runAIToolsStep(): Promise<void> {
         initial: true,
       })
       if (updateAiHook) {
-        integration.install()
-        log.success(`${integration.displayName} session hook updated`)
+        reportInstall(integration, 'updated')
       } else {
         log.info(`${integration.displayName} hook update skipped — re-run workscribe init to update later`)
       }
@@ -261,8 +272,7 @@ async function runAIToolsStep(): Promise<void> {
         initial: false,
       })
       if (install) {
-        integration.install()
-        log.success(`${integration.displayName} session hook installed`)
+        reportInstall(integration, 'installed')
       } else {
         log.info(`${integration.displayName} hook skipped — re-run workscribe init to install later`)
       }

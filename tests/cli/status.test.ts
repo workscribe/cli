@@ -29,8 +29,17 @@ vi.mock('../../src/cli/data-jobs', () => ({
     .mockReturnValue({ pending: [], failed: null, failedChecks: [], unresolvedRows: 0, latestBackup: null }),
 }))
 
-vi.mock('../../src/capture/hooks/claude-code', () => ({
-  checkHookHealth: vi.fn().mockReturnValue({ installed: false, pinned: true, confirmedBroken: null }),
+vi.mock('../../src/capture/hooks', () => ({
+  AI_HOOK_INTEGRATIONS: {
+    'claude-code': {
+      displayName: 'Claude Code',
+      checkHealth: vi.fn().mockReturnValue({ installed: false, pinned: true, confirmedBroken: null }),
+    },
+    'other-agent': {
+      displayName: 'Other Agent',
+      checkHealth: vi.fn().mockReturnValue({ installed: false, pinned: true, confirmedBroken: null }),
+    },
+  },
 }))
 
 // fs is mocked above, so the skill modules must be too — by default no coding agents are detected
@@ -54,7 +63,7 @@ import { getEventCount, getLastEvent, getEventsForDate, getRecentOtherRate } fro
 import { readConfig } from '../../src/config'
 import { log } from '../../src/utils/logger'
 import { registerStatus } from '../../src/cli/status'
-import { checkHookHealth } from '../../src/capture/hooks/claude-code'
+import { AI_HOOK_INTEGRATIONS } from '../../src/capture/hooks'
 import { detectShell, shellHookHealth } from '../../src/capture/shell-hook'
 import { getDataStatus } from '../../src/cli/data-jobs'
 
@@ -65,7 +74,8 @@ const mockGetEventsForDate = getEventsForDate as ReturnType<typeof vi.fn>
 const mockGetRecentOtherRate = getRecentOtherRate as ReturnType<typeof vi.fn>
 const mockReadConfig = readConfig as ReturnType<typeof vi.fn>
 const mockLog = log as Record<string, ReturnType<typeof vi.fn>>
-const mockCheckHookHealth = checkHookHealth as ReturnType<typeof vi.fn>
+const mockCheckHookHealth = AI_HOOK_INTEGRATIONS['claude-code'].checkHealth as ReturnType<typeof vi.fn>
+const mockOtherHealth = AI_HOOK_INTEGRATIONS['other-agent'].checkHealth as ReturnType<typeof vi.fn>
 
 const BASE_CONFIG = {
   ai: { provider: 'anthropic', apiKey: 'sk-test', model: null },
@@ -88,6 +98,7 @@ beforeEach(() => {
   mockReadConfig.mockReturnValue(BASE_CONFIG)
   mockFs.existsSync.mockReturnValue(false)
   mockCheckHookHealth.mockReturnValue({ installed: false, pinned: true, confirmedBroken: null })
+  mockOtherHealth.mockReturnValue({ installed: false, pinned: true, confirmedBroken: null })
 })
 
 describe('workscribe status', () => {
@@ -235,6 +246,14 @@ describe('workscribe status', () => {
       await makeProgram().parseAsync(['status'], { from: 'user' })
       expect(mockLog.plain).toHaveBeenCalledWith(expect.stringContaining('is failing right now'))
       expect(mockLog.plain).toHaveBeenCalledWith(expect.stringContaining('workscribe init'))
+    })
+
+    it("warns about each agent's hook by its own name, from the registry", async () => {
+      mockOtherHealth.mockReturnValue({ installed: true, pinned: false, confirmedBroken: true })
+      await makeProgram().parseAsync(['status'], { from: 'user' })
+      const calls = (mockLog.plain as ReturnType<typeof vi.fn>).mock.calls.flat().join(' ')
+      expect(calls).toContain('Other Agent hook is using an unpinned command and is failing right now')
+      expect(calls).not.toContain('Claude Code hook')
     })
 
     it('shows a softer "can silently break" warning when unpinned but currently working', async () => {
