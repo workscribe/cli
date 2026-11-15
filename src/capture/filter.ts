@@ -36,8 +36,9 @@ export function shouldFilter(command: string, ignoreList: string[]): boolean {
 }
 
 /**
- * Returns true if this command is a duplicate of the last event
- * (same command + same cwd within the dedup window).
+ * Returns true if this command is a duplicate of the last event (same command + same cwd within the dedup
+ * window). Takes the command as it will be stored — redacted and bounded — and compares whitespace-collapsed
+ * forms, so a multi-line or redacted command matches its stored row.
  */
 export function isDuplicate(
   command: string,
@@ -48,5 +49,9 @@ export function isDuplicate(
 ): boolean {
   if (!lastEvent) return false
   const lastTime = new Date(lastEvent.captured_at).getTime()
-  return lastEvent.command === normalizeForFilter(command) && lastEvent.cwd === cwd && now - lastTime < dedupWindowMs
+  return (
+    normalizeForFilter(lastEvent.command) === normalizeForFilter(command) &&
+    lastEvent.cwd === cwd &&
+    now - lastTime < dedupWindowMs
+  )
 }

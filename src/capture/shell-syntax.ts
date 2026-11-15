@@ -66,6 +66,24 @@ export function splitOutsideQuotes(text: string, separators: string[]): string[]
   return parts.map((part) => part.trim()).filter((part) => part !== '')
 }
 
+/**
+ * Where the last separator outside quotes starts at or before `limit`, or -1. `&&` counts once, at its first
+ * character, so cutting there never leaves half a separator behind.
+ */
+export function lastSeparatorAtOrBefore(text: string, limit: number, separators: string[]): number {
+  let last = -1
+  let skipUntil = 0
+  for (const { index, quote } of quotedCharacters(text)) {
+    if (index > limit) break
+    if (quote !== null || index < skipUntil || isRedirection(text, index)) continue
+    const separator = separators.find((candidate) => text.startsWith(candidate, index))
+    if (!separator) continue
+    last = index
+    skipUntil = index + separator.length
+  }
+  return last
+}
+
 /** Command or process substitution outside single quotes: the shell runs another command inside this one. */
 export function containsCommandSubstitution(text: string): boolean {
   for (const { index, quote } of quotedCharacters(text)) {

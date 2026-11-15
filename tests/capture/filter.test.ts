@@ -193,4 +193,18 @@ describe('isDuplicate', () => {
     // last event has 'npm test', new command has extra spaces
     expect(isDuplicate('npm  test', '/projects/myapp', { ...base, captured_at: recentTime }, 5000, now)).toBe(true)
   })
+
+  it('matches a multi-line command with its stored row, whatever its whitespace', () => {
+    const now = Date.now()
+    const stored = { ...base, command: 'git commit -F - <<EOF\nEOF', captured_at: new Date(now - 1000).toISOString() }
+
+    expect(isDuplicate('git commit -F - <<EOF\nEOF', '/projects/myapp', stored, 5000, now)).toBe(true)
+  })
+
+  it('matches a redacted command with its stored, redacted row', () => {
+    const now = Date.now()
+    const stored = { ...base, command: 'deploy --token=[REDACTED]', captured_at: new Date(now - 1000).toISOString() }
+
+    expect(isDuplicate('deploy --token=[REDACTED]', '/projects/myapp', stored, 5000, now)).toBe(true)
+  })
 })
