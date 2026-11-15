@@ -22,9 +22,23 @@ vi.mock('../../src/capture/shell-hook', () => ({
   removeChronicleHook: vi.fn(() => false),
 }))
 
-// Mocked whole: the real module imports child_process and reads ~/.claude/settings.json
-vi.mock('../../src/capture/hooks/claude-code', () => ({
-  claudeCodeIntegration: { isInstalled: vi.fn(() => false), uninstall: vi.fn(() => 'not-installed') },
+// Mocked whole: the real integrations import child_process and read agents' settings files. Two agents, so
+// uninstall is shown to go through the registry rather than to Claude Code
+vi.mock('../../src/capture/hooks', () => ({
+  AI_HOOK_INTEGRATIONS: {
+    'claude-code': {
+      displayName: 'Claude Code',
+      settingsPath: '~/.claude/settings.json',
+      isInstalled: vi.fn(() => false),
+      uninstall: vi.fn(() => 'not-installed'),
+    },
+    'other-agent': {
+      displayName: 'Other Agent',
+      settingsPath: '~/.other/hooks.json',
+      isInstalled: vi.fn(() => false),
+      uninstall: vi.fn(() => 'not-installed'),
+    },
+  },
 }))
 
 // fs is mocked above, so the skill installer is too — tests/skills/installer.test.ts covers the real one
@@ -46,7 +60,7 @@ import {
   removeCompletions,
   removeFishCompletions,
 } from '../../src/capture/shell-hook'
-import { claudeCodeIntegration } from '../../src/capture/hooks/claude-code'
+import { AI_HOOK_INTEGRATIONS } from '../../src/capture/hooks'
 import { Command } from 'commander'
 import { registerUninstall } from '../../src/cli/uninstall'
 
@@ -61,6 +75,9 @@ function makeProgram() {
   registerUninstall(program)
   return program
 }
+
+const claudeCodeIntegration = AI_HOOK_INTEGRATIONS['claude-code']
+const otherIntegration = AI_HOOK_INTEGRATIONS['other-agent']
 
 describe('workscribe uninstall', () => {
   describe('shell hook removal', () => {
@@ -205,7 +222,8 @@ describe('workscribe uninstall — completions and the Claude Code hook (WOR-120
     mockIsHookInstalled.mockReturnValue(false)
     mockPrompts.mockResolvedValue({ deleteData: false })
     vi.mocked(removeCompletions).mockReturnValue(false)
-    vi.mocked(claudeCodeIntegration.uninstall!).mockReturnValue('not-installed')
+    vi.mocked(claudeCodeIntegration.uninstall).mockReturnValue('not-installed')
+    vi.mocked(otherIntegration.uninstall).mockReturnValue('not-installed')
   }
 
   it('removes a leftover Chronicle hook from the rc files 0.2.1 wrote it to', async () => {
@@ -238,7 +256,7 @@ describe('workscribe uninstall — completions and the Claude Code hook (WOR-120
 
   it('removes the Claude Code hook even when Claude Code is no longer on PATH', async () => {
     prepare()
-    vi.mocked(claudeCodeIntegration.uninstall!).mockReturnValue('removed')
+    vi.mocked(claudeCodeIntegration.uninstall).mockReturnValue('removed')
 
     await makeProgram().parseAsync(['uninstall'], { from: 'user' })
 
@@ -249,11 +267,23 @@ describe('workscribe uninstall — completions and the Claude Code hook (WOR-120
 
   it('warns, with what to do, when settings.json cannot be read', async () => {
     prepare()
-    vi.mocked(claudeCodeIntegration.uninstall!).mockReturnValue('unreadable')
+    vi.mocked(claudeCodeIntegration.uninstall).mockReturnValue('unreadable')
 
     await makeProgram().parseAsync(['uninstall'], { from: 'user' })
 
     expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining('workscribe uninstall --hooks-only'))
+  })
+
+  it("removes every registered agent's hook, and names each file it could not read", async () => {
+    prepare()
+    vi.mocked(claudeCodeIntegration.uninstall).mockReturnValue('removed')
+    vi.mocked(otherIntegration.uninstall).mockReturnValue('unreadable')
+
+    await makeProgram().parseAsync(['uninstall'], { from: 'user' })
+
+    expect(mockLog.success).toHaveBeenCalledWith('Claude Code session hook removed from ~/.claude/settings.json')
+    expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining("Couldn't read ~/.other/hooks.json"))
+    expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining('Other Agent session hook was left in place'))
   })
 
   it('removes completions and the Claude Code hook with --hooks-only too', async () => {

@@ -49,6 +49,7 @@ vi.mock('../../src/capture/hooks', () => ({
   AI_HOOK_INTEGRATIONS: {
     'claude-code': {
       displayName: 'Claude Code',
+      settingsPath: '~/.claude/settings.json',
       isInstalled: vi.fn(),
       isHookInstalled: vi.fn(),
       isHookOutdated: vi.fn(() => false),
@@ -242,6 +243,18 @@ describe('workscribe init — AI tool hook integration', () => {
       await makeProgram().parseAsync(['init'], { from: 'user' })
       expect(claudeIntegration.install).toHaveBeenCalledOnce()
       expect(mockLog.success).toHaveBeenCalledWith(expect.stringContaining('session hook installed'))
+    })
+
+    it("never says the hook is installed when its settings file couldn't be read", async () => {
+      claudeIntegration.isInstalled.mockReturnValue(true)
+      claudeIntegration.isHookInstalled.mockReturnValue(false)
+      claudeIntegration.install.mockReturnValue('unreadable')
+      mockPromptAnswers({ install: [true] })
+
+      await makeProgram().parseAsync(['init'], { from: 'user' })
+
+      expect(mockLog.success).not.toHaveBeenCalledWith(expect.stringContaining('session hook installed'))
+      expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining('~/.claude/settings.json'))
     })
 
     it('logs skipped and does not install when user declines', async () => {

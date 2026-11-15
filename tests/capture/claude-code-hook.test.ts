@@ -298,6 +298,65 @@ describe('claudeCodeIntegration.install', () => {
   })
 })
 
+describe('claudeCodeIntegration.install — a settings file it must not lose', () => {
+  it('leaves a settings.json it cannot parse alone, and says so', () => {
+    mockFs.existsSync.mockReturnValue(true)
+    mockFs.readFileSync.mockReturnValue('{ "hooks": ')
+
+    expect(claudeCodeIntegration.install()).toBe('unreadable')
+    expect(mockFs.writeFileSync).not.toHaveBeenCalled()
+    expect(mockFs.copyFileSync).not.toHaveBeenCalled()
+  })
+
+  it('leaves a settings.json that is not an object alone too', () => {
+    mockFs.existsSync.mockReturnValue(true)
+    mockFs.readFileSync.mockReturnValue('[]')
+
+    expect(claudeCodeIntegration.install()).toBe('unreadable')
+    expect(mockFs.writeFileSync).not.toHaveBeenCalled()
+  })
+
+  it('backs an existing settings.json up before writing it, and keeps its other settings', () => {
+    mockFs.existsSync.mockReturnValue(true)
+    mockFs.readFileSync.mockReturnValue(JSON.stringify({ model: 'opus' }))
+
+    expect(claudeCodeIntegration.install()).toBe('installed')
+
+    expect(mockFs.copyFileSync).toHaveBeenCalledWith(
+      expect.stringContaining('settings.json'),
+      expect.stringContaining('workscribe-backup'),
+      expect.anything()
+    )
+    expect(mockFs.copyFileSync.mock.invocationCallOrder[0]).toBeLessThan(
+      mockFs.writeFileSync.mock.invocationCallOrder[0]
+    )
+    expect(JSON.parse(mockFs.writeFileSync.mock.calls[0][1] as string).model).toBe('opus')
+  })
+
+  it('has nothing to back up when it creates the file', () => {
+    mockFs.existsSync.mockReturnValue(false)
+
+    expect(claudeCodeIntegration.install()).toBe('installed')
+    expect(mockFs.copyFileSync).not.toHaveBeenCalled()
+  })
+})
+
+describe('claudeCodeIntegration — what init, status and uninstall read', () => {
+  it('names itself, its source and where it writes', () => {
+    expect(claudeCodeIntegration).toMatchObject({
+      displayName: 'Claude Code',
+      source: 'claude-code',
+      settingsPath: '~/.claude/settings.json',
+    })
+  })
+
+  it('reports its health through the integration', () => {
+    mockFs.existsSync.mockReturnValue(false)
+
+    expect(claudeCodeIntegration.checkHealth()).toMatchObject({ installed: false })
+  })
+})
+
 describe('checkHookHealth', () => {
   it('reports not installed when no hook is present', () => {
     mockFs.existsSync.mockReturnValue(false)

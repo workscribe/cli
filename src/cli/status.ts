@@ -8,7 +8,8 @@ import { formatDate, todayDate } from '../utils/format'
 import { getEventsForDate } from '../db'
 import { PAUSE_FLAG_PATH } from '../utils/paths'
 import { getPendingAlerts } from '../db/alerts'
-import { checkHookHealth } from '../capture/hooks/claude-code'
+import { AI_HOOK_INTEGRATIONS } from '../capture/hooks'
+import type { AIHookIntegration } from '../capture/hooks/types'
 import { detectShell, shellHookHealth } from '../capture/shell-hook'
 import { detectAgents } from '../skills/detect'
 import { formatAgentSkillLine } from '../skills/actions'
@@ -60,6 +61,35 @@ function printShellHookWarnings(): void {
     log.plain('')
     log.plain(`  ${chalk.yellow('⚠')}  An old Chronicle hook in ${shell.rcFile} errors at every prompt.`)
     log.plain(chalk.dim('     Run workscribe init to remove it'))
+  }
+}
+
+/** What's wrong with an agent's installed hook, if anything: one warning with what to do about it. */
+function printAgentHookWarning(integration: AIHookIntegration): void {
+  const health = integration.checkHealth()
+  const name = integration.displayName
+  const warn = (message: string, fix: string): void => {
+    log.plain('')
+    log.plain(`  ${chalk.yellow('⚠')}  ${message}`)
+    log.plain(chalk.dim(`     ${fix}`))
+  }
+  if (health.installed && !health.pinned) {
+    warn(
+      health.confirmedBroken
+        ? `${name} hook is using an unpinned command and is failing right now — ${name} activity is not being captured.`
+        : `${name} hook is using an unpinned command, which can silently break if your default Node version changes.`,
+      'Run workscribe init to repair it'
+    )
+  } else if (health.installed && health.nodeMissing) {
+    warn(
+      `The Node.js version the ${name} hook uses is gone — ${name} activity is not being captured.`,
+      'Run workscribe init to repair it'
+    )
+  } else if (health.installed && !health.guarded) {
+    warn(
+      `${name} hook is from an older version — it will show errors in ${name} if Workscribe is ever removed.`,
+      'Run workscribe init to update it'
+    )
   }
 }
 
@@ -120,32 +150,7 @@ export function registerStatus(program: Command): void {
 
       printShellHookWarnings()
 
-      const hookHealth = checkHookHealth()
-      if (hookHealth.installed && !hookHealth.pinned) {
-        log.plain('')
-        if (hookHealth.confirmedBroken) {
-          log.plain(
-            `  ${chalk.yellow('⚠')}  Claude Code hook is using an unpinned command and is failing right now — Claude Code activity is not being captured.`
-          )
-        } else {
-          log.plain(
-            `  ${chalk.yellow('⚠')}  Claude Code hook is using an unpinned command, which can silently break if your default Node version changes.`
-          )
-        }
-        log.plain(chalk.dim('     Run workscribe init to repair it'))
-      } else if (hookHealth.installed && hookHealth.nodeMissing) {
-        log.plain('')
-        log.plain(
-          `  ${chalk.yellow('⚠')}  The Node.js version the Claude Code hook uses is gone — Claude Code activity is not being captured.`
-        )
-        log.plain(chalk.dim('     Run workscribe init to repair it'))
-      } else if (hookHealth.installed && !hookHealth.guarded) {
-        log.plain('')
-        log.plain(
-          `  ${chalk.yellow('⚠')}  Claude Code hook is from an older version — it will show errors in Claude Code if Workscribe is ever removed.`
-        )
-        log.plain(chalk.dim('     Run workscribe init to update it'))
-      }
+      for (const integration of Object.values(AI_HOOK_INTEGRATIONS)) printAgentHookWarning(integration)
 
       const { total: weekTotal, otherCount } = getRecentOtherRate(7)
       if (weekTotal > 0) {

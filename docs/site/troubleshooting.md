@@ -345,7 +345,7 @@ Check each folder first if you've ever added a `workscribe` skill of your own th
 perl -i -0pe 's/\n?# Workscribe completions\n(?:autoload -Uz compinit && compinit\n)?source "[^"\n]*completion\.(?:zsh|bash)"\n?/\n/g' ~/.zshrc    # or ~/.bashrc
 ```
 
-**Hook errors in Claude Code on every prompt or tool call.** Open `~/.claude/settings.json` and delete the `hooks` entries whose `command` contains `_hook --source claude-code` — under `PostToolUse` and `UserPromptSubmit`. Leave every other hook alone. Hooks written by Workscribe 2.0.1 and later stay silent once the binary is gone.
+**Hook errors in Claude Code on every prompt or tool call.** (Each coding agent's hook lives in its own settings file — Claude Code's is `~/.claude/settings.json`, and `workscribe init`, `status` and `uninstall` handle every agent Workscribe supports, naming the file they touch. If `init` says it couldn't read a settings file, it left the file alone: fix its JSON and run `init` again. Before it writes to an existing settings file it saves a `.workscribe-backup-<time>` copy next to it.) Open `~/.claude/settings.json` and delete the `hooks` entries whose `command` contains `_hook --source claude-code` — under `PostToolUse` and `UserPromptSubmit`. Leave every other hook alone. Hooks written by Workscribe 2.0.1 and later stay silent once the binary is gone.
 
 **Optional tidy-up: the shell hook block.** It does nothing without the binary, but you can remove it too:
 

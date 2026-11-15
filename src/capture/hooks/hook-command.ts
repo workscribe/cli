@@ -1,11 +1,26 @@
-// The command strings Workscribe writes into ~/.claude/settings.json, and how to read them back. Pure.
+// The command strings Workscribe writes into a coding agent's hook settings, and how to read them back. Pure.
 //
 // Every command is guarded: when the binary (or the Node it's pinned to) is gone — say the package was removed
 // without `workscribe uninstall` — the hook exits 0 silently instead of erroring on every prompt and tool call.
 // `_hook` itself never exits non-zero, so the trailing `|| true` only ever hides a missing binary or a crash.
 
-// Identifies a workscribe hook entry in any of its forms — legacy bare, pinned, guarded — since all contain it
-export const HOOK_MARKER = '_hook --source claude-code'
+/** The `_hook` arguments that name an agent's hooks: `_hook --source claude-code`. */
+export function hookMarker(source: string): string {
+  return `_hook --source ${source}`
+}
+
+/**
+ * Whether a command is one of Workscribe's hooks for this agent, in any of its forms — legacy bare, pinned, guarded.
+ * The marker has to end the source's name, so `copilot` doesn't claim the hooks of `copilot-vscode`.
+ */
+export function isWorkscribeHook(command: string, source: string): boolean {
+  const marker = hookMarker(source)
+  for (let at = command.indexOf(marker); at !== -1; at = command.indexOf(marker, at + 1)) {
+    const next = command[at + marker.length]
+    if (next === undefined || /\s/.test(next)) return true
+  }
+  return false
+}
 
 const GUARD_SUFFIX = ' || true'
 // The `test -x "<path>" && ` guards in front of a pinned command
