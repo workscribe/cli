@@ -1,5 +1,11 @@
 # Changelog
 
+## [3.4.1](https://github.com/workscribe/cli/compare/v3.4.0...v3.4.1) (2026-11-15)
+
+### Bug Fixes
+
+* **capture:** store commands without heredoc bodies ([2d38063](https://github.com/workscribe/cli/commit/2d380636a950ce41a3433b368ebf7f12893098d7))
+
 ## [3.4.0](https://github.com/workscribe/cli/compare/v3.3.0...v3.4.0) (2026-11-15)
 
 ### Features
