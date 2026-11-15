@@ -10,6 +10,7 @@ import { readLastAiderPrompt } from './aider'
 import { normalizeCommand } from '../normalize/patterns'
 import { readConfig } from '../config'
 import { shouldFilter, isDuplicate } from './filter'
+import { boundedCommand } from './command-steps'
 import { IDE_DEDUP_WINDOW_MS, TASK_RUN_DEDUP_WINDOW_MS } from './ide'
 import { PAUSE_FLAG_PATH } from '../utils/paths'
 import { loadAIToolRegistry } from '../config/registry'
@@ -110,7 +111,8 @@ export function captureCommand(opts: {
       }
     }
 
-    const command = opts.command === undefined ? (opts.file ?? opts.type) : redact(opts.command, config.redact.extra)
+    const command =
+      opts.command === undefined ? (opts.file ?? opts.type) : boundedCommand(redact(opts.command, config.redact.extra))
     const context = getRepoContext(cwd, config)
     const { repoName, branch } = context
     const ideEvent = {
@@ -143,12 +145,13 @@ export function captureCommand(opts: {
   // 1. Filter noise commands
   if (shouldFilter(command, config.capture.ignore)) return
 
-  // 2. Deduplicate: same command + same cwd within 5 seconds
-  const last = getLastEvent()
-  if (isDuplicate(command, cwd, last ?? undefined)) return
-
-  // 3. Redact sensitive patterns
+  // 2. Redact sensitive patterns — before the duplicate check, which compares what is stored
   const safeCommand = redact(command, config.redact.extra)
+  const storedCommand = boundedCommand(safeCommand)
+
+  // 3. Deduplicate: same command + same cwd within 5 seconds
+  const last = getLastEvent()
+  if (isDuplicate(storedCommand, cwd, last ?? undefined)) return
 
   // 4. Normalize to typed event — first, because the repo depends on which step did the work
   const { category, metadata: normalizedMetadata, matchedStep } = normalizeCommand(safeCommand)
@@ -166,7 +169,7 @@ export function captureCommand(opts: {
   if (category === 'other') {
     const firstToken = safeCommand.trim().split(/\s+/)[0]
     if (firstToken) metadata.tool = firstToken
-    metadata.hint = commandHint(safeCommand)
+    metadata.hint = commandHint(storedCommand)
   }
 
   // 6. For ai_session events, enrich metadata
@@ -198,7 +201,7 @@ export function captureCommand(opts: {
     : exitCode
   const shellEvent = {
     captured_at: new Date().toISOString(),
-    command: safeCommand,
+    command: storedCommand,
     cwd,
     exit_code: storedExitCode,
     duration_ms: durationMs,

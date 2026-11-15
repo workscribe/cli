@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest'
+import { gitMovesOf } from '../../src/normalize/git-move'
 import {
+  MAX_STORED_COMMAND_LENGTH,
+  boundedCommand,
   commandSteps,
   heredocBodies,
   isGlueStep,
@@ -173,5 +176,75 @@ describe('heredocBodies', () => {
 
   it('leaves out a heredoc that never ends', () => {
     expect(heredocBodies('cat <<EOF\nno terminator')).toEqual([])
+  })
+})
+
+describe('boundedCommand', () => {
+  const COMMIT_THEN_SWITCH = [
+    'git commit -F - <<EOF',
+    'feat: add the thing',
+    '',
+    'A long body of text.',
+    'EOF',
+    'git switch -c feat/y',
+  ].join('\n')
+
+  it('drops a heredoc body and keeps the opener and the terminator', () => {
+    expect(boundedCommand(SKILL_SAVE)).toBe(
+      ["workscribe sessions summary set --key 'api|2026-10-25T09:00:00.000Z' <<'EOF'", 'EOF'].join('\n')
+    )
+  })
+
+  it('keeps the branch move that follows a heredoc', () => {
+    const stored = boundedCommand(COMMIT_THEN_SWITCH)
+
+    expect(stored).toBe('git commit -F - <<EOF\nEOF\ngit switch -c feat/y')
+    expect(gitMovesOf(stored)).toEqual(gitMovesOf(COMMIT_THEN_SWITCH))
+  })
+
+  it('keeps the commands an unquoted heredoc runs', () => {
+    expect(boundedCommand('cat <<EOF\nplain text\nran $(npm test)\nEOF')).toBe('cat <<EOF\nnpm test\nEOF')
+  })
+
+  it('strips each of two heredocs, even when they share a terminator', () => {
+    expect(boundedCommand('cat <<EOF > a\none\nEOF\ncat <<EOF > b\ntwo\nEOF')).toBe(
+      'cat <<EOF > a\nEOF\ncat <<EOF > b\nEOF'
+    )
+  })
+
+  it('strips a <<- heredoc whose terminator is indented', () => {
+    expect(boundedCommand('cat <<-EOF\n\tbody\n\tEOF\nnpm test')).toBe('cat <<-EOF\n\tEOF\nnpm test')
+  })
+
+  it.each([
+    ['a here-string', 'cat <<<EOF\nnpm test'],
+    ['a <<  inside quotes', 'echo "a<<EOF"\nnpm test'],
+    ['a heredoc opener in a comment', '# see <<EOF\nnpm test'],
+  ])('leaves %s alone', (_description, command) => {
+    expect(boundedCommand(command)).toBe(command)
+  })
+
+  it('leaves a short command without a heredoc as it was', () => {
+    expect(boundedCommand('cd api && npm test')).toBe('cd api && npm test')
+  })
+
+  it('cuts a long command before the step that crosses the limit', () => {
+    const step = `echo ${'x'.repeat(MAX_STORED_COMMAND_LENGTH / 4)}`
+    const command = [step, step, step, step, step].join(' && ')
+
+    const stored = boundedCommand(command)
+
+    expect(stored.length).toBeLessThanOrEqual(MAX_STORED_COMMAND_LENGTH)
+    expect(stored).toBe([step, step, step].join(' && '))
+  })
+
+  it('never cuts inside quotes', () => {
+    const quoted = `echo "${'a && b '.repeat(MAX_STORED_COMMAND_LENGTH / 6)}"`
+
+    expect(boundedCommand(`npm test && ${quoted}`)).toBe('npm test')
+  })
+
+  it('cuts a first step that is itself over the limit at the limit', () => {
+    expect(boundedCommand(`echo ${'x'.repeat(MAX_STORED_COMMAND_LENGTH * 2)}`)).toHaveLength(MAX_STORED_COMMAND_LENGTH)
   })
 })

@@ -254,6 +254,71 @@ describe('captureCommand — repo naming', () => {
   })
 })
 
+describe('captureCommand — bounded stored command', () => {
+  const COMMIT_THEN_SWITCH = 'git commit -F - <<EOF\nfeat: add the thing\nEOF\ngit switch -c feat/y'
+
+  it('stores the command without its heredoc body, and checks for a duplicate on that form', () => {
+    captureCommand({ command: COMMIT_THEN_SWITCH, cwd: '/repo', exitCode: 0, durationMs: 10 })
+
+    const stored = 'git commit -F - <<EOF\nEOF\ngit switch -c feat/y'
+    expect(mockInsertEvent).toHaveBeenCalledWith(expect.objectContaining({ command: stored }))
+    expect(mockIsDuplicate).toHaveBeenCalledWith(stored, '/repo', undefined)
+  })
+
+  it('classifies the whole command, so a message in the heredoc is still read', () => {
+    captureCommand({ command: COMMIT_THEN_SWITCH, cwd: '/repo', exitCode: 0, durationMs: 10 })
+
+    expect(mockNormalize).toHaveBeenCalledWith(COMMIT_THEN_SWITCH)
+  })
+
+  it('reads the commit message from the heredoc the stored command no longer has', async () => {
+    const { normalizeCommand: realNormalize } =
+      await vi.importActual<typeof import('../../src/normalize/patterns')>('../../src/normalize/patterns')
+    mockNormalize.mockImplementation(realNormalize)
+    mockReadConfig.mockReturnValue({ ...BASE_CONFIG, capture: { ...BASE_CONFIG.capture, profiles: [] } })
+
+    captureCommand({ command: COMMIT_THEN_SWITCH, cwd: '/repo', exitCode: 0, durationMs: 10 })
+
+    const [event] = mockInsertEvent.mock.calls[0]
+    expect(event.command).not.toContain('feat: add the thing')
+    expect(JSON.parse(event.metadata).message).toBe('feat: add the thing')
+  })
+
+  it('checks for a duplicate on the redacted form of a command that holds a secret', () => {
+    mockRedact.mockReturnValue('deploy --token=[REDACTED]')
+
+    captureCommand({ command: 'deploy --token=FAKEVALUE', cwd: '/repo', exitCode: 0, durationMs: 10 })
+
+    expect(mockIsDuplicate).toHaveBeenCalledWith('deploy --token=[REDACTED]', '/repo', undefined)
+  })
+
+  it('keeps a heredoc body out of the hint of an unclassified command', () => {
+    mockNormalize.mockReturnValue({ category: 'other', metadata: {} })
+
+    captureCommand({
+      command: "cat <<'EOF' > notes.md\nthe body of the script\nEOF",
+      cwd: '/repo',
+      exitCode: 0,
+      durationMs: 10,
+    })
+
+    const stored = JSON.parse(mockInsertEvent.mock.calls[0][0].metadata)
+    expect(stored.hint).toBe("cat <<'EOF' > notes.md\nEOF")
+  })
+
+  it('bounds a command from an IDE the same way', () => {
+    captureCommand({
+      command: 'cat <<EOF\nbody\nEOF',
+      cwd: '/repo',
+      exitCode: null,
+      durationMs: null,
+      type: 'task_run',
+    })
+
+    expect(mockInsertEvent).toHaveBeenCalledWith(expect.objectContaining({ command: 'cat <<EOF\nEOF' }))
+  })
+})
+
 describe('captureCommand — project links', () => {
   const API_PROJECT = { identity: 'remote:github.com/acme/api', kind: 'remote' }
 

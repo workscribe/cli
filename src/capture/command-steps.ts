@@ -5,6 +5,7 @@ import {
   commentStart,
   containsCommandSubstitution,
   isOutsideQuotes,
+  lastSeparatorAtOrBefore,
   maskQuotedText,
   splitOutsideQuotes,
   startsWithWord,
@@ -13,6 +14,8 @@ import {
 
 const STEP_SEPARATORS = ['&&', '||', ';', '\n', '&']
 const PIPE_SEPARATORS = ['|']
+/** The longest a command is stored before it is cut at a step boundary. */
+export const MAX_STORED_COMMAND_LENGTH = 2000
 /** Commands that only produce text. */
 export const TEXT_SOURCES = ['echo', 'printf']
 // Steps that do no work of their own when they run nothing inside them
@@ -46,16 +49,20 @@ export function substitutionCommands(line: string): string[] {
  * Removes heredoc bodies, keeping the line that opens each one, so their text can't look like commands.
  * The shell still runs `$(…)` inside an unquoted heredoc (`<<EOF`, not `<<'EOF'`), so the commands inside
  * those substitutions stay — each on its own line, without the surrounding text (whose apostrophes and
- * other characters would otherwise be read as shell syntax).
+ * other characters would otherwise be read as shell syntax). With `keepTerminators`, each heredoc's closing
+ * line stays too, so the stored command still shows where it ended.
  */
-export function stripHeredocBodies(command: string): string {
+function removeHeredocBodies(command: string, { keepTerminators }: { keepTerminators: boolean }): string {
   const kept: string[] = []
   const pending: { terminator: string; runsSubstitutions: boolean }[] = []
   for (const line of command.split('\n')) {
     if (pending.length > 0) {
-      if (line.trim() === pending[0].terminator) pending.shift()
-      else if (pending[0].runsSubstitutions && containsCommandSubstitution(line))
+      if (line.trim() === pending[0].terminator) {
+        pending.shift()
+        if (keepTerminators) kept.push(line)
+      } else if (pending[0].runsSubstitutions && containsCommandSubstitution(line)) {
         kept.push(...substitutionCommands(line))
+      }
       continue
     }
     kept.push(line)
@@ -69,6 +76,24 @@ export function stripHeredocBodies(command: string): string {
     }
   }
   return kept.join('\n')
+}
+
+/** The command with heredoc bodies and their terminators gone, for reading what it runs. */
+export function stripHeredocBodies(command: string): string {
+  return removeHeredocBodies(command, { keepTerminators: false })
+}
+
+/**
+ * What is stored of a captured command, already redacted: heredoc bodies removed (their opener and terminator
+ * lines stay), then, if it is still longer than `MAX_STORED_COMMAND_LENGTH`, cut before the step that crosses
+ * the limit — `gitMovesOf` reads whole steps. A first step longer than the limit is cut at the limit.
+ * Read anything a command carries (a commit message) from the whole command first.
+ */
+export function boundedCommand(redactedCommand: string): string {
+  const withoutBodies = removeHeredocBodies(redactedCommand, { keepTerminators: true })
+  if (withoutBodies.length <= MAX_STORED_COMMAND_LENGTH) return withoutBodies
+  const boundary = lastSeparatorAtOrBefore(withoutBodies, MAX_STORED_COMMAND_LENGTH, STEP_SEPARATORS)
+  return withoutBodies.slice(0, boundary > 0 ? boundary : MAX_STORED_COMMAND_LENGTH).trimEnd()
 }
 
 /** A heredoc in a command: its terminator, its body, and the line that opened it. */
