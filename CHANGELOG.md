@@ -1,5 +1,15 @@
 # Changelog
 
+## [3.4.0](https://github.com/workscribe/cli/compare/v3.3.0...v3.4.0) (2026-11-15)
+
+### Features
+
+* **capture:** store a failed command with no exit code as -1 ([bbfff6e](https://github.com/workscribe/cli/commit/bbfff6e7a60e4629e45e389ae7a45a1fe1a5165c))
+
+### Bug Fixes
+
+* **summary:** say tests ran when the latest run has no exit code ([96937e9](https://github.com/workscribe/cli/commit/96937e9da3234efdb63c709afafa7b4c4ca5789d))
+
 ## [3.3.0](https://github.com/workscribe/cli/compare/v3.2.0...v3.3.0) (2026-11-15)
 
 ### Features
