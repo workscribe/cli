@@ -18,7 +18,7 @@ export function shouldRunStartupChecks(invokedCommand: string | undefined): bool
 // Data jobs (src/db/jobs/) run only before these: commands people type that read the data. Never the background
 // _capture/_hook, never `context` (the editor calls it with a 5 s timeout), never `sessions` (the agent skill calls
 // it), and never commands that remove or reset the database (`uninstall`, `clear`, `init`).
-export const DATA_JOB_COMMANDS = new Set(['status', 'summary', 'week', 'export', 'events', 'upgrade'])
+export const DATA_JOB_COMMANDS = new Set(['status', 'summary', 'week', 'export', 'events', 'history', 'upgrade'])
 // The extension detects the CLI with `--version` on a 2 s timeout; help output should never wait on a backup either
 const INFORMATION_FLAGS = new Set(['--version', '-V', '--help', '-h'])
 

@@ -23,6 +23,7 @@ import { registerUpgrade } from './cli/upgrade'
 import { runDataJobsBeforeCommand } from './cli/data-jobs'
 import { registerAlerts } from './cli/alerts'
 import { registerContext } from './cli/context'
+import { registerHistory } from './cli/history'
 import { registerSkill } from './cli/skill'
 import { checkForUpdate, pingTelemetry } from './utils/update-check'
 import { ensureTelemetryFallback } from './config'
@@ -72,6 +73,7 @@ registerBugReport(program)
 registerCompletions(program)
 registerAlerts(program)
 registerContext(program)
+registerHistory(program)
 registerSkill(program)
 registerUpgrade(program)
 

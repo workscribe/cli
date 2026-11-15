@@ -26,9 +26,12 @@ describe('shouldRunStartupChecks', () => {
 })
 
 describe('shouldRunDataJobs', () => {
-  it.each(['status', 'summary', 'week', 'export', 'events', 'upgrade'])('runs data jobs before %s', (command) => {
-    expect(shouldRunDataJobs([command])).toBe(true)
-  })
+  it.each(['status', 'summary', 'week', 'export', 'events', 'history', 'upgrade'])(
+    'runs data jobs before %s',
+    (command) => {
+      expect(shouldRunDataJobs([command])).toBe(true)
+    }
+  )
 
   it.each([
     '_capture',

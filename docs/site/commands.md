@@ -296,6 +296,47 @@ Events are colour-coded by category:
 
 ---
 
+## workscribe history
+
+Show what you did in the current repo's git, in order, so you can retrace it or get work back after a mistake.
+
+```bash
+workscribe history
+workscribe history --since 2d
+workscribe history --since 2026-11-05 --all
+workscribe history --json
+```
+
+| Option | Description |
+|---|---|
+| `--since <when>` | How far back: `6h`, `2d`, `1w`, or a date (`YYYY-MM-DD`, from the start of that day). Default `24h` |
+| `--all` | Also list the repo's commands that aren't git (git commands only by default, `status`, `log` and `diff` included) |
+| `--json` | Print the versioned JSON: no commands, `null` when there is no repo |
+
+```
+  History of api
+  09:12  git stash [main]
+  09:13  git switch -c feat/auth [feat/auth]
+      → Created feat/auth from main
+  09:14  git stash pop [feat/auth]
+      → Moved uncommitted changes from main to feat/auth (git stash, then git stash pop)
+  10:40  git reset --hard HEAD~1 [feat/auth] (Claude Code)
+      → Discarded local changes (git reset --hard)
+      to look back: git reflog lists where HEAD was before (committed work only: uncommitted changes are not in it)
+```
+
+Each line is the command as Workscribe stored it (secrets already redacted), the branch you were on after it, who ran it when it wasn't you in the shell (an editor or a coding agent), and `✗` with the exit code when it failed. Under it, in plain language, the branch moves it made: the same wording as [summaries](/summaries). A failed command made no move.
+
+Under moves git can help you undo, a line says where to look, using git's own tools: `git reflog` after a `reset --hard` (committed work only: git keeps no copy of uncommitted changes), `ORIG_HEAD` and the reflog after a rebase or merge, `git stash list` after a stash, `git fsck --unreachable` after a dropped stash. Discarded file changes (`checkout --`, `restore`, `clean`) get no line, since git keeps no record of them.
+
+- It covers every checkout and worktree of the repo. Commands captured before the repo was linked to a project (before it had a remote, or before the upgrade linked old events) are not listed.
+- Moves are read over the `--since` window only: a `stash pop` whose stash was made before it reads "Restored stashed changes", and a branch created by the window's first command has no "from". A stash nobody restored in the window ends the list with "Left changes stashed".
+- A command both your shell and a coding agent captured can appear twice.
+
+The JSON has `schemaVersion` (1), `repo`, `since`, `entries` (`capturedAt`, `branch`, `source`, `isGit`, `exitCode`, `moves`, `recovery`) and `leftStashed`. It carries no command text, folder or file path.
+
+---
+
 ## workscribe note
 
 Attach a free-text annotation to the current session.
