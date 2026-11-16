@@ -22,6 +22,12 @@ export function isExecutable(filePath: string): boolean {
   }
 }
 
+/** A hook command that is pinned, guarded, and pinned to a Node.js that still exists. */
+export function isCommandCurrent(command: string): boolean {
+  const nodePath = pinnedNodePath(command)
+  return isPinnedCommand(command) && isGuardedCommand(command) && nodePath !== null && isExecutable(nodePath)
+}
+
 /**
  * Whether an agent's installed hook commands use the pinned (safe) or bare (vulnerable to Node-version/PATH drift)
  * form, and — for bare commands only — a live probe of whether they're actually broken right now. The probe is

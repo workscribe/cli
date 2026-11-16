@@ -1,7 +1,8 @@
 // What Workscribe reads from Claude Code's edit and session hook payloads, checked against Claude Code 2.1.319
 // (tests/fixtures/agent-hooks/claude-code/2.1.319/). Pure. File contents, old and new text, patches and the agent's
 // words are read here only to count lines or to hand on to the opt-in recap path — the edit result never holds text.
-import type { EditCounts } from '../edit-counts'
+import { optionalLineCount, type EditCounts } from '../edit-counts'
+import { asRecord, parsePayloadRecord, stringOf, type Payload } from './payload'
 import type { AgentMessageKind } from '../../db/agent-sessions'
 import type { HookEvent, Outcome } from './event'
 
@@ -29,31 +30,6 @@ export interface AgentSessionEvent {
   message: string | null
   /** Why SessionEnd fired (`other`, `clear`, `logout`, …) */
   reason: string | null
-}
-
-type Payload = Record<string, unknown>
-
-function asRecord(value: unknown): Payload | null {
-  return typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Payload) : null
-}
-
-/** A hook's stdin as an object, or null when it's empty or not an object. Invalid JSON throws, as `_hook` expects. */
-function parsePayloadRecord(raw: string): Payload | null {
-  return raw.trim() ? asRecord(JSON.parse(raw)) : null
-}
-
-function stringOf(value: unknown): string | null {
-  return typeof value === 'string' && value !== '' ? value : null
-}
-
-/** Lines in a text: a trailing newline ends the last line rather than starting another. */
-function lineCount(text: string): number {
-  if (text === '') return 0
-  return text.endsWith('\n') ? text.split('\n').length - 1 : text.split('\n').length
-}
-
-function optionalLineCount(value: unknown): number | null {
-  return typeof value === 'string' ? lineCount(value) : null
 }
 
 /** Counts from Claude Code's unified-diff hunks (`structuredPatch`), or null when there's no patch to read. */

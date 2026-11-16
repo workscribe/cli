@@ -4,16 +4,9 @@ import type { AIHookIntegration, HookInstallOutcome, HookUninstallOutcome } from
 import { isCommandInstalled } from './utils'
 import { resolveWorkscribeBinary } from '../shell-hook'
 import { readJsonConfig, writeJsonConfig } from './config-file'
-import { healthOfCommands, isExecutable, type HookHealth } from './hook-health'
+import { healthOfCommands, isCommandCurrent, type HookHealth } from './hook-health'
 import { parseClaudeHook } from './claude-code-payload'
-import {
-  buildHookCommand,
-  hookMarker,
-  isGuardedCommand,
-  isPinnedCommand,
-  isWorkscribeHook,
-  pinnedNodePath,
-} from './hook-command'
+import { buildHookCommand, hookMarker, isWorkscribeHook } from './hook-command'
 
 const SOURCE = 'claude-code'
 const CLAUDE_SETTINGS_PATH = path.join(os.homedir(), '.claude', 'settings.json')
@@ -128,11 +121,6 @@ function hooksWithoutWorkscribe(hooks: Record<string, unknown>): Record<string, 
     if (kept.length > 0) remaining[eventName] = kept
   }
   return removedAny ? remaining : null
-}
-
-function isCommandCurrent(command: string): boolean {
-  const nodePath = pinnedNodePath(command)
-  return isPinnedCommand(command) && isGuardedCommand(command) && nodePath !== null && isExecutable(nodePath)
 }
 
 /**

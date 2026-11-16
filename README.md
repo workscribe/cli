@@ -61,7 +61,7 @@ source ~/.zshrc   # or restart your terminal
 
 > Use the global install flag for your package manager — e.g. `npm install -g`, `yarn global add`, `pnpm add -g`, or `bun add -g`.
 
-`workscribe init` installs the shell hook, offers to install a Claude Code session capture hook if Claude Code is detected, and offers to install the Workscribe skill into the coding agents it finds. Safe to re-run — updates outdated hooks and skips steps already complete.
+`workscribe init` installs the shell hook, offers to install a session capture hook for each coding agent it detects (Claude Code, Antigravity), and offers to install the Workscribe skill into the coding agents it finds. Safe to re-run — updates outdated hooks and skips steps already complete.
 
 ## Also capturing in your editor?
 

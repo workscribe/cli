@@ -1,5 +1,6 @@
 import type { AIHookIntegration } from './types'
 import { claudeCodeIntegration } from './claude-code'
+import { antigravityIntegration } from './antigravity'
 
 /**
  * Registry of AI tool hook integrations, keyed by the "hook" field in src/config/ai-tools.json.
@@ -7,4 +8,5 @@ import { claudeCodeIntegration } from './claude-code'
  */
 export const AI_HOOK_INTEGRATIONS: Record<string, AIHookIntegration> = {
   'claude-code': claudeCodeIntegration,
+  antigravity: antigravityIntegration,
 }
