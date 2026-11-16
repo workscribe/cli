@@ -8,6 +8,17 @@ export interface EditCounts {
   linesRemoved: number | null
 }
 
+/** Lines in a text: a trailing newline ends the last line rather than starting another. */
+export function lineCount(text: string): number {
+  if (text === '') return 0
+  return text.endsWith('\n') ? text.split('\n').length - 1 : text.split('\n').length
+}
+
+/** `lineCount` of a payload field, or null when it isn't text. */
+export function optionalLineCount(value: unknown): number | null {
+  return typeof value === 'string' ? lineCount(value) : null
+}
+
 const NON_NEGATIVE_INTEGER = /^\d+$/
 
 /**
