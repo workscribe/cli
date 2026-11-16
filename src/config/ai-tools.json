@@ -5,7 +5,6 @@
     "pattern": "^claude\\b",
     "hook": "claude-code",
     "contextSource": "hook",
-    "historyFormat": null,
     "securityWarning": null
   },
   {
@@ -14,7 +13,6 @@
     "pattern": "^aider\\b",
     "hook": null,
     "contextSource": "history-file",
-    "historyFormat": "markdown",
     "securityWarning": null
   },
   {
@@ -22,8 +20,7 @@
     "displayName": "Codex CLI",
     "pattern": "^codex\\b",
     "hook": null,
-    "contextSource": "history-file",
-    "historyFormat": "jsonl",
+    "contextSource": null,
     "securityWarning": null
   },
   {
@@ -31,8 +28,7 @@
     "displayName": "Gemini CLI",
     "pattern": "^gemini\\b",
     "hook": null,
-    "contextSource": "history-file",
-    "historyFormat": "json",
+    "contextSource": null,
     "securityWarning": null
   },
   {
@@ -40,8 +36,7 @@
     "displayName": "GitHub Copilot",
     "pattern": "^gh\\s+copilot\\b",
     "hook": null,
-    "contextSource": "history-file",
-    "historyFormat": "jsonl",
+    "contextSource": null,
     "securityWarning": null
   },
   {
@@ -49,8 +44,7 @@
     "displayName": "Amazon Q",
     "pattern": "^q\\s+(chat|dev)\\b",
     "hook": null,
-    "contextSource": "history-file",
-    "historyFormat": "json",
+    "contextSource": null,
     "securityWarning": null
   },
   {
@@ -58,8 +52,7 @@
     "displayName": "OpenCode",
     "pattern": "^opencode\\b",
     "hook": null,
-    "contextSource": "sqlite",
-    "historyFormat": "sqlite",
+    "contextSource": null,
     "securityWarning": null
   },
   {
@@ -68,7 +61,6 @@
     "pattern": "^kilo\\b",
     "hook": null,
     "contextSource": null,
-    "historyFormat": null,
     "securityWarning": null
   },
   {
@@ -77,7 +69,6 @@
     "pattern": "^grok\\b",
     "hook": null,
     "contextSource": null,
-    "historyFormat": null,
     "securityWarning": "Grok Build was found to silently upload entire local git repositories — including .env files and untracked secrets — to Google Cloud Storage without user disclosure (July 2026 incident). Workscribe does not read Grok Build session files. Consider whether this tool is appropriate for use in repositories containing sensitive credentials."
   },
   {
@@ -86,7 +77,6 @@
     "pattern": "^continue\\b",
     "hook": null,
     "contextSource": null,
-    "historyFormat": null,
     "securityWarning": null
   },
   {
@@ -95,7 +85,6 @@
     "pattern": "^cody\\b",
     "hook": null,
     "contextSource": null,
-    "historyFormat": null,
     "securityWarning": null
   },
   {
@@ -104,7 +93,6 @@
     "pattern": "^cursor\\b",
     "hook": null,
     "contextSource": null,
-    "historyFormat": null,
     "securityWarning": null
   }
 ]

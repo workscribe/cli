@@ -9,8 +9,7 @@ export interface AIToolEntry {
   displayName: string
   pattern: string
   hook: string | null
-  contextSource: 'hook' | 'history-file' | 'sqlite' | null
-  historyFormat: 'jsonl' | 'json' | 'markdown' | 'sqlite' | null
+  contextSource: 'hook' | 'history-file' | null
   securityWarning: string | null
 }
 
@@ -32,7 +31,6 @@ export function loadAIToolRegistry(): AIToolEntry[] {
             pattern: entry.pattern as string,
             hook: (entry.hook as string | null | undefined) ?? null,
             contextSource: (entry.contextSource as AIToolEntry['contextSource'] | undefined) ?? null,
-            historyFormat: (entry.historyFormat as AIToolEntry['historyFormat'] | undefined) ?? null,
             securityWarning: (entry.securityWarning as string | null | undefined) ?? null,
           }))
       }
