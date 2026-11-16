@@ -106,6 +106,18 @@ Bash payloads are in `tests/fixtures/claude-code-hooks/` (2.1.311, WOR-127). Thi
 | `SessionEnd` | `reason`: `other` for both `-p` runs. An async `SessionEnd` hook that slept 2 s before recording still wrote its recording, about 2 s after the synchronous one, so it ran to the end. Interactive exits weren't tried |
 | Session id | `session_id`, the same on edits, `Stop`, `PostCompact` and `SessionEnd`, and kept by `--resume` |
 
+## Antigravity integration (WOR-161)
+
+Built on the measurements above: `src/capture/hooks/antigravity.ts` installs one `PostToolUse` group per tool
+(`run_command`, `edit_file`, `write_file`, each matched by exact name, since the hook doc's `a\|b` alternation example is
+ambiguous) under a hook named `workscribe` in `~/.gemini/config/hooks.json`, with `timeout: 10`.
+
+- **No recaps.** `Stop` carries `lastUserInput`, `terminationReason`, `fullyIdle` and a `transcriptPath`, but no reply
+  text, and there is no `SessionEnd`. Reading the transcript file was decided against (WOR-161).
+- **Not yet run on a real `agy` through the installed file.** The parser is tested against every fixture above, and the
+  installer against a temp file; whether `agy` fires the three exact-name groups and accepts `timeout: 10` has not been
+  confirmed on a real run, nor whether Antigravity IDE and 2.0 read `~/.gemini/config/hooks.json`.
+
 ## Summary for later tickets
 
 **No failure signal in the payload (WOR-159):** Antigravity CLI for commands; Copilot in VS Code for commands and edits,

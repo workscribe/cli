@@ -253,6 +253,7 @@ Codex and GitHub Copilot read the same folder, so they share one copy.
 
 **Whose activity gets captured:** the skill works the same in every agent — it summarizes whatever Workscribe captured — but how much of the agent's own work is captured differs:
 - **Claude Code**: its commands are captured through the Claude Code session hook (`workscribe init` offers it), with each command's exit code — so summaries can say whether the tests and builds it ran passed. The hook also records the files it edits, with line counts, and when each conversation ended; its recaps only with [`capture.agentMessages`](/configuration#capture). A hook installed by Workscribe 3.2 or earlier captures commands only; `workscribe init` offers to update it.
+- **Antigravity**: its commands and file edits are captured through its session hook in `~/.gemini/config/hooks.json` (`workscribe init` offers it when the `agy` command is found), grouped by conversation. It sends no exit codes, so only a `git commit` that didn't land shows as failed. No recaps.
 - **GitHub Copilot and Cursor**: their agents run commands in the VS Code or Cursor integrated terminal, so the shell hook most likely captures them.
 - **Codex**: it runs commands in its own process, so only launching `codex` is recorded.
 
@@ -670,7 +671,7 @@ When paused, the shell hook still fires but events are silently discarded. Usefu
 
 ## workscribe uninstall
 
-Remove everything `workscribe init` added — shell hooks, shell completions, the Claude Code session hook and the agent skill — and optionally delete all Workscribe data. Run it **before** `npm uninstall -g @workscribe/cli`: npm 7 and later don't run package cleanup scripts, so removing the package alone leaves these behind (see [Troubleshooting](/troubleshooting#errors-after-removing-workscribe-without-workscribe-uninstall) if that already happened).
+Remove everything `workscribe init` added — shell hooks, shell completions, the coding-agent session hooks and the agent skill — and optionally delete all Workscribe data. Run it **before** `npm uninstall -g @workscribe/cli`: npm 7 and later don't run package cleanup scripts, so removing the package alone leaves these behind (see [Troubleshooting](/troubleshooting#errors-after-removing-workscribe-without-workscribe-uninstall) if that already happened).
 
 ```bash
 workscribe uninstall
@@ -679,12 +680,12 @@ workscribe uninstall --hooks-only
 
 | Option | Description |
 |---|---|
-| `--hooks-only` | Remove shell hooks, completions and the Claude Code hook only — keep the agent skill and skip the data deletion prompt |
+| `--hooks-only` | Remove shell hooks, completions and the coding-agent hooks only — keep the agent skill and skip the data deletion prompt |
 
 **What it does:**
 - Detects and removes the Workscribe hook block from `~/.zshrc`, `~/.bashrc`, and `~/.bash_profile`
 - Removes the shell completions block from those files, and the fish completion file
-- Removes the Claude Code session hook from `~/.claude/settings.json`, leaving your other hooks and settings untouched (each edited file is backed up first)
+- Removes the session hook of each coding agent (`~/.claude/settings.json` for Claude Code, `~/.gemini/config/hooks.json` for Antigravity), leaving your other hooks and settings untouched (each edited file is backed up first)
 - Removes the agent skill Workscribe installed (never a `workscribe` skill you added yourself)
 - Prompts whether to delete `~/.workscribe/` (database, config, exports, backups) — defaults to **no**
 - Prints the command to remove the CLI itself (`npm uninstall -g @workscribe/cli`)

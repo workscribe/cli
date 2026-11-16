@@ -22,7 +22,7 @@ export interface AIHookIntegration {
   /**
    * Whether capture checks a `git commit` that reports no outcome against git's `HEAD`. For an agent whose hooks
    * carry no failure signal for commands (WOR-154 measured that for Antigravity CLI and Copilot in VS Code); off for
-   * the rest. No integration turns it on yet.
+   * the rest. Antigravity turns it on; Copilot in VS Code will (WOR-164).
    */
   checksCommits?: boolean
   /** What its actions overlap with. No integration sets it yet: each agent's ticket turns on what it measured */

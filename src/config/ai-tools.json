@@ -94,5 +94,13 @@
     "hook": null,
     "contextSource": null,
     "securityWarning": null
+  },
+  {
+    "tool": "antigravity",
+    "displayName": "Antigravity",
+    "pattern": "^agy\\b",
+    "hook": "antigravity",
+    "contextSource": null,
+    "securityWarning": null
   }
 ]
