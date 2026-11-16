@@ -17,6 +17,29 @@ beforeEach(() => {
   vi.resetAllMocks()
 })
 
+describe('the shipped registry', () => {
+  async function loadShipped() {
+    const { default: shipped } = await vi.importActual<{ default: Record<string, unknown>[] }>(
+      '../../src/config/ai-tools.json'
+    )
+    return shipped
+  }
+
+  it('lets only Aider read a history file', async () => {
+    const shipped = await loadShipped()
+
+    const historyTools = shipped.filter((entry) => entry.contextSource === 'history-file')
+
+    expect(historyTools.map((entry) => entry.tool)).toEqual(['aider'])
+  })
+
+  it('carries no history format', async () => {
+    const shipped = await loadShipped()
+
+    expect(shipped.some((entry) => 'historyFormat' in entry)).toBe(false)
+  })
+})
+
 describe('loadAIToolRegistry', () => {
   describe('no user registry', () => {
     it('returns built-in tools when no user file exists', () => {

@@ -277,7 +277,7 @@ Workscribe ships with built-in support for Claude Code, Aider, Gemini, GitHub Co
 | `pattern` | yes | JavaScript regex string matched against the captured command |
 | `displayName` | no | Human-readable name shown in `workscribe events` (defaults to `tool`) |
 | `hook` | no | Hook integration key — `null` for shell-only tools |
-| `contextSource` | no | Set to `"history-file"` to read last prompt from a history file |
+| `contextSource` | no | Set to `"history-file"` to attach the last prompt from Aider's history file (`.aider.chat.history.md`). Built for Aider: any tool given this value is read as Aider's history file, and no other tool's history is read |
 
 **Override a built-in:** add an entry with the same `tool` slug — it replaces the built-in entry entirely.
 

@@ -33,6 +33,7 @@ vi.mock('../../src/config/registry', () => ({
     { tool: 'claude', pattern: '^claude\\b', hook: 'claude-code', contextSource: 'hook' },
     { tool: 'aider', pattern: '^aider\\b', hook: null, contextSource: 'history-file' },
     { tool: 'gemini', pattern: '^gemini\\b', hook: null, contextSource: null },
+    { tool: 'codex', pattern: '^codex\\b', hook: null, contextSource: null },
   ]),
 }))
 
@@ -148,6 +149,17 @@ describe('captureCommand — Aider prompt enrichment', () => {
   it('does not call readLastAiderPrompt for hook-based tools (e.g. Claude Code)', () => {
     mockNormalize.mockReturnValue({ category: 'ai_session', metadata: { tool: 'claude' } })
     captureCommand({ command: 'claude', cwd: '/repo', exitCode: 0, durationMs: 100 })
+    expect(mockReadLastAiderPrompt).not.toHaveBeenCalled()
+  })
+
+  it('attaches no prompt to a tool other than Aider, even when Aider history exists', () => {
+    mockReadLastAiderPrompt.mockReturnValue('refactor the payment service')
+    mockNormalize.mockReturnValue({ category: 'ai_session', metadata: { tool: 'codex' } })
+
+    captureCommand({ command: 'codex', cwd: '/repo', exitCode: 0, durationMs: 100 })
+
+    const stored = JSON.parse(mockInsertEvent.mock.calls[0][0].metadata)
+    expect(stored.prompt).toBeUndefined()
     expect(mockReadLastAiderPrompt).not.toHaveBeenCalled()
   })
 
