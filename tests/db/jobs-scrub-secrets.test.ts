@@ -168,6 +168,15 @@ describe('scrub-secrets job', () => {
     expect(row(db, withSecret)).toEqual({ ...secretBefore, command: REDACTED_COMMAND })
   })
 
+  it('scrubs a form that redaction learned after the command was stored', () => {
+    const db = database()
+    const stored = insert(db, { command: `7z a -p${SECRET} out.7z dir` })
+
+    run(db)
+
+    expect(row(db, stored).command).toBe('7z a -p[REDACTED] out.7z dir')
+  })
+
   it('scrubs a note, and a command from an IDE even when it names a file', () => {
     const db = database()
     const note = insert(db, {

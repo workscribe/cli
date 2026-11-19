@@ -491,6 +491,115 @@ describe('redact', () => {
     })
   })
 
+  describe('more tools, flags and headers', () => {
+    it.each([
+      ['mysql@8 -pFAKEVALUE', 'mysql@8 -p[REDACTED]'],
+      ['mycli -pFAKEVALUE', 'mycli -p[REDACTED]'],
+      ['mysqlsh -u me -pFAKEVALUE', 'mysqlsh -u me -p[REDACTED]'],
+      ['7z a -pFAKEVALUE out.7z dir', '7z a -p[REDACTED] out.7z dir'],
+      ['7za x -pFAKEVALUE out.7z', '7za x -p[REDACTED] out.7z'],
+      ['http -a me:FAKEVALUE x.io', 'http -a me:[REDACTED] x.io'],
+      ['http --auth me:FAKEVALUE x.io', 'http --auth me:[REDACTED] x.io'],
+      ['xh -a "me:FAKEVALUE" x.io', 'xh -a "me:[REDACTED]" x.io'],
+      ['openssl enc -aes-256-cbc -k FAKEVALUE -in f', 'openssl enc -aes-256-cbc -k [REDACTED] -in f'],
+      ['openssl enc -pass "pass:FAKEVALUE" -in f', 'openssl enc -pass "pass:[REDACTED]" -in f'],
+      ["openssl enc -pass 'pass:FAKEVALUE' -in f", "openssl enc -pass 'pass:[REDACTED]' -in f"],
+      ['gh secret set NAME --body FAKEVALUE', 'gh secret set NAME --body [REDACTED]'],
+      ['gh secret set NAME -b "FAKEVALUE" --repo o/r', 'gh secret set NAME -b [REDACTED] --repo o/r'],
+      [
+        'kubectl create secret generic s --from-literal=token=FAKEVALUE',
+        'kubectl create secret generic s --from-literal=token=[REDACTED]',
+      ],
+      [
+        'kubectl create secret generic s --from-literal=db_password=FAKEVALUE --from-literal=user=me',
+        'kubectl create secret generic s --from-literal=db_password=[REDACTED] --from-literal=user=me',
+      ],
+      ['curl -H "PRIVATE-TOKEN: FAKEVALUE" x.io', 'curl -H "PRIVATE-TOKEN: [REDACTED]" x.io'],
+      ['curl -H "X-Token: FAKEVALUE" x.io', 'curl -H "X-Token: [REDACTED]" x.io'],
+    ])('redacts %s', (command, expected) => {
+      expect(redact(command)).toBe(expected)
+    })
+
+    it('redacts a versioned tool run by its full path', () => {
+      expect(redact('/opt/homebrew/opt/mysql@8.0/bin/mysql@8.0 -u me -pFAKEVALUE db')).not.toContain('FAKEVALUE')
+    })
+
+    it.each([
+      'mysql@8 -p db',
+      '7z a out.7z dir',
+      '7z x -y out.7z',
+      'http x.io',
+      'http -a',
+      'openssl x509 -in cert.pem -noout',
+      'openssl enc -in f -out g',
+      'gh secret set NAME < value.txt',
+      'gh secret list --body',
+      'kubectl create secret generic s --from-literal=user=me',
+      'curl -H "Accept: text/plain" x.io',
+    ])('leaves %s alone', (command) => {
+      expect(redact(command)).toBe(command)
+    })
+  })
+
+  describe('a secret that holds a ;', () => {
+    it.each([
+      ['export PASSWORD=ab;cd', 'export PASSWORD=[REDACTED]'],
+      ['mysql --password=pa;ss -h x', 'mysql --password=[REDACTED] -h x'],
+      ['TOKEN=ab;cd npm publish', 'TOKEN=[REDACTED] npm publish'],
+      ['note: rotated --token=ab;cd today', 'note: rotated --token=[REDACTED] today'],
+    ])('redacts all of it in %s', (command, expected) => {
+      expect(redact(command)).toBe(expected)
+    })
+  })
+
+  describe('quotes that do not pair up cannot hide a quoted secret', () => {
+    it.each([
+      `echo it's --password "FAKEVALUE" y's`,
+      `echo \\" --password "FAKEVALUE" \\"`,
+      `it's a "note": --password "FAKEVALUE" and don't`,
+      `"a" it's --password "FAKEVALUE" 'b' it's`,
+      `don't --password "FAKEVALUE" "isn't" it's`,
+    ])('redacts the value in %s', (text) => {
+      expect(redact(text)).not.toContain('FAKEVALUE')
+    })
+  })
+
+  describe('keeps the branch move in a compound command', () => {
+    it.each([
+      ['echo "use mongo -p" && git switch -c x && echo "y"', 'echo "use mongo -p" && git switch -c x && echo "y"'],
+      [
+        `git commit -m "don't use mongo -p" && git switch -c x && git commit -m "b"`,
+        `git commit -m "don't use mongo -p" && git switch -c x && git commit -m "b"`,
+      ],
+      ['curl -H "Cookie:" x && git switch -c y && echo "z"', 'curl -H "Cookie:" x && git switch -c y && echo "z"'],
+      ['mysql -pX;git switch -c y', 'mysql -p[REDACTED];git switch -c y'],
+      [
+        'mysql -pX;git switch -c y;mysql -pY&& git push',
+        'mysql -p[REDACTED];git switch -c y;mysql -p[REDACTED]&& git push',
+      ],
+    ])('keeps the rest of %s', (command, expected) => {
+      expect(redact(command)).toBe(expected)
+    })
+
+    it('still redacts a value in quotes that start after a flag inside another string', () => {
+      expect(redact('bash -c "mongosh -p" && mongosh -p "SECRET" && git switch -c y')).toBe(
+        'bash -c "mongosh -p" && mongosh -p [REDACTED] && git switch -c y'
+      )
+    })
+
+    it('still redacts when quotes do not pair up, as in prose with an apostrophe', () => {
+      expect(redact(`don't log --password "hunter2" here`)).toBe(`don't log --password [REDACTED] here`)
+    })
+
+    it('still redacts a quoted value with a space in it', () => {
+      expect(redact('run --password "a b" now')).toBe('run --password [REDACTED] now')
+    })
+
+    it('does not skip an extra pattern that starts with a quote', () => {
+      expect(redact('echo "x" "secret-thing"', ['"secret-thing"'])).toBe('echo "x" [REDACTED]')
+    })
+  })
+
   describe('stays fast on a very long line', () => {
     const LONG_LINE_LENGTH = 200_000
 
@@ -512,6 +621,14 @@ describe('redact', () => {
       ['hosts after ssh', 'ssh mongo -p 1 '],
       ['unbalanced quotes', "mysql ' -p x "],
       ['long quoted strings', `"${'x'.repeat(10_000)}" -p x `],
+      ['quotes that end a string', 'echo "mongo -p" '],
+      ['repeated quoted values', 'mongosh -p "x" '],
+      ['repeated 7z', '7z a -p x '],
+      ['repeated httpie', 'http -a '],
+      ['repeated from-literal', '--from-literal=a-b.c='],
+      ['repeated openssl', 'openssl -k '],
+      ['repeated gh secret', 'gh secret set A --body '],
+      ['repeated versioned tool', 'mysql@8 -p x '],
     ])('%s', (_shape, unit) => {
       const longLine = unit.repeat(Math.ceil(LONG_LINE_LENGTH / unit.length))
       const startedAt = performance.now()

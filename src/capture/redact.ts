@@ -1,9 +1,16 @@
+import { closingQuotePositions } from './shell-syntax'
+
 const QUOTED = String.raw`"[^"]*"|'[^']*'`
 // Quotes, brackets and shell separators stay in a word only with more of the word after it, so `"add --pass option"`
-// keeps its closing quote and `mysql -pX; git push` its `;`, while `--password=a&b` loses all of its value
+// keeps its closing quote and `--password=a&b` or `PASSWORD=ab;cd` lose all of their value. Text that isn't a shell
+// command (a note, an agent's message) can hold a secret with a `;` in it, so this is the safe default
 const WORD_REST = String.raw`(?:[^\s"');&|]|["');&|](?=[^\s;&|)]))*`
+// In a command a short flag's unquoted value ends at `;`, as a shell word does: `mysql -pX;git switch -c y` keeps its
+// `git`. Only the patterns that read a command's flags use this
+const SHELL_WORD_REST = String.raw`(?:[^\s"');&|]|["')&|](?=[^\s;&|)]))*`
 // A flag's value. A leading `-` is the next flag, not a value (`mongosh -p --tls`).
 const VALUE = String.raw`(?:${QUOTED}|[^\s"'\-]${WORD_REST})`
+const SHELL_VALUE = String.raw`(?:${QUOTED}|[^\s"'\-]${SHELL_WORD_REST})`
 const VALUE_OR_DASHED = String.raw`(?:${QUOTED}|[^\s"']${WORD_REST})`
 // The limits keep a very long line fast, as these patterns run inside lookbehinds. A quoted string counts as one part
 const MAX_COMMAND_PARTS = 1000
@@ -25,7 +32,8 @@ const NOT_A_NAME = String.raw`(?<!--name(?:\s+|=)|\bssh\s+)`
 const NOT_IN_A_MESSAGE = String.raw`(?<!\s(?:-[as]*m|--message|--title|--body|--subject)[\s=]*["'][^"'\n]{0,${MAX_COMMAND_PARTS}})`
 // A lookbehind runs right to left, so the slow check goes first here and runs last
 const TOOL_WORD_START = `${NOT_IN_A_MESSAGE}${NOT_A_NAME}${NOT_PART_OF_A_WORD}`
-const TOOL_WORD_END = String.raw`(?:\.exe)?["'\x60)]?(?=\s)`
+// A version after the name is still the tool: `mysql@8`, Homebrew's name for it
+const TOOL_WORD_END = String.raw`(?:@\d[\w.]*)?(?:\.exe)?["'\x60)]?(?=\s)`
 // `-p 27017:27017` publishes a port. A bare number stays a possible password: `mongosh -p 12345`
 const NOT_A_PORT_MAPPING = String.raw`(?!(?:[\d.]+:)?\d+:\d+(?:\/\w+)?(?=\s|$))`
 
@@ -60,17 +68,17 @@ const SLUG_AFTER_SK = String.raw`(?!${UUID_IN_A_KEY})${SLUG_WORD}(?:-${SLUG_WORD
 const CONTAINER_LOGIN_TOOLS = 'docker|podman|podman-remote|nerdctl|helm'
 const EVERYDAY_HEADERS = 'api-key|cookie|set-cookie'
 // Not everyday words, unlike `cookie`, so they count anywhere: `http x.io X-Api-Key:SECRET`, `HDR="X-Api-Key: SECRET"`
-const DISTINCTIVE_HEADERS = 'x-api-key|x-auth-token|x-access-token'
+const DISTINCTIVE_HEADERS = 'x-api-key|x-auth-token|x-access-token|private-token|x-token'
 const HEADER_FLAG = String.raw`(?<![\w-])(?:-\w*H|--(?:proxy-)?header)[\s=]*`
 
 /** Matches the value that follows `prefix`, leaving the prefix in place. */
-function valueAfter(prefix: string, flags = 'g'): RegExp {
-  return new RegExp(`(?<=${prefix})${VALUE}`, flags)
+function valueAfter(prefix: string, value = VALUE): RegExp {
+  return new RegExp(`(?<=${prefix})${value}`, 'g')
 }
 
 /** Matches a short flag's value, when the tool is a word of the same command. */
 function toolFlagValue(tools: string, flag: string): RegExp {
-  return valueAfter(String.raw`${TOOL_WORD_START}(?:${tools})${TOOL_WORD_END}${SAME_COMMAND}\s${flag}`)
+  return valueAfter(String.raw`${TOOL_WORD_START}(?:${tools})${TOOL_WORD_END}${SAME_COMMAND}\s${flag}`, SHELL_VALUE)
 }
 
 /** Matches what follows `name` in `"name:value"` and `'name:value'`. Each stops where its quoting does. */
@@ -123,8 +131,8 @@ const BUILTIN_PATTERNS: RegExp[] = [
   // A password attached to the flag: `mysql -pSECRET`. `mysql -p db` prompts, so there's no value to remove, and
   // `psql -p 5432` is a port, so psql isn't listed
   toolFlagValue(
-    'mysql|mysqldump|mysqladmin|mysqlimport|mysqlshow|mysqlcheck|mariadb|mariadb-dump|mariadb-admin|mariadb-import|' +
-      'mariadb-show|mariadb-check',
+    'mysql|mysqldump|mysqladmin|mysqlimport|mysqlshow|mysqlcheck|mycli|mysqlsh|mariadb|mariadb-dump|mariadb-admin|' +
+      'mariadb-import|mariadb-show|mariadb-check',
     '-p'
   ),
   // Short flags that take a secret, for the tools where they do
@@ -133,16 +141,33 @@ const BUILTIN_PATTERNS: RegExp[] = [
   toolFlagValue('redis-cli', String.raw`-a\s*`),
   toolFlagValue('ssh-keygen', String.raw`-[NP]\s*`),
   toolFlagValue('zip|unzip', String.raw`-P\s*`),
+  // 7-Zip's password is attached to the flag, like mysql's: `7z a -pSECRET out.7z dir`
+  toolFlagValue('7z|7za|7zr', '-p'),
+  toolFlagValue('openssl', String.raw`-k\s+`),
   valueAfter(
     String.raw`${TOOL_WORD_START}(?:${CONTAINER_LOGIN_TOOLS})${TOOL_WORD_END}[^|;&\n]{0,${MAX_PARTS_BEFORE_LOGIN}}?\slogin` +
-      String.raw`${TOOL_WORD_END}${sameCommand(MAX_PARTS_AFTER_LOGIN)}\s-p\s*${NOT_A_PORT_MAPPING}`
+      String.raw`${TOOL_WORD_END}${sameCommand(MAX_PARTS_AFTER_LOGIN)}\s-p\s*${NOT_A_PORT_MAPPING}`,
+    SHELL_VALUE
   ),
-  // openssl's `-pass pass:SECRET`, also -passin and -passout
+  // openssl's `-pass pass:SECRET`, also -passin and -passout, with or without quotes around it
   /(?<=\s-pass(?:in|out|word)?\s+pass:)\S+/g,
+  /(?<=\s-pass(?:in|out|word)?\s+["']pass:)[^"'\s]+/g,
   // curl's cookies, which also covers a cookie file's name: `curl -b s=SECRET`
   valueAfter(String.raw`\bcurl\b["']?${SAME_COMMAND}\s(?:--cookie|-\w*b)[\s=]+`),
   // The password half of `curl -u user:password`
   ...valuesAfterName(String.raw`\bcurl\b["']?${SAME_COMMAND}\s(?:-\w*u[\s=]*|--user[\s=]+)`, String.raw`[^:\s"']*:`),
+  // The password half of httpie's `http -a user:password`
+  ...valuesAfterName(
+    String.raw`${TOOL_WORD_START}(?:http|https|xh|xhs)${TOOL_WORD_END}${SAME_COMMAND}\s(?:-a[\s=]*|--auth[\s=]+)`,
+    String.raw`[^:\s"']*:`
+  ),
+  // A secret's value given as a flag: `gh secret set NAME --body SECRET`, or `kubectl create secret generic s
+  // --from-literal=token=SECRET`
+  valueAfter(String.raw`\bgh\s+secret\s+set\b${SAME_COMMAND}\s(?:--body|-b)[\s=]+`, SHELL_VALUE),
+  new RegExp(
+    String.raw`(?<=--from-literal=[\w.-]*(?:token|secret|password|passwd|pwd|api[-_]?key)[\w.-]*=)${VALUE_OR_DASHED}`,
+    'gi'
+  ),
   // Tokens handed over on stdin: `echo SECRET | docker login --password-stdin`, `gh auth login --with-token <<< SECRET`
   new RegExp(
     String.raw`(?<=\b(?:echo(?:\s+-[neE]+)*|printf(?:\s+["']?%s(?:\\n)?["']?)?)\s+)${VALUE}` +
@@ -188,23 +213,46 @@ const BUILTIN_PATTERNS: RegExp[] = [
 
 export const REDACTED_TEXT = '[REDACTED]'
 
+/**
+ * Replaces what `pattern` matches, except a match that begins with a quote that ends a string. A value in quotes starts
+ * at the quote that opens it: in `echo "use mongo -p" && git switch -c x && echo "y"`, the quote right after `-p` ends
+ * the first string, and what it would take as the value is the command between the strings.
+ */
+function redactBuiltin(text: string, pattern: RegExp): string {
+  let result = ''
+  let copiedUpTo = 0
+  let closingQuotes: Set<number> | undefined
+  // Found on the first quote-leading match only, so a line without one costs nothing
+  const closingQuoteIndexes = () => (closingQuotes ??= closingQuotePositions(text))
+  pattern.lastIndex = 0
+  for (let found = pattern.exec(text); found; found = pattern.exec(text)) {
+    const [match] = found
+    const startsWithQuote = match.startsWith('"') || match.startsWith("'")
+    if (startsWithQuote && closingQuoteIndexes().has(found.index)) {
+      // Not a value, and not the end of the search: a real one can start inside this text
+      pattern.lastIndex = found.index + 1
+      continue
+    }
+    result += text.slice(copiedUpTo, found.index) + REDACTED_TEXT
+    copiedUpTo = found.index + match.length
+    if (match === '') pattern.lastIndex++
+  }
+  return result + text.slice(copiedUpTo)
+}
+
 export function redact(command: string, extraPatterns: string[] = []): string {
   let result = command
 
-  const allPatterns = [...BUILTIN_PATTERNS]
+  for (const pattern of BUILTIN_PATTERNS) {
+    result = redactBuiltin(result, pattern)
+  }
 
-  for (const pattern of extraPatterns) {
+  for (const extraPattern of extraPatterns) {
     try {
-      allPatterns.push(new RegExp(pattern, 'g'))
+      result = result.replace(new RegExp(extraPattern, 'g'), REDACTED_TEXT)
     } catch {
       // Invalid regex — skip silently
     }
-  }
-
-  for (const pattern of allPatterns) {
-    // Reset lastIndex for global regexes
-    pattern.lastIndex = 0
-    result = result.replace(pattern, REDACTED_TEXT)
   }
 
   return result
