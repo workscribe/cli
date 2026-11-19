@@ -1,5 +1,17 @@
 # Changelog
 
+## [3.5.0](https://github.com/workscribe/cli/compare/v3.4.1...v3.5.0) (2026-11-19)
+
+### Features
+
+* **capture:** capture Antigravity commands and edits through its hooks ([2aff120](https://github.com/workscribe/cli/commit/2aff1209c64360e44d27539dd8a01fb5fabc084b))
+* **capture:** merge one action seen by two capture paths into one event ([f8ab207](https://github.com/workscribe/cli/commit/f8ab207dce49b500f11bc7bfdc09fd4a1965eede))
+
+### Bug Fixes
+
+* **capture:** attach Aider's prompt only to Aider sessions ([965bc0d](https://github.com/workscribe/cli/commit/965bc0d1c0b9949232c233e6bf9f33967a686f0d))
+* **cli:** escape quotes in generated shell completion descriptions ([e7c30b9](https://github.com/workscribe/cli/commit/e7c30b9147588a4768f20d943b34e2d26704959f))
+
 ## [3.4.1](https://github.com/workscribe/cli/compare/v3.4.0...v3.4.1) (2026-11-15)
 
 ### Bug Fixes
