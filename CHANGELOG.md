@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.5.1](https://github.com/workscribe/cli/compare/v3.5.0...v3.5.1) (2026-11-19)
+
+### Bug Fixes
+
+* **capture:** keep branch moves and redact more secret forms ([053e1e3](https://github.com/workscribe/cli/commit/053e1e3d35e25b5808d34c32b12fd1dac98b849d))
+* **capture:** redact credentials assigned in code and scrub backups ([16f9be0](https://github.com/workscribe/cli/commit/16f9be0f4e65fa8863816d99179e7fcb71f00625))
+
 ## [3.5.0](https://github.com/workscribe/cli/compare/v3.4.1...v3.5.0) (2026-11-19)
 
 ### Features
