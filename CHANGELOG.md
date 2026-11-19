@@ -1,5 +1,7 @@
 # Changelog
 
+## [3.5.2](https://github.com/workscribe/cli/compare/v3.5.1...v3.5.2) (2026-11-19)
+
 ## [3.5.1](https://github.com/workscribe/cli/compare/v3.5.0...v3.5.1) (2026-11-19)
 
 ### Bug Fixes
