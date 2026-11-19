@@ -37,6 +37,30 @@ function* quotedCharacters(text: string): Generator<QuotedCharacter> {
   }
 }
 
+/**
+ * Where quoted strings end: the position of each quote mark that closes one, so `"a" -p "b"` gives the second and the
+ * fourth quote mark and a caller can tell "b" starts a value while `" -p "` does not. A quote inside the other kind
+ * (`"it's"`) ends nothing. Text whose quotes don't pair up (`don't … --password "x"`) can't be told apart, so it has no
+ * closing quotes: redaction then keeps working instead of skipping a real value. One pass, so a caller asking about
+ * many positions doesn't rescan the text.
+ */
+export function closingQuotePositions(text: string): Set<number> {
+  const closing = new Set<number>()
+  let quote: QuoteState = null
+  for (let index = 0; index < text.length; index++) {
+    const character = text[index]
+    if (character === '\\' && quote !== "'") {
+      index++
+    } else if (character === quote) {
+      closing.add(index)
+      quote = null
+    } else if (quote === null && (character === '"' || character === "'")) {
+      quote = character
+    }
+  }
+  return quote === null ? closing : new Set()
+}
+
 export function isOutsideQuotes(text: string, position: number): boolean {
   for (const { index, quote } of quotedCharacters(text)) {
     if (index >= position) return quote === null

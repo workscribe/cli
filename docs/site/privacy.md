@@ -58,9 +58,9 @@ Before any event is written to disk, Workscribe strips sensitive patterns from t
 
 **Automatically redacted:**
 - Bearer tokens (`Bearer <token>`)
-- Authorization, API key and cookie headers
+- Authorization, API key, token (such as `PRIVATE-TOKEN` and `X-Token`) and cookie headers
 - API keys and tokens from common providers, such as GitHub, GitLab, AWS, Anthropic, OpenAI, Google, npm, Slack and Stripe
-- Passwords and tokens passed as flags (`--password`, `--token=…`), and tools' short flags where they mean a password, such as `mysql -p…`, `sshpass -p`, `docker login -p`, `redis-cli -a` and `curl -u user:password`
+- Passwords and tokens passed as flags (`--password`, `--token=…`), and tools' short flags where they mean a password, such as `mysql -p…` (also `mycli` and `mysqlsh`), `7z -p…`, `sshpass -p`, `docker login -p`, `redis-cli -a`, `openssl -k`, `curl -u user:password` and `http -a user:password`, plus `--from-literal=token=…` and `gh secret set --body`
 - `password=` in connection strings, passwords in URLs, sensitive environment variables and tokens piped to `--password-stdin`
 - JWT tokens
 - Private keys

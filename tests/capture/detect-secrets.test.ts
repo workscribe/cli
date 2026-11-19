@@ -42,4 +42,16 @@ describe('containsSecrets', () => {
   it('returns false for common shell commands without sensitive values', () => {
     expect(containsSecrets('git commit -m "add feature" && npm run build')).toBe(false)
   })
+
+  it('returns true for prose with an apostrophe before a quoted password', () => {
+    expect(containsSecrets(`don't log --password "hunter2" here`)).toBe(true)
+  })
+
+  it('returns true for a password that contains a semicolon', () => {
+    expect(containsSecrets('export PASSWORD=ab;cd')).toBe(true)
+  })
+
+  it('returns false for a compound command whose quotes only mention a flag', () => {
+    expect(containsSecrets('echo "use mongo -p" && git switch -c x && echo "y"')).toBe(false)
+  })
 })

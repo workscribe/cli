@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { gitMovesOf } from '../../src/normalize/git-move'
+import { redact } from '../../src/capture/redact'
 
 describe('gitMovesOf — branches', () => {
   it.each([
@@ -116,5 +117,14 @@ describe('gitMovesOf — compound commands', () => {
 
   it('finds nothing in commands that are not git', () => {
     expect(gitMovesOf('npm test && echo done')).toEqual([])
+  })
+
+  it.each([
+    ['echo "use mongo -p" && git switch -c x && echo "y"', 'x'],
+    [`git commit -m "don't use mongo -p" && git switch -c x && git commit -m "b"`, 'x'],
+    ['curl -H "Cookie:" x && git switch -c y && echo "z"', 'y'],
+    ['mysql -pFAKEVALUE;git switch -c y', 'y'],
+  ])('still finds the branch move once the command is redacted: %s', (command, branch) => {
+    expect(gitMovesOf(redact(command))).toContainEqual({ kind: 'create-branch', branch })
   })
 })
