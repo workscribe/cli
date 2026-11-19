@@ -1,12 +1,16 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, onTestFinished } from 'vitest'
 
-vi.mock('../../src/db', () => ({ getDb: vi.fn(() => ({ fake: 'db' })) }))
+vi.mock('../../src/db', () => ({ getDb: vi.fn(() => ({ fake: 'db' })), openDatabaseFile: vi.fn() }))
 vi.mock('../../src/db/jobs/runner', () => ({ runPendingJobs: vi.fn(() => ({ backup: 'not-needed', jobs: [] })) }))
 vi.mock('../../src/db/jobs/state', () => ({ recordCliVersion: vi.fn(), readDataStatus: vi.fn() }))
 vi.mock('../../src/db/jobs/backup', () => ({ ensureBackup: vi.fn() }))
+vi.mock('../../src/db/jobs/backup-scrub', () => ({
+  scrubBackups: vi.fn(() => ({ scrubbed: 0, untouched: 0, deferred: 0, unwritable: [] })),
+}))
 vi.mock('../../src/utils/paths')
 
-import { runDataJobsBeforeCommand, IMPLICIT_RUN_BUDGET_MS } from '../../src/cli/data-jobs'
+import { runDataJobs, runDataJobsBeforeCommand, IMPLICIT_RUN_BUDGET_MS } from '../../src/cli/data-jobs'
+import { scrubBackups } from '../../src/db/jobs/backup-scrub'
 import { runPendingJobs } from '../../src/db/jobs/runner'
 import { recordCliVersion } from '../../src/db/jobs/state'
 import { ensureBackup } from '../../src/db/jobs/backup'
@@ -17,6 +21,7 @@ const mockRunPendingJobs = runPendingJobs as ReturnType<typeof vi.fn>
 const mockRecordCliVersion = recordCliVersion as ReturnType<typeof vi.fn>
 const mockEnsureBackup = ensureBackup as ReturnType<typeof vi.fn>
 const mockLog = log as Record<string, ReturnType<typeof vi.fn>>
+const mockScrubBackups = scrubBackups as ReturnType<typeof vi.fn>
 
 function runOptions(): RunOptions {
   return mockRunPendingJobs.mock.calls[0][2] as RunOptions
@@ -91,5 +96,63 @@ describe('runDataJobsBeforeCommand', () => {
 
     expect(() => runDataJobsBeforeCommand('summary', '2.2.0')).not.toThrow()
     expect(mockLog.notice).toHaveBeenCalledWith(expect.stringContaining('database is locked'))
+  })
+})
+
+describe('runDataJobs — the backup copies', () => {
+  beforeEach(() => {
+    mockScrubBackups.mockReturnValue({ scrubbed: 0, untouched: 0, deferred: 0, unwritable: [] })
+  })
+
+  it('scrubs the backups folder after the jobs, with no time limit when asked to finish everything', () => {
+    runDataJobs('3.6.0')
+
+    expect(mockScrubBackups).toHaveBeenCalledWith(
+      { fake: 'db' },
+      expect.objectContaining({ directory: '/home/user/.workscribe/backups', isOverBudget: undefined })
+    )
+  })
+
+  it('gives the scrub a short budget of its own before a command', () => {
+    vi.useFakeTimers()
+    onTestFinished(() => vi.useRealTimers())
+
+    runDataJobsBeforeCommand('summary', '3.6.0')
+
+    const { isOverBudget } = mockScrubBackups.mock.calls[0][1] as { isOverBudget: () => boolean }
+    expect(isOverBudget()).toBe(false)
+    vi.advanceTimersByTime(1000)
+    expect(isOverBudget()).toBe(true)
+  })
+
+  it('names the backups it could not write, so they are not left holding secrets unnoticed', () => {
+    mockScrubBackups.mockReturnValue({ scrubbed: 0, untouched: 0, deferred: 0, unwritable: ['a.db', 'b.db'] })
+
+    runDataJobs('3.6.0')
+
+    expect(mockLog.notice).toHaveBeenCalledWith(expect.stringContaining('a.db, b.db'))
+  })
+
+  it('says so when it removed secrets from a backup', () => {
+    mockScrubBackups.mockReturnValue({ scrubbed: 2, untouched: 0, deferred: 0, unwritable: [] })
+
+    runDataJobs('3.6.0')
+
+    expect(mockLog.notice).toHaveBeenCalledWith('Removed secrets from 2 of your Workscribe backups.')
+  })
+
+  it('stays quiet when there was nothing to remove', () => {
+    runDataJobs('3.6.0')
+
+    expect(mockLog.notice).not.toHaveBeenCalled()
+  })
+
+  it('never fails the run when the scrub throws', () => {
+    mockScrubBackups.mockImplementation(() => {
+      throw new Error('disk gone')
+    })
+
+    expect(() => runDataJobs('3.6.0')).not.toThrow()
+    expect(mockRunPendingJobs).toHaveBeenCalled()
   })
 })

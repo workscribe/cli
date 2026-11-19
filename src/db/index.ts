@@ -25,6 +25,11 @@ export type { EventRow } from './types'
 
 let _db: DatabaseSync | null = null
 
+/** Opens a database file other than the live one, such as a backup copy. The caller closes it. */
+export function openDatabaseFile(file: string): DatabaseSync {
+  return new DatabaseSync(file)
+}
+
 export function getDb(): DatabaseSync {
   if (_db) return _db
 
