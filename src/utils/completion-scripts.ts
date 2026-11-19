@@ -3,6 +3,17 @@ export interface CompletionCommand {
   description: string
 }
 
+// Descriptions are free text ("the day's work"), so quote them for the shell
+// that will read them. An unescaped apostrophe breaks the whole script, and the
+// parse error is printed on every shell start.
+function zshQuote(text: string): string {
+  return `'${text.replace(/'/g, `'\\''`)}'`
+}
+
+function fishQuote(text: string): string {
+  return `"${text.replace(/[\\"$]/g, '\\$&')}"`
+}
+
 export function bashCompletion(commands: CompletionCommand[]): string {
   const names = commands.map((command) => command.name).join(' ')
   return `\
@@ -21,7 +32,7 @@ complete -F _workscribe_completion workscribe`
 }
 
 export function zshCompletion(commands: CompletionCommand[]): string {
-  const commandList = commands.map((command) => `    '${command.name}:${command.description}'`).join('\n')
+  const commandList = commands.map((command) => `    ${zshQuote(`${command.name}:${command.description}`)}`).join('\n')
   return `\
 #compdef workscribe
 _workscribe() {
@@ -52,7 +63,7 @@ export function fishCompletion(commands: CompletionCommand[]): string {
     'complete -c workscribe -f',
     ...commands.map(
       (command) =>
-        `complete -c workscribe -n "__fish_use_subcommand" -a ${command.name.padEnd(12)} -d "${command.description}"`
+        `complete -c workscribe -n "__fish_use_subcommand" -a ${command.name.padEnd(12)} -d ${fishQuote(command.description)}`
     ),
     'complete -c workscribe -n "__fish_seen_subcommand_from completions" -a "bash zsh fish"',
     'complete -c workscribe -n "__fish_seen_subcommand_from config"      -a "get set list"',
