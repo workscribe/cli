@@ -10,7 +10,7 @@ description: Install Workscribe and start capturing your work in under two minut
 | Dependency | Version |
 |---|---|
 | Node.js | **22 or later** |
-| Shell | zsh or bash |
+| Shell | zsh, bash or fish |
 | OS | macOS or Linux (Windows not supported — WSL2 works) |
 
 Check your Node version:
@@ -34,10 +34,10 @@ workscribe init
 ```
 
 `init` will:
-1. Create `~/.workscribe/` and initialise the local database
-2. Detect your shell (zsh or bash) and install the capture hook
+1. Create your data folder (`~/.workscribe/` or the XDG folders — see [Where your data lives](/troubleshooting#where-your-data-lives)) and initialise the local database
+2. Detect your shell (zsh, bash or fish) and install the capture hook
 3. If the shell hook is outdated, prompt you to update it
-4. If Claude Code is detected, offer to install a session capture hook
+4. If it finds AI coding tools such as Claude Code or Antigravity, offer to install a session capture hook for each
 5. Offer to install the Workscribe skill into the coding agents it finds (Claude Code, Codex, GitHub Copilot, Cursor)
 
 There's no AI provider or API key to set up — summaries work offline out of the box.
@@ -80,9 +80,10 @@ For a prose summary, ask your coding agent to *"summarize my work today"* — th
 
 Every command you run in the terminal is intercepted by the shell hook, filtered, redacted, and stored locally. Workscribe **never** stores:
 
-- Raw file contents
-- File paths
+- File contents, or the text of any edit
 - Passwords, tokens, or API keys (stripped before writing to disk)
 - Commands you've added to the ignore list
 
-See [Privacy & Security](/docs/privacy) for full details.
+It does record the path of each file you save in your editor or a coding agent edits, with how many lines changed, so it can tell which work touched which file.
+
+See [Privacy & Security](/privacy) for full details.

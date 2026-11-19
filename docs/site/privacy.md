@@ -11,10 +11,9 @@ Everything you capture. All captured data is stored in `~/.workscribe/` on your 
 
 | Location | Contents |
 |---|---|
-| `~/.workscribe/workscribe.db` | SQLite database — events, sessions, cached summaries |
-| `~/.workscribe/config.json` | Configuration including API keys |
+| `~/.workscribe/workscribe.db` | SQLite database — events, work blocks and threads, summaries your coding agent saved |
+| `~/.workscribe/config.json` | Configuration, including webhook URLs |
 | `~/.workscribe/exports/` | Markdown files from `workscribe export` |
-| `~/.workscribe/weekly-cache/` | Cached weekly summaries |
 | `~/.workscribe/backups/` | Copies of the database taken before a data upgrade — the newest 3 are kept |
 
 Both the database and config file are written with `0600` permissions (owner read/write only). Backups hold the same data as the database, so they get the same protection: the folder is `0700` and each copy `0600`.
@@ -154,4 +153,4 @@ Delete the entire data directory:
 rm -rf ~/.workscribe
 ```
 
-This removes the database, config, exports, backups, and cache. The shell hook in your `~/.zshrc` or `~/.bashrc` will still fire but write nothing (it will error silently). To remove the hook, delete the block between `# workscribe:hook:start` and `# workscribe:hook:end` in your shell rc file.
+This removes the database, config, exports and backups. The shell hook in your `~/.zshrc`, `~/.bashrc` or fish `conf.d/workscribe.fish` will still fire but write nothing (it will error silently). To remove the hook, delete the block between `# workscribe:hook:start` and `# workscribe:hook:end` in your shell rc file.

@@ -24,7 +24,7 @@ workscribe status
 workscribe init
 ```
 
-Accept "Shell hook … is outdated. Update?". Your rc file is backed up first. Commands run before the update weren't recorded and can't be recovered. Fish isn't affected.
+Accept "Shell hook … is outdated. Update?". Your rc file is backed up first. Commands run before the update weren't recorded and can't be recovered. The fish hook isn't affected.
 
 **"An old Chronicle hook … errors at every prompt"** (or `_chronicle_precmd: unknown function: int` in your terminal): Workscribe 0.2.1, from before it was renamed, left a hook in your `~/.zshrc` or `~/.bashrc`. Run `workscribe init` and accept removing it.
 
@@ -61,31 +61,26 @@ workscribe init
 
 Re-running init is safe — it skips steps already completed and re-attempts the hook install.
 
-If you're using a non-standard shell (fish, nushell), the hook is not currently supported. You can manually trigger capture:
+`init` installs the hook for zsh, bash and fish. For any other shell (nushell, for example) there's no hook. You can manually trigger capture:
 
 ```bash
 workscribe _capture --cmd "your command" --cwd "$PWD" --exit 0
 ```
 
-**Windows is not supported.** The shell hook requires zsh or bash. If you're on Windows, use WSL2 with zsh or bash — Workscribe works normally inside WSL2.
+**Windows is not supported.** The shell hook requires zsh, bash or fish. If you're on Windows, use WSL2 with zsh or bash — Workscribe works normally inside WSL2.
 
 ---
 
 ## Tab completion isn't working
 
-Shell completions are a snapshot taken at the time you ran `workscribe init` — upgrading the npm package doesn't update an already-installed `~/.workscribe/completion.*` file on its own. If completions stop working or are missing commands after an upgrade, refresh the cache file directly:
+Completions are a script file that `workscribe init` writes, so upgrading the npm package doesn't update it on its own. If completions stop working or are missing commands after an upgrade, re-run `init`: it rewrites the script every time and never duplicates lines in your rc file.
 
 ```bash
-workscribe completions zsh > ~/.workscribe/completion.zsh    # or bash / fish
-```
-
-Then reload your shell:
-
-```bash
+workscribe init
 source ~/.zshrc   # or ~/.bashrc
 ```
 
-You can also re-run `workscribe init` and accept the completions prompt again — as of v1.14.2 this is safe to repeat and won't duplicate lines in your rc file.
+For fish, open a new terminal instead. To write the script yourself, see [`workscribe completions`](/commands#workscribe-completions).
 
 ---
 
