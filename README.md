@@ -46,8 +46,8 @@ shell hook → capture → SQLite → session grouper → template engine → ma
 | Dependency | Version | Notes |
 |---|---|---|
 | Node.js | **22 or later** | Uses the built-in `node:sqlite` module introduced in Node 22.5 |
-| Shell | zsh or bash | Hook is appended to `~/.zshrc` or `~/.bashrc` by `workscribe init` |
-| OS | macOS or Linux | Windows is not supported — the shell hook requires zsh or bash. WSL2 works. |
+| Shell | zsh, bash or fish | `workscribe init` appends the hook to `~/.zshrc` or `~/.bashrc`, or adds `~/.config/fish/conf.d/workscribe.fish` for fish |
+| OS | macOS or Linux | Windows is not supported — the shell hook requires zsh, bash or fish. WSL2 works. |
 
 > Check your version: `node --version`
 
@@ -56,7 +56,7 @@ shell hook → capture → SQLite → session grouper → template engine → ma
 ```bash
 <package-manager> install -g @workscribe/cli
 workscribe init
-source ~/.zshrc   # or restart your terminal
+source ~/.zshrc   # or ~/.bashrc; in fish, open a new terminal
 ```
 
 > Use the global install flag for your package manager — e.g. `npm install -g`, `yarn global add`, `pnpm add -g`, or `bun add -g`.
@@ -81,6 +81,8 @@ If you've already removed the binary and still see `_workscribe_precmd` errors i
 1. Open `~/.zshrc` (or `~/.bashrc`)
 2. Delete everything between `# workscribe:hook:start` and `# workscribe:hook:end` (inclusive)
 3. Run `source ~/.zshrc` or restart your terminal
+
+In fish, delete `~/.config/fish/conf.d/workscribe.fish` and open a new terminal.
 
 ## Summaries
 
