@@ -600,6 +600,131 @@ describe('redact', () => {
     })
   })
 
+  describe('a credential assigned in code', () => {
+    const KEY = `lin_api_${'A1b2C3d4'.repeat(5)}`
+
+    it.each([
+      [`node -e "const API_KEY = '${KEY}'"`, `node -e "const API_KEY = '[REDACTED]'"`],
+      [`node -e "const apiKey = '${KEY}'; fetch(u)"`, `node -e "const apiKey = '[REDACTED]'; fetch(u)"`],
+      [`python3 -c "token = '${KEY}'"`, `python3 -c "token = '[REDACTED]'"`],
+      [`node -e 'const api_key: "${KEY}"'`, `node -e 'const api_key: "[REDACTED]"'`],
+      [
+        `node -e "const headers = { Authorization: '${KEY}' }"`,
+        `node -e "const headers = { Authorization: '[REDACTED]' }"`,
+      ],
+      [
+        `node -e "const headers = { 'x-api-key': '${KEY}' }"`,
+        `node -e "const headers = { 'x-api-key': '[REDACTED]' }"`,
+      ],
+      [
+        `node -e "const client = new Linear({ apiKey: '${KEY}' })"`,
+        `node -e "const client = new Linear({ apiKey: '[REDACTED]' })"`,
+      ],
+      [`node -e "process.env.LINEAR_API_KEY = '${KEY}'"`, `node -e "process.env.LINEAR_API_KEY = '[REDACTED]'"`],
+      [`python3 -c "client = Client(secret='${KEY}')"`, `python3 -c "client = Client(secret='[REDACTED]')"`],
+      [`python3 -c "password = 'hunter2hunter2'"`, `python3 -c "password = '[REDACTED]'"`],
+      [`const secret_key = "FAKEVALUE1234"`, `const secret_key = "[REDACTED]"`],
+      [`let accessKey:'FAKEVALUE1234'`, `let accessKey:'[REDACTED]'`],
+    ])('redacts the value in %s', (command, expected) => {
+      expect(redact(command)).toBe(expected)
+    })
+
+    it.each([
+      [`node -e "const API_KEY = \\"${KEY}\\""`, `node -e "const API_KEY = \\"[REDACTED]\\""`],
+      [
+        `node -e "const o = {\\"password\\": \\"hunter2hunter2\\"}"`,
+        `node -e "const o = {\\"password\\": \\"[REDACTED]\\"}"`,
+      ],
+    ])('redacts a value a shell escaped the quotes of: %s', (command, expected) => {
+      expect(redact(command)).toBe(expected)
+    })
+
+    it('takes a value with spaces whole', () => {
+      expect(redact(`node -e "const password = \\"correct horse battery\\""`)).toBe(
+        `node -e "const password = \\"[REDACTED]\\""`
+      )
+    })
+
+    it('redacts a Linear API key wherever it appears', () => {
+      expect(redact(`echo ${KEY}`)).toBe('echo [REDACTED]')
+    })
+
+    it('redacts a Linear OAuth token wherever it appears', () => {
+      expect(redact(`curl https://x.io/?k=lin_oauth_${'a1B2c3D4'.repeat(4)} -s`)).toBe(
+        'curl https://x.io/?k=[REDACTED] -s'
+      )
+    })
+
+    it.each([
+      [`node -e "const o = {api_key: 'ab\\'cdefghijk'}"`, `node -e "const o = {api_key: '[REDACTED]'}"`],
+      [`node -e "const o = {token: 'quote\\"inside'}"`, `node -e "const o = {token: '[REDACTED]'}"`],
+      [`python3 -c 'password = "pa\\"ss word 1"'`, `python3 -c 'password = "[REDACTED]"'`],
+    ])('takes a value with an escaped quote in it whole: %s', (command, expected) => {
+      expect(redact(command)).toBe(expected)
+    })
+
+    it.each([
+      [`sqlite3 db "update t set secret='it''s abcdefgh'"`, `sqlite3 db "update t set secret='[REDACTED]'"`],
+      [`node -e "const o = {token: 'ab''cd''efghij'}"`, `node -e "const o = {token: '[REDACTED]'}"`],
+    ])('takes a value with a doubled quote (the SQL escape) whole: %s', (command, expected) => {
+      expect(redact(command)).toBe(expected)
+    })
+
+    it('keeps a value just under the minimum length', () => {
+      expect(redact(`python3 -c "password = 'hunter7'"`)).toBe(`python3 -c "password = 'hunter7'"`)
+      expect(redact(`python3 -c "password = 'hunter78'"`)).toBe(`python3 -c "password = '[REDACTED]'"`)
+    })
+
+    it.each([
+      [`git commit -m "fix auth: 'invalid credentials' error"`, `git commit -m "fix auth: '[REDACTED]' error"`],
+      [`git commit -m "rename token='old value here' handling"`, `git commit -m "rename token='[REDACTED]' handling"`],
+    ])('also redacts a quoted phrase of the same shape in prose: %s', (command, expected) => {
+      expect(redact(command)).toBe(expected)
+    })
+
+    it.each([
+      `node -e "const token = getToken()"`,
+      `node -e "const token = process.env.TOKEN"`,
+      `node -e "const tokens = ['a', 'b']"`,
+      `python3 -c "password = input('password: ')"`,
+      `node -e "const password = ''"`,
+      `node -e "const auth = 'basic'"`,
+      `git commit -m "fix: token = 'x' bug"`,
+      `node -e "const tokenizer = 'gpt-4o-mini'"`,
+      `node -e "const authorName = 'Moe Osaze'"`,
+      `node -e "const secretsFile = 'secrets.json'"`,
+      `node -e "const keyboard = 'qwerty'"`,
+      `node -e "const a = { key: 'name' }"`,
+      `node -e "const monkey = 'banana-banana'"`,
+      `node -e "const token = '$GITHUB_TOKEN_VALUE'"`,
+      `node -e "const apiKey = '<your-api-key-here>'"`,
+      `node -e "if (password === 'hunter2hunter2') run()"`,
+      `grep -rn "api_key = " src`,
+      `echo "set password = prompt"`,
+    ])('leaves %s alone', (command) => {
+      expect(redact(command)).toBe(command)
+    })
+
+    it.each([
+      'grep -rn "api_key = " src/capture/redact.ts',
+      'grep "api_key = " src "x y z w"',
+      'echo "token: " && ls -la /tmp',
+      'echo "password = " && cat notes.txt "and more text"',
+    ])('does not read the quote that ends a string as the start of a value: %s', (command) => {
+      expect(redact(command)).toBe(command)
+    })
+
+    it('still redacts a real assignment after a string that has already ended', () => {
+      expect(redact(`echo "a" && node -e "const token = 'FAKEVALUE1234'"`)).toBe(
+        `echo "a" && node -e "const token = '[REDACTED]'"`
+      )
+    })
+
+    it('treats text whose quotes do not pair up as having no closing quotes, so it redacts too much rather than too little', () => {
+      expect(redact(`echo don't; grep "api_key = " src/capture/redact.ts "x"`)).toContain('[REDACTED]')
+    })
+  })
+
   describe('stays fast on a very long line', () => {
     const LONG_LINE_LENGTH = 200_000
 
@@ -621,6 +746,14 @@ describe('redact', () => {
       ['hosts after ssh', 'ssh mongo -p 1 '],
       ['unbalanced quotes', "mysql ' -p x "],
       ['long quoted strings', `"${'x'.repeat(10_000)}" -p x `],
+      ['assignments in code', `token = 'abc' `],
+      ['assignments with long values', `token = '${'x'.repeat(100)}' `],
+      ['unterminated assignments', `token = '${'x'.repeat(100)} `],
+      ['secret words', 'token '],
+      ['one long identifier', `${'token'.repeat(30)}_`],
+      ['one long identifier before an operator', `${'token'.repeat(30)}= `],
+      ['names with dots and dashes', 'a.b-c.token '],
+      ['quotes that end a string before an assignment', `"a" token = "`],
       ['quotes that end a string', 'echo "mongo -p" '],
       ['repeated quoted values', 'mongosh -p "x" '],
       ['repeated 7z', '7z a -p x '],

@@ -14,7 +14,7 @@ Everything you capture. All captured data is stored in `~/.workscribe/` on your 
 | `~/.workscribe/workscribe.db` | SQLite database — events, work blocks and threads, summaries your coding agent saved |
 | `~/.workscribe/config.json` | Configuration, including webhook URLs |
 | `~/.workscribe/exports/` | Markdown files from `workscribe export` |
-| `~/.workscribe/backups/` | Copies of the database taken before a data upgrade — the newest 3 are kept |
+| `~/.workscribe/backups/` | Copies of the database taken before a data upgrade — the newest 3 are kept, and secrets are removed from them once the upgrade has removed them from your database |
 
 Both the database and config file are written with `0600` permissions (owner read/write only). Backups hold the same data as the database, so they get the same protection: the folder is `0700` and each copy `0600`.
 
@@ -62,13 +62,16 @@ Before any event is written to disk, Workscribe strips sensitive patterns from t
 - API keys and tokens from common providers, such as GitHub, GitLab, AWS, Anthropic, OpenAI, Google, npm, Slack and Stripe
 - Passwords and tokens passed as flags (`--password`, `--token=…`), and tools' short flags where they mean a password, such as `mysql -p…` (also `mycli` and `mysqlsh`), `7z -p…`, `sshpass -p`, `docker login -p`, `redis-cli -a`, `openssl -k`, `curl -u user:password` and `http -a user:password`, plus `--from-literal=token=…` and `gh secret set --body`
 - `password=` in connection strings, passwords in URLs, sensitive environment variables and tokens piped to `--password-stdin`
+- Credentials assigned in code, such as `const API_KEY = '…'` or `token: "…"` in a `node -e` or `python3 -c` script: a quoted value of 8 or more characters assigned to a name that ends in key, token, secret, password or similar. A shorter value isn't caught, and a quoted phrase of the same shape in a commit message or note, such as `auth: 'invalid credentials'`, is redacted too. Linear API keys (`lin_api_…`) are redacted wherever they appear.
 - JWT tokens
 - Private keys
 - Slack incoming webhook URLs (`hooks.slack.com/services/...`)
 
+**Backups:** before each upgrade a copy of your database is taken, and the newest 3 files named `workscribe-*.db` are kept. Once the upgrade has removed secrets from your stored events, it removes them from every `.db` copy in `~/.workscribe/backups/` too, and rewrites those files so the old text doesn't stay in them. A backup then holds what your database held, minus the removed secrets: restoring one brings your history back without them. A copy that is locked or in use is retried on a later command, one that isn't a Workscribe database is left alone, and one that can't be written is named in a message once, so you can delete it or fix its permissions. Delete `~/.workscribe/backups/` yourself if you'd rather not keep any.
+
 **Events already stored:** when you update, a data upgrade applies the built-in patterns to the commands and structured fields of your existing events, including notes, then rewrites the database file so the old text doesn't stay in it. Some things can still hold it:
 
-- Backups taken before the upgrade, until they're pruned (the newest 3 are kept). They're your only way to undo the rewrite, so they aren't deleted automatically. Delete `~/.workscribe/backups/` yourself if you'd rather not keep them.
+- Copies of the database you made yourself, or kept anywhere but `~/.workscribe/backups/`. The upgrade only reaches the `.db` files in that folder, and nothing prunes a copy outside it, so delete those yourself.
 - Saved summaries, which aren't rewritten. Summaries from older versions weren't always redacted when they were saved.
 - An Aider prompt stored by an older version, if it was cut off partway through a secret. A pattern can't recognise part of one.
 

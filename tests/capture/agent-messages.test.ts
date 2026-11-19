@@ -18,6 +18,10 @@ describe('storableAgentMessage', () => {
     expect(storableAgentMessage(`Set GITHUB_TOKEN to ${GITHUB_TOKEN} and retried`, [])).toBeNull()
   })
 
+  it('drops a recap that quotes a credential assigned in code, whole', () => {
+    expect(storableAgentMessage(`Ran node -e "const apiKey = '${GITHUB_TOKEN.slice(0, 20)}'" to check`, [])).toBeNull()
+  })
+
   it("applies the user's own patterns", () => {
     expect(storableAgentMessage('Deployed to internal-staging', ['internal-[a-z]+'])).toBe('Deployed to [REDACTED]')
   })

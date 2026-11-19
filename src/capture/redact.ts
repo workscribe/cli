@@ -102,6 +102,61 @@ const SENSITIVE_VARIABLE_WORDS = 'TOKEN|SECRET|KEY|PASSWORD|PASS|AUTH|CREDENTIAL
 const QUERY_SECRET_NAME = String.raw`key|[\w-]*(?:token|secret|password|passwd|pwd|api[-_]?key)`
 const JSON_SECRET_NAME = String.raw`[\w-]*(?:token|secret|password|passwd|pwd|api[-_]?key)`
 
+// A value assigned in code: `const API_KEY = '…'`, `token: "…"`, `Client(secret='…')`. The name must end with a secret
+// word, so `tokenizer` and `authorName` stay. The value is a quoted string of some length that isn't a placeholder, so
+// `token = ''` and `auth: 'basic'` stay too. Prose with the same shape in a commit message or note is redacted as well:
+// that is the price of catching `node -e "token = '…'"`
+const CODE_SECRET_WORDS = String.raw`api[-_]?key|access[-_]?key|secret[-_]?key|private[-_]?key|token|secret|password|passwd|pwd|credentials?|auth(?:orization)?`
+const MAX_CODE_NAME_LENGTH = 64
+const MAX_OPERATOR_PADDING = 4
+const MIN_CODE_VALUE_LENGTH = 8
+
+/**
+ * One way of quoting the value of a secret-named assignment. `open` is the opening quote (a group of its own) and
+ * `secret` the value, which ends where `close` begins. The match includes the opening quote so `redactBuiltin` can tell
+ * it opens a string: in `grep "api_key = " src "x y z w"` the quote after `= ` closes one.
+ */
+function codeAssignment({ open, valueCharacter, close }: CodeQuoteForm): RegExp {
+  const name = String.raw`(?<![\w.-])[\w.-]{0,${MAX_CODE_NAME_LENGTH}}?(?:${CODE_SECRET_WORDS})(?:\\?["'])?`
+  const operator = String.raw`\s{0,${MAX_OPERATOR_PADDING}}[:=](?!=)\s{0,${MAX_OPERATOR_PADDING}}`
+  const value = String.raw`(?![$<{%])(?:${valueCharacter}){${MIN_CODE_VALUE_LENGTH},}`
+  return new RegExp(String.raw`${name}${operator}(?<open>${open})(?<secret>${value})(?=${close})`, 'gi')
+}
+
+interface CodeQuoteForm {
+  open: string
+  valueCharacter: string
+  close: string
+}
+
+// A quote's SQL escape is the quote doubled: `'it''s a key'`
+const SQL_DOUBLED_SINGLE_QUOTE = "|''"
+
+/** `'value'` or `"value"`, where a backslash escapes any character, a quote included: `'it\'s a key'`. */
+function plainForm(quote: string): CodeQuoteForm {
+  return {
+    open: String.raw`(?<!\\)${quote}`,
+    valueCharacter: String.raw`[^\\\n${quote}]|\\[^\n]${quote === "'" ? SQL_DOUBLED_SINGLE_QUOTE : ''}`,
+    close: quote,
+  }
+}
+
+/** `\"value\"`, a value whose quotes a shell escaped: the value ends at the next `\"`. */
+function shellEscapedForm(quote: string): CodeQuoteForm {
+  return {
+    open: String.raw`\\${quote}`,
+    valueCharacter: String.raw`[^\\\n${quote}]|\\(?!${quote})`,
+    close: String.raw`\\${quote}`,
+  }
+}
+
+const CODE_QUOTES = ['"', "'"]
+const CODE_QUOTE_FORMS = [plainForm, shellEscapedForm]
+
+function codeAssignments(): RegExp[] {
+  return CODE_QUOTES.flatMap((quote) => CODE_QUOTE_FORMS.map((form) => codeAssignment(form(quote))))
+}
+
 // Patterns that match known sensitive values
 const BUILTIN_PATTERNS: RegExp[] = [
   // AWS access keys
@@ -209,31 +264,51 @@ const BUILTIN_PATTERNS: RegExp[] = [
   /(?<=[a-zA-Z][a-zA-Z0-9+.-]*:\/\/[^:@\s/]*:)[^@\s]+(?=@)/g,
   // A token as the whole userinfo of an https URL: `git clone https://TOKEN@github.com/org/repo`
   /(?<=https?:\/\/)[^\s:@/?#]+(?=@)/g,
+  // Linear API keys and OAuth tokens, wherever they appear: `echo lin_api_…`
+  /(?<![A-Za-z0-9])lin_(?:api|oauth)_[A-Za-z0-9]{20,}/g,
+  // A value assigned in code, last so the patterns above get the first look: `node -e "const API_KEY = '…'"`
+  ...codeAssignments(),
 ]
 
 export const REDACTED_TEXT = '[REDACTED]'
 
 /**
- * Replaces what `pattern` matches, except a match that begins with a quote that ends a string. A value in quotes starts
- * at the quote that opens it: in `echo "use mongo -p" && git switch -c x && echo "y"`, the quote right after `-p` ends
- * the first string, and what it would take as the value is the command between the strings.
+ * Where the redacted text starts: the whole match, or only its `secret` group, which follows its `open` quote. Null
+ * when that quote ends a string rather than opening one, so what follows it isn't a value.
+ */
+function redactionStart(found: RegExpExecArray, isClosingQuote: (index: number) => boolean): number | null {
+  const [match] = found
+  const secret = found.groups?.secret
+  if (secret !== undefined) {
+    const start = found.index + match.length - secret.length
+    return isClosingQuote(start - 1) ? null : start
+  }
+  const startsWithQuote = match.startsWith('"') || match.startsWith("'")
+  return startsWithQuote && isClosingQuote(found.index) ? null : found.index
+}
+
+/**
+ * Replaces what `pattern` matches, except a value whose quote ends a string. A value in quotes starts at the quote that
+ * opens it: in `echo "use mongo -p" && git switch -c x && echo "y"`, the quote right after `-p` ends the first string,
+ * and what it would take as the value is the command between the strings. A match with a `secret` group keeps
+ * everything before it, quote included.
  */
 function redactBuiltin(text: string, pattern: RegExp): string {
   let result = ''
   let copiedUpTo = 0
   let closingQuotes: Set<number> | undefined
-  // Found on the first quote-leading match only, so a line without one costs nothing
+  // Found on the first quoted match only, so a line without one costs nothing
   const closingQuoteIndexes = () => (closingQuotes ??= closingQuotePositions(text))
   pattern.lastIndex = 0
   for (let found = pattern.exec(text); found; found = pattern.exec(text)) {
     const [match] = found
-    const startsWithQuote = match.startsWith('"') || match.startsWith("'")
-    if (startsWithQuote && closingQuoteIndexes().has(found.index)) {
+    const start = redactionStart(found, (index) => closingQuoteIndexes().has(index))
+    if (start === null) {
       // Not a value, and not the end of the search: a real one can start inside this text
       pattern.lastIndex = found.index + 1
       continue
     }
-    result += text.slice(copiedUpTo, found.index) + REDACTED_TEXT
+    result += text.slice(copiedUpTo, start) + REDACTED_TEXT
     copiedUpTo = found.index + match.length
     if (match === '') pattern.lastIndex++
   }

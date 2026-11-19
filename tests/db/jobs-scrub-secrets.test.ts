@@ -168,6 +168,21 @@ describe('scrub-secrets job', () => {
     expect(row(db, withSecret)).toEqual({ ...secretBefore, command: REDACTED_COMMAND })
   })
 
+  it('scrubs a credential assigned in code, in a command and in a note', () => {
+    const db = database()
+    const command = insert(db, { command: `node -e "const API_KEY = '${SECRET}1234'"` })
+    const note = insert(db, {
+      command: 'workscribe note',
+      metadata: JSON.stringify({ text: `tried token = '${SECRET}1234' in a script` }),
+      category: 'note',
+    })
+
+    run(db)
+
+    expect(row(db, command).command).toBe(`node -e "const API_KEY = '[REDACTED]'"`)
+    expect(row(db, note).metadata).toBe(JSON.stringify({ text: `tried token = '[REDACTED]' in a script` }))
+  })
+
   it('scrubs a form that redaction learned after the command was stored', () => {
     const db = database()
     const stored = insert(db, { command: `7z a -p${SECRET} out.7z dir` })

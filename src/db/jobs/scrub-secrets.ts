@@ -79,29 +79,63 @@ export function scrubEvent({ command, metadata }: StoredText): StoredText | null
   return { command: scrubbedCommand, metadata: scrubbedMetadata }
 }
 
+/** Which of the optional `events` columns a database has: a backup from an older version may lack some. */
+export interface EventColumns {
+  hasMetadata: boolean
+  hasFilePath: boolean
+}
+
+const CURRENT_EVENT_COLUMNS: EventColumns = { hasMetadata: true, hasFilePath: true }
+
 /**
  * An IDE save's command is its file's path, and its metadata is only line counts — no text to scrub. An event with its
  * own command is still checked.
  */
-function readEvents(db: MigrationDatabase, afterId: number, limit: number): StoredEvent[] {
+function readEvents(
+  db: MigrationDatabase,
+  afterId: number,
+  limit: number,
+  { hasMetadata, hasFilePath }: EventColumns = CURRENT_EVENT_COLUMNS
+): StoredEvent[] {
   return db
     .prepare(
-      `SELECT id, command, metadata FROM events
-       WHERE id > ? AND command IS NOT file_path
+      `SELECT id, command, ${hasMetadata ? 'metadata' : 'NULL AS metadata'} FROM events
+       WHERE id > ? ${hasFilePath ? 'AND command IS NOT file_path' : ''}
        ORDER BY id LIMIT ?`
     )
     .all(afterId, limit) as StoredEvent[]
 }
 
-function runBatch(db: MigrationDatabase, afterId: number, limit: number): BatchResult {
-  const events = readEvents(db, afterId, limit)
-  if (events.length === 0) return { lastId: null, issues: [] }
-  const update = db.prepare('UPDATE events SET command = ?, metadata = ? WHERE id = ?')
+/**
+ * Scrubs up to `limit` events after `afterId`, rewriting only the ones that change. Returns the last id it read (null
+ * when there were none) and how many it rewrote. The job runs it on the live database; the backup scrub on each copy.
+ */
+export function scrubEventBatch(
+  db: MigrationDatabase,
+  afterId: number,
+  limit: number,
+  columns: EventColumns = CURRENT_EVENT_COLUMNS
+): { lastId: number | null; changed: number } {
+  const events = readEvents(db, afterId, limit, columns)
+  if (events.length === 0) return { lastId: null, changed: 0 }
+  const update = db.prepare(
+    columns.hasMetadata
+      ? 'UPDATE events SET command = ?, metadata = ? WHERE id = ?'
+      : 'UPDATE events SET command = ? WHERE id = ?'
+  )
+  let changed = 0
   for (const event of events) {
     const scrubbed = scrubEvent(event)
-    if (scrubbed) update.run(scrubbed.command, scrubbed.metadata, event.id)
+    if (scrubbed === null) continue
+    if (columns.hasMetadata) update.run(scrubbed.command, scrubbed.metadata, event.id)
+    else update.run(scrubbed.command, event.id)
+    changed++
   }
-  return { lastId: events[events.length - 1].id, issues: [] }
+  return { lastId: events[events.length - 1].id, changed }
+}
+
+function runBatch(db: MigrationDatabase, afterId: number, limit: number): BatchResult {
+  return { lastId: scrubEventBatch(db, afterId, limit).lastId, issues: [] }
 }
 
 /** Nothing is ever removed, and a rerun couldn't clear a row that redacts differently twice: the count is for `status`. */
@@ -151,8 +185,8 @@ function scrubAgentMessage(message: string): string | null {
   return storableAgentMessage(message, [])
 }
 
-/** The agent sessions are few, so their messages are scrubbed in one pass before the events. */
-function scrubAgentMessages(db: MigrationDatabase): void {
+/** The agent sessions are few, so their messages are scrubbed in one pass before the events. Returns how many changed. */
+export function scrubAgentMessages(db: MigrationDatabase): number {
   const sessions = db.prepare('SELECT id, recap, compact_summary AS compactSummary FROM agent_sessions').all() as {
     id: number
     recap: string | null
@@ -160,17 +194,20 @@ function scrubAgentMessages(db: MigrationDatabase): void {
   }[]
   const update = db.prepare('UPDATE agent_sessions SET recap = ?, compact_summary = ? WHERE id = ?')
   const scrubbed = (message: string | null) => (message === null ? null : scrubAgentMessage(message))
+  let changed = 0
   for (const session of sessions) {
     const recap = scrubbed(session.recap)
     const compactSummary = scrubbed(session.compactSummary)
-    if (recap !== session.recap || compactSummary !== session.compactSummary)
-      update.run(recap, compactSummary, session.id)
+    if (recap === session.recap && compactSummary === session.compactSummary) continue
+    update.run(recap, compactSummary, session.id)
+    changed++
   }
+  return changed
 }
 
 export const scrubSecretsJob: DataJob = {
   name: JOB_NAME,
-  version: 3,
+  version: 4,
   description: 'Remove secrets from stored commands, metadata and agent recaps',
   // Redacting what's already redacted changes nothing, so a rerun only needs the file cleaned again
   prepare: (db) => {

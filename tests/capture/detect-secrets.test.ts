@@ -54,4 +54,12 @@ describe('containsSecrets', () => {
   it('returns false for a compound command whose quotes only mention a flag', () => {
     expect(containsSecrets('echo "use mongo -p" && git switch -c x && echo "y"')).toBe(false)
   })
+
+  it('returns true for a pasted line that assigns a credential in code', () => {
+    expect(containsSecrets(`const password = "changeme123"`)).toBe(true)
+  })
+
+  it('returns false for code that only reads one', () => {
+    expect(containsSecrets('const token = process.env.TOKEN')).toBe(false)
+  })
 })
