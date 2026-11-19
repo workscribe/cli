@@ -21,7 +21,7 @@ Safe to re-run at any time — installs missing hooks, updates outdated ones, an
 - Installs or updates the shell hook in `~/.zshrc` or `~/.bashrc`. An update keeps one header above the hook, removing copies earlier updates stacked up
 - Offers to remove a leftover Chronicle hook (from Workscribe 0.2.1, before the rename), which errors at every prompt — defaults to yes. Your rc file is backed up first
 - Installs shell completions, and rewrites the completion script on every run, so deleting the data folder doesn't break them. If your rc file has completions from Workscribe 2.0.0 or earlier, which print an error once the script is gone, offers to update them — defaults to yes
-- Detects installed AI coding tools (Claude Code, Aider, etc.) and offers to install a session capture hook for each — opt-in, defaults to no. If a hook is already there but outdated (from an older version, or pinned to a Node.js version that's since been removed), offers to update it instead — defaults to yes, since you opted in before
+- Detects installed AI coding tools (Claude Code, Antigravity, Aider, etc.) and offers to install a session capture hook for each — opt-in, defaults to no. If a hook is already there but outdated (from an older version, or pinned to a Node.js version that's since been removed), offers to update it instead — defaults to yes, since you opted in before
 - Detects coding agents (Claude Code, Codex, GitHub Copilot, Cursor) and offers to install the [Workscribe agent skill](#agent-skill) for each — defaults to yes, and only asks when the skill is missing or outdated
 - If your config still has AI provider settings from Workscribe 1.x (including an API key), offers to remove them — 2.0 doesn't use them
 
@@ -282,18 +282,19 @@ Events are colour-coded by category:
 
 | Category | Colour | Examples |
 |---|---|---|
-| `code_commit`, `code_push`, `code_merge` | green | `git commit`, `git push` |
-| `code_pull`, `branch_switch`, `code_stash` | blue | `git pull`, `git checkout` |
-| `test_run` | magenta | `npm test`, `npx vitest`, `pytest` |
-| `build` | cyan | `npm run build`, `npx tsc`, `cargo build` |
-| `dependency_install`, `dependency_remove`, `file_ops` | yellow | `npm install`, `rm`, `mkdir` |
-| `lint_run` | yellow | `npx eslint`, `npx prettier` |
-| `server_run` | cyan | `npm run dev`, `yarn start` |
-| `infrastructure` | red | `kubectl`, `docker`, `terraform` |
-| `script_run` | white | `npx husky`, `bash deploy.sh` |
+| `shipping` | green | `git commit`, `git push`, `git merge`, `git rebase` |
+| `versioning` | blue | `git pull`, `git checkout`, `git stash` |
+| `testing` | magenta | `npm test`, `npx vitest`, `pytest` |
+| `building` | cyan | `npm run build`, `cargo build`, `make` |
+| `running` | white | `npm run dev`, `yarn start` |
+| `dependencies`, `linting` | yellow | `npm install`, `npx eslint` |
+| `infrastructure` | red | `kubectl`, `docker run`, `terraform`, `ssh` |
+| `releasing` | bold green | `npm publish`, `gh release`, `vercel deploy` |
+| `database` | bold blue | `psql`, `mysql`, `sqlite3` |
+| `files` | dim yellow | `rm`, `mkdir` |
+| `exploring` | dim cyan | `grep`, `cat`, `find` |
 | `ai_session` | bold magenta | Claude Code, Cursor, Copilot |
-| `code_search`, `code_read` | dim | `grep`, `cat`, `find` |
-| `environment`, `git_other`, `other` | gray | `export`, `git status` |
+| `other` | gray | anything no rule matches |
 
 ---
 
@@ -626,7 +627,7 @@ Bring the data you've already captured up to date after updating Workscribe.
 workscribe upgrade
 ```
 
-Some updates change how stored activity is organised. Workscribe does that work in small steps: a little at a time before `status`, `summary`, `week`, `export` and `events` (at most about 2 seconds each time), never while capturing and never for `context` or `sessions`, which editors and coding agents call. `workscribe upgrade` does all of it in one go and prints what it checked.
+Some updates change how stored activity is organised. Workscribe does that work in small steps: a little at a time before `status`, `summary`, `week`, `export`, `events` and `history` (at most about 2 seconds each time), never while capturing and never for `context` or `sessions`, which editors and coding agents call. `workscribe upgrade` does all of it in one go and prints what it checked.
 
 - **A backup comes first.** Before the first change after an update, Workscribe copies your database to `~/.workscribe/backups/` (once per version; the newest 3 are kept). If the backup can't be made, nothing is changed.
 - **Interrupted is fine.** Each step is saved as it finishes; the next run carries on where the last one stopped.
@@ -653,6 +654,38 @@ When credentials are detected in a prompt sent to an AI tool (e.g. Claude Code),
 4. Injects a `systemMessage` into Claude's context for that turn.
 
 The `clear` subcommand marks all alerts as dismissed and removes the signal file.
+
+---
+
+## workscribe completions
+
+Print the tab-completion script for a shell.
+
+```bash
+workscribe completions zsh
+workscribe completions bash
+workscribe completions fish
+```
+
+`workscribe init` already installs completions for you, so you only need this to set them up by hand — for example, `workscribe completions fish > ~/.config/fish/completions/workscribe.fish`. Command descriptions that contain quotes are escaped, so the script loads cleanly in all three shells.
+
+---
+
+## workscribe bug-report
+
+Write a diagnostic report you can attach to a GitHub issue.
+
+```bash
+workscribe bug-report
+```
+
+The report is saved as `bug-report-<timestamp>.txt` in your data folder with owner-only permissions (see [Where your data lives](/troubleshooting#where-your-data-lives)), and the command prints a pre-filled link for opening an issue. It contains:
+
+- Workscribe and Node.js versions, platform, architecture and OS release
+- Your config, with the Slack webhook, custom webhook and any leftover 1.x API key replaced by `<redacted>`
+- The last 100 lines of the debug log. Set `WORKSCRIBE_DEBUG=1` first to record one — without it the report says there's no debug log
+
+Nothing is sent anywhere. Read the file before you attach it.
 
 ---
 
@@ -724,9 +757,10 @@ workscribe _capture --type task_run --source vscode --cwd /path/to/repo
 | `--lines-added [count]` | Lines a `code_edit` added. Anything but a non-negative integer counts as unknown |
 | `--lines-removed [count]` | Lines a `code_edit` removed. Anything but a non-negative integer counts as unknown |
 
-Options `_capture` doesn't know are ignored rather than failing the capture, so an integration can send newer flags. CLI versions up to 3.2 reject them, along with `--lines-added` and `--lines-removed`.
 | `--exit <code>` | Exit code (shell hook only) |
 | `--duration <ms>` | Duration in milliseconds (shell hook only) |
+
+Options `_capture` doesn't know are ignored rather than failing the capture, so an integration can send newer flags. CLI versions up to 3.2 reject them, along with `--lines-added` and `--lines-removed`.
 
 **Deduplication:** a `code_edit` within 30 seconds of the last event for the same file and folder, when that event is a `code_edit` from the same source, is added onto it: the line counts add up (unknown counts add nothing) and `lastEditAt` moves to the new edit, but the event keeps its time. The window counts from the event's own time, so a long run of saves is one event per 30 seconds. An edit from another source, or after another kind of event on the file, is kept as a new event.
 
@@ -761,4 +795,4 @@ http******** (68 chars)
 
 This confirms a value is set without exposing it in your terminal history.
 
-See [Configuration](/docs/configuration) for the full config reference.
+See [Configuration](/configuration) for the full config reference.
