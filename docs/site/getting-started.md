@@ -47,7 +47,7 @@ Safe to re-run at any time — updates outdated hooks and skips steps already co
 After init, activate the hook without restarting your terminal:
 
 ```bash
-source ~/.zshrc   # or ~/.bashrc
+source ~/.zshrc   # or ~/.bashrc; in fish, open a new terminal
 ```
 
 ## Verify it's working
