@@ -40,13 +40,13 @@ function useIdleTimeout(minutes: number): void {
   } as ReturnType<typeof readConfig>)
 }
 
-function capture(minutes: number): void {
+function capture(minutes: number, overrides: { command?: string; durationMs?: number } = {}): void {
   insertEvent({
     captured_at: minutesAfterStart(minutes),
-    command: `npm test ${minutes}`,
+    command: overrides.command ?? `npm test ${minutes}`,
     cwd: '/repo',
     exit_code: 0,
-    duration_ms: 10,
+    duration_ms: overrides.durationMs ?? 10,
     repo_name: 'api',
     branch: 'main',
     category: 'testing',
@@ -127,6 +127,18 @@ describe('getOrBuildBlocks on a real database', () => {
     useIdleTimeout(10)
 
     expect(getOrBuildBlocks(DATE)).toHaveLength(2)
+  })
+
+  it('counts a session left open for days as the idle timeout, not the whole day', () => {
+    const twentyFourDaysMs = 24 * 24 * 60 * 60 * 1000
+    capture(0)
+    capture(120, { command: 'claude', durationMs: twentyFourDaysMs })
+
+    const blocks = getOrBuildBlocks(DATE)
+
+    // 1 slot for the first event; the 30 minutes before the session's exit span 7 slots, in one block
+    expect(blocks.map((block) => block.activeSlots)).toEqual([8])
+    expect(getDb().prepare('SELECT COUNT(DISTINCT slot_start) AS slots FROM activity_slot').get()).toEqual({ slots: 8 })
   })
 
   it('rebuilds a day built by another grouping version', () => {
