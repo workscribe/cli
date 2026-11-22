@@ -1,5 +1,25 @@
 # Changelog
 
+## [3.6.0](https://github.com/workscribe/cli/compare/v3.5.2...v3.6.0) (2026-11-22)
+
+### Features
+
+* **capture:** exclude directories from capture ([32f39e1](https://github.com/workscribe/cli/commit/32f39e11821cb843c8be9aa4f7a54c04ebc37e8b))
+* **config:** remove the anonymous install telemetry ([d17c805](https://github.com/workscribe/cli/commit/d17c80577f5e7466cc9e1d9442295bd894ccbc44))
+
+### Bug Fixes
+
+* **capture:** redact secrets a command writes as plain text ([ec56c04](https://github.com/workscribe/cli/commit/ec56c041b98ca1a35661bfff6866b1d6530aa2ee))
+* **capture:** redact secrets in infrastructure command forms ([cdf9c8f](https://github.com/workscribe/cli/commit/cdf9c8ff7ec8dede6109fe6851f8e2663b928cfa))
+* **db:** scrub stored events and backups for infrastructure secrets ([d3b50b8](https://github.com/workscribe/cli/commit/d3b50b828b64d26df6157a8886de4279a1ebb823))
+* **db:** scrub stored events for secrets written as plain text ([7fa982a](https://github.com/workscribe/cli/commit/7fa982aad884a6dd52ca00f4ef4b835bffee9425))
+* **normalize:** don't read a masked exit code as a passing run ([572ca8f](https://github.com/workscribe/cli/commit/572ca8f54223f20c96aaba4170d8025da40c37eb))
+* **normalize:** keep shell expansions out of dependency packages ([e5af837](https://github.com/workscribe/cli/commit/e5af8379db7ced1f0bd22c1fa207eec3de750ff3))
+* **normalize:** read the tool after npx's own boolean flags ([57da79c](https://github.com/workscribe/cli/commit/57da79cf3f57d81f8b5c83cc31fcc8578d6e847e))
+* **sessions:** cap active time of long-running commands ([ade1e4d](https://github.com/workscribe/cli/commit/ade1e4d86146799a502c76d02d8308cb4c685194))
+* **summary:** never name a branch from a shell variable ([c955968](https://github.com/workscribe/cli/commit/c955968f811a0d847958a9253dfc6b25029154dd))
+* **summary:** word a removal that names no package as removed ([be1c32c](https://github.com/workscribe/cli/commit/be1c32cb073a93aa1080b5e8fe59eee767864ba4))
+
 ## [3.5.2](https://github.com/workscribe/cli/compare/v3.5.1...v3.5.2) (2026-11-19)
 
 ## [3.5.1](https://github.com/workscribe/cli/compare/v3.5.0...v3.5.1) (2026-11-19)
