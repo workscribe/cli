@@ -792,6 +792,21 @@ describe('redact', () => {
       ['encrypt_string value flags only', 'ansible-vault encrypt_string -n a -n '],
       ['secret key after a separator', 'a=1;token=b '],
       ['secret key after an ampersand', 'a=1&pass=b '],
+      ['echo with a colon key', 'echo "password: '],
+      ['echo with a spaced equals key', 'echo "token = '],
+      ['echo with many keys', 'echo password: a token: b '],
+      ['printf with a secret format', "printf 'token: %s' "],
+      ['printf arguments after a secret format', "printf 'token: %s' a b c d e "],
+      ['printf with an unclosed format', "printf 'token: %s "],
+      ['here-string with a key', 'tee f <<< "token: '],
+      ['sed substitutions', "sed 's/password:.*/password: x/' "],
+      ['script with a colon key', 'python3 -c "token: '],
+      ['bare value to a secret file', 'echo abcdefgh > .secret '],
+      ['bare value to a plain file', 'echo abcdefgh > out.txt '],
+      ['bare value piped to tee', 'echo abcdefgh | tee ~/.vault-pass '],
+      ['key with a long prefix', `echo ${'a'.repeat(32)}_password: `],
+      ['key with dotted prefixes', 'echo a.b.c.d.e.f.password: '],
+      ['written-out newlines', 'echo -e "a\\ntoken: x\\n'],
     ])('%s', (_shape, unit) => {
       const longLine = unit.repeat(Math.ceil(LONG_LINE_LENGTH / unit.length))
       const startedAt = performance.now()

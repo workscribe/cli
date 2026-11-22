@@ -94,11 +94,74 @@ const VAULT_ARGUMENT = String.raw`(?:${QUOTED}|[^\s"'=-][^\s"'=]*(?=\s|$))`
 // The key of one `name=value` pair of `vault kv put`; a flag such as `-mount=secret` is not one
 const MAX_VAULT_KEY_LENGTH = 64
 const VAULT_PAIR_KEY = String.raw`[A-Za-z_][\w.-]{0,${MAX_VAULT_KEY_LENGTH - 1}}`
+// A secret a command writes as plain text (WOR-204): `echo "password: …" > values.yaml`. Only a writer is read, so a
+// commit message or a note that says "password: required" is left alone
+const WRITER_VERBS = String.raw`echo|printf|tee|sed|awk|gawk`
+// A one-line script is read for `key: value` in the text it writes, never for `key = value`, which is code:
+// `node -e "const token = getToken()"`
+const SCRIPT_VERBS = String.raw`perl|python3?|node|ruby`
+// The limits below keep a very long line fast: these patterns run inside lookbehinds, where an unbounded run backtracks
+// A key's prefix, `client_` or `db.` in `client_secret` and `db.password`
+const MAX_WRITTEN_KEY_PREFIX_LENGTH = 32
+// The spaces around the `:` or `=` of a key
+const MAX_WRITTEN_KEY_SPACES = 4
+// Short values are words (`no`, `see`, `x`), not secrets
+const MIN_WRITTEN_VALUE_LENGTH = 6
+// How far into a `printf` format string a key is looked for, and how many arguments are read after it
+const MAX_PRINTF_FORMAT_LENGTH = 200
+const MAX_PRINTF_ARGUMENTS = 10
+// A key that ends in a secret word, after an optional prefix that ends in `_`, `-` or `.`: `client_secret`, `db.password`,
+// not `bypass` or `tokenizer`. It starts a word, or follows a `\n` or `\t` written out in a string
+const WRITTEN_KEY_NAME = String.raw`(?:(?<![\w.-])|(?<=\\[nt]))(?:[\w.-]{0,${MAX_WRITTEN_KEY_PREFIX_LENGTH}}[_.-])?(?:${anyCase(SECRET_KEY_NAMES)})`
+const WRITTEN_COLON_KEY = String.raw`${WRITTEN_KEY_NAME}\s{0,${MAX_WRITTEN_KEY_SPACES}}:\s{0,${MAX_WRITTEN_KEY_SPACES}}`
+// INI style, `token = value`, with a space each side. Prose says `set password = prompt`, so its value must have a digit
+// or a capital, as a generated secret does
+const WRITTEN_SPACED_EQUALS_KEY = String.raw`${WRITTEN_KEY_NAME}\s{1,${MAX_WRITTEN_KEY_SPACES}}=\s{1,${MAX_WRITTEN_KEY_SPACES}}`
+// In a `printf` format the key is followed by `%s`, so either sign counts and the value is a later argument
+const PRINTF_FORMAT_KEY = String.raw`${WRITTEN_KEY_NAME}\s{0,${MAX_WRITTEN_KEY_SPACES}}[:=]\s{0,${MAX_WRITTEN_KEY_SPACES}}`
+// What a value cannot start with: a variable (`$X`), a placeholder (`<…>`, `{{…}}`, `%s`), a regex (`.*`, `^`, `\`) or
+// what is already redacted (`[REDACTED]`); and the words that are switches, not secrets
+const NOT_A_WRITTEN_VALUE = String.raw`(?![$<{%.*\\^\[]|(?:true|false|null|none|yes|no)(?![\w-]))`
+// What a value is made of: not a space, a quote, a backslash or a shell separator. A `/` inside it is part of it
+// (base64); a `/` that ends it is a `sed` delimiter and stays
+const WRITTEN_VALUE_CHARACTERS = String.raw`(?:[^\s"'\\;&|)/]|/(?=[^\s"'\\;&|)/]))`
+const WRITTEN_VALUE = String.raw`${NOT_A_WRITTEN_VALUE}${WRITTEN_VALUE_CHARACTERS}{${MIN_WRITTEN_VALUE_LENGTH},}`
+// A `printf` argument is often quoted, `printf 'password: %s\n' "SECRET"`: a quoted literal, not `"$NAME"`
+const QUOTED_WRITTEN_VALUE = String.raw`(?:"${NOT_A_WRITTEN_VALUE}[^"\n]{${MIN_WRITTEN_VALUE_LENGTH},}"|'${NOT_A_WRITTEN_VALUE}[^'\n]{${MIN_WRITTEN_VALUE_LENGTH},}')`
+const REQUIRES_DIGIT_OR_CAPITAL = String.raw`(?=[^\s"'\\;&|)]*[A-Z0-9])`
+// The verbs that print their first argument, with their flags, and the `tee` that writes it to a file:
+// `echo -n SECRET | tee -a ~/.vault-pass`
+const ECHO_VERBS = String.raw`echo|printf`
+const ECHO_FLAGS = String.raw`(?:\s+-[neE]+)*`
+const TEE_TARGET = String.raw`\|\s*tee(?:\s+-a)?\s+`
+// The extension of a file name: `.txt`, `.json`
+const MAX_FILE_EXTENSION_LENGTH = 5
+// The file a bare secret is written to is named for it: its last word is a secret word, `.vault-pass`, `my_token.txt`,
+// `credentials.json`, but not `passenger.log`, `token_count.txt` or `.secretive`. Not `key`: `authorized_keys` is public
+const SECRET_FILE_WORDS = String.raw`password|passwd|pass|secret|token|credential`
+const SECRET_FILE_TARGET = String.raw`[^\s"'|;&]*?(?<![A-Za-z0-9])(?:${SECRET_FILE_WORDS})s?(?:\.[A-Za-z0-9]{1,${MAX_FILE_EXTENSION_LENGTH}})?(?=[\s"'|;&)]|$)`
 // A Kubernetes key is at most 253 characters
 const MAX_LITERAL_NAME_LENGTH = 253
 // `ansible-vault encrypt_string --name x 'one' 'two'`: each plaintext, past the flags that take a value
 const MAX_ENCRYPT_STRING_VALUES = 20
 const ANSIBLE_VAULT_VALUE_FLAGS = String.raw`(?:-n|--name|--vault-id|--encrypt-vault-id|--vault-password-file|--vault-pass-file|--stdin-name|--output)`
+
+/**
+ * The pattern with each letter outside a `[…]` class matching either case: `pass` as `[pP][aA][sS][sS]`. For the key of a
+ * written secret (`Password:`, `TOKEN:`) without the `i` flag, which would also let a lowercase letter pass for the capital
+ * that `REQUIRES_DIGIT_OR_CAPITAL` asks of a value.
+ */
+function anyCase(pattern: string): string {
+  let insideClass = false
+  return [...pattern]
+    .map((character) => {
+      if (character === '[') insideClass = true
+      if (character === ']') insideClass = false
+      const isLetter = /[A-Za-z]/.test(character)
+      return isLetter && !insideClass ? `[${character.toLowerCase()}${character.toUpperCase()}]` : character
+    })
+    .join('')
+}
 
 /** Matches the value that follows `prefix`, leaving the prefix in place. */
 function valueAfter(prefix: string, value = VALUE): RegExp {
@@ -239,6 +302,37 @@ function infrastructurePatterns(): RegExp[] {
   ]
 }
 
+// What a command writes as plain text: `echo "password: …" > values.yaml`, `printf`, `tee`, a here-string, `sed -i`, a
+// one-line script, and a bare secret echoed into a file named for it. A heredoc body is never stored, so it needs no rule
+function writtenTextPatterns(): RegExp[] {
+  const afterVerbs = (verbs: string) => String.raw`${TOOL_WORD_START}(?:${verbs})${TOOL_WORD_END}${SAME_COMMAND}`
+  // `key: value`, and `key = value` (INI) when its value looks generated, wherever `prefix` says text is written
+  const keyedValues = (prefix: string): RegExp[] => [
+    valueAfter(`${prefix}${WRITTEN_COLON_KEY}`, WRITTEN_VALUE),
+    valueAfter(`${prefix}${WRITTEN_SPACED_EQUALS_KEY}`, `${REQUIRES_DIGIT_OR_CAPITAL}${WRITTEN_VALUE}`),
+  ]
+  const printfFormat = String.raw`(?:'[^']{0,${MAX_PRINTF_FORMAT_LENGTH}}?${PRINTF_FORMAT_KEY}%s[^']*'|"[^"]{0,${MAX_PRINTF_FORMAT_LENGTH}}?${PRINTF_FORMAT_KEY}%s[^"]*")`
+  const printfArgument = String.raw`(?:"[^"]*"|'[^']*'|[^\s"'<>|;&]+)`
+  return [
+    ...keyedValues(afterVerbs(WRITER_VERBS)),
+    // A one-line script is read for `key: value` only: `key = value` is code
+    valueAfter(`${afterVerbs(SCRIPT_VERBS)}${WRITTEN_COLON_KEY}`, WRITTEN_VALUE),
+    // The same in a here-string: `cat > f.yaml <<< "password: …"`
+    ...keyedValues(String.raw`<<<\s*["']?`),
+    // `printf 'password: %s\n' SECRET`: the arguments after a format that has a secret-named key
+    valueAfter(
+      String.raw`${TOOL_WORD_START}printf${TOOL_WORD_END}\s+${printfFormat}(?:\s+${printfArgument}){0,${MAX_PRINTF_ARGUMENTS}}?\s+`,
+      `(?:${WRITTEN_VALUE}|${QUOTED_WRITTEN_VALUE})`
+    ),
+    // A bare secret written to a file named for it: `echo -n SECRET > .secret`, `echo SECRET | tee ~/.vault-pass`
+    new RegExp(
+      String.raw`(?<=${TOOL_WORD_START}(?:${ECHO_VERBS})${TOOL_WORD_END}${ECHO_FLAGS}\s+["']?)${WRITTEN_VALUE}` +
+        String.raw`(?=["']?\s*(?:>{1,2}\s*|${TEE_TARGET})["']?${SECRET_FILE_TARGET})`,
+      'g'
+    ),
+  ]
+}
+
 // Patterns that match known sensitive values
 const BUILTIN_PATTERNS: RegExp[] = [
   // AWS access keys
@@ -312,6 +406,7 @@ const BUILTIN_PATTERNS: RegExp[] = [
   ),
   valueAfter(String.raw`--(?:password-stdin|with-token)\s*<<<\s*`),
   ...infrastructurePatterns(),
+  ...writtenTextPatterns(),
   // Headers. A scheme or a header flag is required for Authorization, so prose like "Authorization: added middleware"
   // stays. An everyday word needs to look like a header, so `git commit -m "cookie: rotate on login"` stays: a header
   // flag, `Cookie:value` with no space, or a quoted `"Cookie: value"` outside a message
