@@ -7,7 +7,7 @@ description: How Workscribe handles your data and what never leaves your machine
 
 ## What stays local
 
-Everything you capture. All captured data is stored in `~/.workscribe/` on your machine. Nothing is sent to any remote server except a small anonymous install ping (on by default, see below). Summaries are built offline by the template engine; your activity leaves your machine only if you ask a coding agent to summarize it with the Workscribe skill (see below).
+Everything you capture. All captured data is stored in `~/.workscribe/` on your machine. Workscribe sends no usage data, install ID or analytics: the only request it makes on its own is a once-a-day check of the npm registry for a newer version, which carries nothing about you or your activity. Summaries are built offline by the template engine; your activity leaves your machine only if you ask a coding agent to summarize it with the Workscribe skill (see below).
 
 | Location | Contents |
 |---|---|
@@ -28,27 +28,6 @@ Both the database and config file are written with `0600` permissions (owner rea
 - **Projects, branches and files:** to tell when events belong to the same project, Workscribe also stores each repo's `origin` remote (host, owner and repo, never credentials), its root folder and git folder, and the path of each saved file relative to its repo. These come from the same folders and names already recorded with each event. To link events captured before this was recorded, a one-time upgrade asks git about each folder in your history, once, and keeps the answer.
 - **Line counts on saves:** when an editor sends them, Workscribe stores how many lines a save added and removed, and when a file's repeated saves last changed it. Never the text of the change.
 - **`git commit -F <file>`:** Workscribe reads the message file's first line (the subject) when the command is captured, redacted like the command itself. Only regular files are read, at most 4 KB, and the file's path isn't stored.
-
----
-
-## Anonymous install telemetry
-
-Workscribe sends a small anonymous ping on startup, at most once every 24 hours per install — on by default.
-
-**Sent:**
-- A randomly generated install ID — not tied to your identity, your repos, or any account
-- CLI version
-- OS platform
-- Node.js version
-
-**Never sent:** commands, events, sessions, or summaries — nothing from the "What gets redacted" or "When your activity leaves your machine" sections below.
-
-Telemetry does not run for the background shell-hook process that captures each command (`_capture`/`_hook`) — only for commands you run directly, and never more than once in a 24-hour window.
-
-**Opt out:**
-```bash
-workscribe config set telemetry.enabled false
-```
 
 ---
 
@@ -128,7 +107,7 @@ If you need summaries that never leave your machine, don't use the skill — `wo
 
 ## Fully offline operation
 
-`workscribe summary`, `week` and `export` never make an external network request for your summary data. The anonymous install ping (see above) still runs unless you disable it — add `workscribe config set telemetry.enabled false` for fully offline operation, and don't use the agent skill.
+`workscribe summary`, `week` and `export` never make an external network request for your summary data. Workscribe's only other request is the once-a-day npm registry check for a newer version (it sends nothing about you or your activity, and fails quietly when you're offline). For fully offline operation, don't use the agent skill.
 
 Ollama was supported in 1.x for offline AI-written summaries; it was removed in 2.0 along with the cloud providers. See [Migrating to 2.0](/migrating-to-2).
 

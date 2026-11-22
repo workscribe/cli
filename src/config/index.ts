@@ -1,8 +1,6 @@
-import crypto from 'crypto'
 import fs from 'fs'
 import path from 'path'
 import { CONFIG_PATH } from '../utils/paths'
-import { debugLog } from '../utils/logger'
 import { DEFAULT_TICKET_PATTERN } from '../capture/tickets'
 
 /**
@@ -64,10 +62,6 @@ export interface WorkscribeConfig {
     slackWebhook?: string
     webhook?: string
   }
-  telemetry: {
-    enabled: boolean
-    installId: string
-  }
   tickets: {
     // What a ticket key looks like in branch names and commit messages (a regular expression). Change it with
     // `workscribe config set tickets.pattern`, which also re-links the history.
@@ -100,10 +94,6 @@ const DEFAULTS: WorkscribeConfig = {
   summary: {
     format: 'markdown',
   },
-  telemetry: {
-    enabled: true,
-    installId: '',
-  },
   tickets: {
     pattern: DEFAULT_TICKET_PATTERN,
   },
@@ -113,7 +103,9 @@ export function readConfig(): WorkscribeConfig {
   if (!fs.existsSync(CONFIG_PATH)) return deepMerge(DEFAULTS, {})
   try {
     const raw = fs.readFileSync(CONFIG_PATH, 'utf-8')
-    const parsed = JSON.parse(raw)
+    // `telemetry` was removed (WOR-181): a config written before that still holds it, with its install ID. It is
+    // dropped here, so it never reaches `config list` or a bug report, and leaves the file with the next save.
+    const { telemetry: _removedTelemetry, ...parsed } = JSON.parse(raw)
     return deepMerge(DEFAULTS, parsed)
   } catch {
     return deepMerge(DEFAULTS, {})
@@ -136,41 +128,6 @@ export function writeConfig(config: WorkscribeConfig): void {
     fs.chmodSync(CONFIG_PATH, 0o600)
   } catch {
     /* ignore */
-  }
-}
-
-// Generates and persists telemetry.installId on first use. Covers both a
-// fresh install and an existing user upgrading — deepMerge already backfills
-// the telemetry key itself, this just fills in the empty installId.
-export function ensureInstallId(config: WorkscribeConfig): string {
-  if (config.telemetry.installId) return config.telemetry.installId
-
-  const installId = crypto.randomUUID()
-  writeConfig({ ...config, telemetry: { ...config.telemetry, installId } })
-  return installId
-}
-
-// Fallback for users who skip `init` entirely — which is exactly what an
-// existing user upgrading will typically do, since they never re-run it.
-// Presence of installId is the only state tracked; no separate "notice
-// shown" flag is needed since this is a no-op once installId is set.
-export function ensureTelemetryFallback(): void {
-  // Unlike init's explicit telemetry step, this runs unannounced ahead of
-  // every command — it must never throw, however it fails, or a disk issue
-  // (read-only $HOME, full disk, a locked-down CI sandbox) would crash the
-  // user's actual command before it even starts.
-  try {
-    const config = readConfig()
-    if (config.telemetry.installId) return
-
-    config.telemetry.enabled = true
-    config.telemetry.installId = ensureInstallId(config)
-
-    process.stderr.write(
-      '\n  Workscribe collects anonymous install stats (install ID, CLI version, platform, Node version).\n  Opt out: workscribe config set telemetry.enabled false\n\n'
-    )
-  } catch (error) {
-    debugLog('ensureTelemetryFallback', error)
   }
 }
 
@@ -209,8 +166,8 @@ function deepMerge<T extends object>(defaults: T, overrides: Partial<T>): T {
   // (e.g. a config file written before a newer top-level key existed) must
   // still be an independent copy, not a shared reference back into the
   // caller's `defaults` object. A shallow spread here previously let any
-  // caller that mutates a nested field on the returned config (e.g.
-  // ensureTelemetryFallback) silently corrupt the module-level DEFAULTS
+  // caller that mutates a nested field on the returned config
+  // silently corrupt the module-level DEFAULTS
   // singleton for the rest of the process.
   const result = structuredClone(defaults)
   for (const key of Object.keys(overrides) as (keyof T)[]) {

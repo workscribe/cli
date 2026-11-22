@@ -111,7 +111,7 @@ A few of the most common:
 - Credentials are redacted before any event is written to disk (tokens, API keys, passwords, JWTs)
 - `workscribe summary`, `week` and `export` never send your activity anywhere — the template engine runs entirely on your machine
 - The agent skill is the one exception, and only when you ask your coding agent for a summary: the agent sends the session data it reads to its own model provider
-- Separately, Workscribe sends an anonymous install ping (a random ID, CLI version, OS platform, Node version — no activity data, ever), disclosed during `workscribe init`. Opt out anytime: `workscribe config set telemetry.enabled false`
+- Workscribe sends no usage data or analytics. Its one request of its own is a once-a-day npm registry check for a newer version, which carries nothing about you or your activity
 
 **[Full privacy & security details →](https://workscribe.mintlify.site/privacy)**
 

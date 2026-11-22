@@ -26,22 +26,12 @@ import { registerAlerts } from './cli/alerts'
 import { registerContext } from './cli/context'
 import { registerHistory } from './cli/history'
 import { registerSkill } from './cli/skill'
-import { checkForUpdate, pingTelemetry } from './utils/update-check'
-import { ensureTelemetryFallback } from './config'
+import { checkForUpdate } from './utils/update-check'
 import { log } from './utils/logger'
 
 const invokedCommand = process.argv[2]
 if (shouldRunStartupChecks(invokedCommand)) {
   checkForUpdate()
-  // init handles its own telemetry disclosure via an interactive prompt —
-  // the silent fallback is only for users who skip init entirely. Must run
-  // before pingTelemetry() — otherwise a user's very first command would
-  // generate the installId but the ping already read the old empty config
-  // moments earlier, delaying the first ping to the next invocation.
-  if (invokedCommand !== 'init') {
-    ensureTelemetryFallback()
-  }
-  pingTelemetry()
 }
 
 // Before a data command people typed: record the version and give pending data jobs a short budget (never in the
