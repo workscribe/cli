@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { redact } from '../../src/capture/redact'
+import { MAX_HEADER_NAME_WORD_LENGTH, redact } from '../../src/capture/redact'
 
 // Well above what these take, about 2 s at worst, so a loaded machine doesn't fail them
 const MAX_REDACT_MS = 5000
@@ -512,7 +512,7 @@ describe('redact', () => {
       ],
       [
         'kubectl create secret generic s --from-literal=db_password=FAKEVALUE --from-literal=user=me',
-        'kubectl create secret generic s --from-literal=db_password=[REDACTED] --from-literal=user=me',
+        'kubectl create secret generic s --from-literal=db_password=[REDACTED] --from-literal=user=[REDACTED]',
       ],
       ['curl -H "PRIVATE-TOKEN: FAKEVALUE" x.io', 'curl -H "PRIVATE-TOKEN: [REDACTED]" x.io'],
       ['curl -H "X-Token: FAKEVALUE" x.io', 'curl -H "X-Token: [REDACTED]" x.io'],
@@ -534,7 +534,6 @@ describe('redact', () => {
       'openssl enc -in f -out g',
       'gh secret set NAME < value.txt',
       'gh secret list --body',
-      'kubectl create secret generic s --from-literal=user=me',
       'curl -H "Accept: text/plain" x.io',
     ])('leaves %s alone', (command) => {
       expect(redact(command)).toBe(command)
@@ -762,6 +761,37 @@ describe('redact', () => {
       ['repeated openssl', 'openssl -k '],
       ['repeated gh secret', 'gh secret set A --body '],
       ['repeated versioned tool', 'mysql@8 -p x '],
+      ['repeated vault login', 'vault login -x '],
+      ['repeated vault login with a pair', 'vault login a=b '],
+      ['repeated vault unseal', 'vault operator unseal -x '],
+      ['repeated vault kv put', 'vault kv put a=b '],
+      ['repeated vault kv put without pairs', 'vault kv put -mount=a '],
+      ['repeated ssm put-parameter', 'aws ssm put-parameter --value '],
+      ['repeated aws before ssm', 'aws --profile p ssm '],
+      ['repeated az login', 'az login -p x '],
+      ['repeated az login without a password', 'az login -u x '],
+      ['repeated az keyvault', 'az keyvault secret set --value '],
+      ['repeated from-literal with a space', '--from-literal a='],
+      ['repeated from-literal without a value', '--from-literal a-b.c '],
+      ['repeated encrypt_string', "ansible-vault encrypt_string 'a' "],
+      ['repeated encrypt_string flags', 'ansible-vault encrypt_string -x '],
+      ['repeated gcloud stdin', 'echo a | gcloud secrets '],
+      ['repeated creds', '--creds a:b '],
+      ['repeated terraform token', 'terraform login -token '],
+      ['repeated secret key', 'token=a '],
+      ['repeated secret key in quotes', `-var 'secret=a' `],
+      ['repeated dashed header name', 'x-a-b-c-d-e-f-g-h-token '],
+      ['repeated dashed words', 'a-b-c-d-e-f-g-h-i-j '],
+      ['repeated header with a long name', `-H x-${'a'.repeat(MAX_HEADER_NAME_WORD_LENGTH)}-token: `],
+      ['curl user with a colon', 'curl -u a: '],
+      ['curl user without one', 'curl -u a '],
+      ['curl quoted user with a colon', "curl -u 'a:' "],
+      ['aws configure set', 'aws configure set aws_session_token '],
+      ['aws session token variable', 'AWS_SESSION_TOKEN '],
+      ['encrypt_string flags with values', 'ansible-vault encrypt_string --name a '],
+      ['encrypt_string value flags only', 'ansible-vault encrypt_string -n a -n '],
+      ['secret key after a separator', 'a=1;token=b '],
+      ['secret key after an ampersand', 'a=1&pass=b '],
     ])('%s', (_shape, unit) => {
       const longLine = unit.repeat(Math.ceil(LONG_LINE_LENGTH / unit.length))
       const startedAt = performance.now()
