@@ -45,6 +45,68 @@ function makeSpan(overrides: Partial<PayloadSpan> = {}): PayloadSpan {
 }
 
 describe('eventRowToPayload', () => {
+  it('names a branch the shell expanded by the branch the command ended on', () => {
+    const row = makeEvent({
+      command: 'git switch -c $B main',
+      category: 'versioning',
+      branch: 'feat/x',
+      metadata: '{}',
+    })
+
+    expect(eventRowToPayload(row).gitMoves).toEqual([{ kind: 'create-branch', branch: 'feat/x' }])
+  })
+
+  it('names a branch built from a variable the same way', () => {
+    const row = makeEvent({
+      command: 'git checkout -b "fix/$ID-redact" main',
+      category: 'versioning',
+      branch: 'fix/WOR-166-redact',
+      metadata: '{}',
+    })
+
+    expect(eventRowToPayload(row).gitMoves).toEqual([{ kind: 'create-branch', branch: 'fix/WOR-166-redact' }])
+  })
+
+  it('leaves out a branch the shell expanded when the command ended on no branch', () => {
+    const row = makeEvent({ command: 'git switch -c $B main', category: 'versioning', branch: null, metadata: '{}' })
+
+    expect(eventRowToPayload(row)).not.toHaveProperty('gitMoves')
+  })
+
+  it('never names a branch from a variable when the command failed', () => {
+    const row = makeEvent({
+      command: 'git switch -c $B main',
+      category: 'versioning',
+      branch: 'main',
+      exit_code: 128,
+      metadata: '{}',
+    })
+
+    expect(eventRowToPayload(row)).not.toHaveProperty('gitMoves')
+  })
+
+  it('names only the last branch move by the branch the command ended on', () => {
+    const row = makeEvent({
+      command: 'git switch -c $A main && git switch -c $B',
+      category: 'versioning',
+      branch: 'feat/b',
+      metadata: '{}',
+    })
+
+    expect(eventRowToPayload(row).gitMoves).toEqual([{ kind: 'create-branch', branch: 'feat/b' }])
+  })
+
+  it('keeps a branch name that is not an expansion exactly as written', () => {
+    const row = makeEvent({
+      command: 'git switch -c feat/y main',
+      category: 'versioning',
+      branch: 'feat/y',
+      metadata: '{}',
+    })
+
+    expect(eventRowToPayload(row).gitMoves).toEqual([{ kind: 'create-branch', branch: 'feat/y' }])
+  })
+
   it('drops shell expansions that were stored as package names', () => {
     const row = makeEvent({
       category: 'dependencies',
