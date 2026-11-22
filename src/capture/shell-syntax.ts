@@ -73,21 +73,34 @@ function isRedirection(text: string, index: number): boolean {
   return text[index] === '&' && (text[index - 1] === '>' || text[index - 1] === '<' || text[index + 1] === '>')
 }
 
-/** Splits on any separator that sits outside single or double quotes. */
-export function splitOutsideQuotes(text: string, separators: string[]): string[] {
-  const parts: string[] = []
+/** A piece of text between separators, and the separator that ended it (null for the last piece). */
+export interface SeparatedPart {
+  text: string
+  separatorAfter: string | null
+}
+
+/** Splits on any separator outside quotes, keeping each piece's text as written and the separator that follows it. */
+export function splitKeepingSeparators(text: string, separators: string[]): SeparatedPart[] {
+  const parts: SeparatedPart[] = []
   let partStart = 0
   let skipUntil = 0
   for (const { index, quote } of quotedCharacters(text)) {
     if (quote !== null || index < skipUntil || isRedirection(text, index)) continue
     const separator = separators.find((candidate) => text.startsWith(candidate, index))
     if (!separator) continue
-    parts.push(text.slice(partStart, index))
+    parts.push({ text: text.slice(partStart, index), separatorAfter: separator })
     partStart = index + separator.length
     skipUntil = partStart
   }
-  parts.push(text.slice(partStart))
-  return parts.map((part) => part.trim()).filter((part) => part !== '')
+  parts.push({ text: text.slice(partStart), separatorAfter: null })
+  return parts
+}
+
+/** Splits on any separator that sits outside single or double quotes. */
+export function splitOutsideQuotes(text: string, separators: string[]): string[] {
+  return splitKeepingSeparators(text, separators)
+    .map((part) => part.text.trim())
+    .filter((part) => part !== '')
 }
 
 /**

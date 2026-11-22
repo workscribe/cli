@@ -44,6 +44,13 @@ function soloThreadToJson(events: Parameters<typeof thread>[0], overrides: Param
 }
 
 describe('eventToJson', () => {
+  it("reports no exit code for a test run whose 0 was another command's, and keeps the same keys", () => {
+    const json = eventToJson(capturedRow('npx vitest run | tail', { exit_code: 0, category: 'testing' }))
+
+    expect(json.exitCode).toBeNull()
+    expect(Object.keys(json).sort()).toEqual(EVENT_KEYS)
+  })
+
   it('keeps the agent session out of the event, whose keys are pinned', () => {
     const json = eventToJson(capturedRow('npm test', { agent_session_id: 7 }))
 

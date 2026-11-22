@@ -12,7 +12,7 @@ import {
   stripComments,
 } from './shell-syntax'
 
-const STEP_SEPARATORS = ['&&', '||', ';', '\n', '&']
+export const STEP_SEPARATORS = ['&&', '||', ';', '\n', '&']
 const PIPE_SEPARATORS = ['|']
 /** The longest a command is stored before it is cut at a step boundary. */
 export const MAX_STORED_COMMAND_LENGTH = 2000

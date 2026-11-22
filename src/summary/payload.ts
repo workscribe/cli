@@ -4,8 +4,9 @@ import { formatDate } from '../utils/format'
 import { parseMetadata } from './event-metadata'
 import { storyCommitsOf } from './story-commits'
 import { isFailedCommand } from './commits'
-import { withoutShellExpansions } from '../normalize/dependency-metadata'
-import { gitMovesOf } from '../normalize/git-move'
+import { isShellExpansion, withoutShellExpansions } from '../normalize/dependency-metadata'
+import { reportedExitCode } from '../normalize/exit-evidence'
+import { gitMovesOf, type GitMove } from '../normalize/git-move'
 import type { AgentSessionPayload, EventPayload, SessionPayload } from '../ai/types'
 import type { AgentSessionInfo } from '../db/agent-sessions'
 import type { EventRow } from '../db/types'
@@ -39,6 +40,28 @@ const DEFAULT_LOCATION_CONTEXT: LocationContext = { projects: {}, homeDir: os.ho
 // Only git commands can move work between branches; anything else isn't worth parsing
 const MENTIONS_GIT = /(^|[\s;&|(])git\s/
 
+type BranchMove = Extract<GitMove, { kind: 'create-branch' | 'switch' }>
+
+const isBranchMove = (move: GitMove): move is BranchMove => move.kind === 'create-branch' || move.kind === 'switch'
+
+const isNamedByExpansion = (move: GitMove): boolean => isBranchMove(move) && isShellExpansion(move.branch)
+
+/**
+ * A branch the shell expanded (`git switch -c $B main`) is stored as written, so its name would be the variable's.
+ * When the command succeeded and that was its last branch move, the branch the event ended on is the real name. Any
+ * other such move is left out, and so is every one of a failed command's: it ended on the old branch, and a wrong name
+ * is worse than none.
+ */
+function withResolvedBranchNames(moves: GitMove[], row: EventRow): GitMove[] {
+  if (!moves.some(isNamedByExpansion)) return moves
+  const lastBranchMove = moves.map(isBranchMove).lastIndexOf(true)
+  const endedOn = isFailedCommand(row) ? null : row.branch
+  return moves.flatMap((move, index) => {
+    if (!isBranchMove(move) || !isNamedByExpansion(move)) return [move]
+    return index === lastBranchMove && endedOn !== null ? [{ ...move, branch: endedOn }] : []
+  })
+}
+
 /**
  * The command's branch moves, read from the stored (redacted) command. When the command failed, there's no telling
  * which step did — except that a new branch the session is now on was created (`git switch -c x && npm test` with
@@ -46,7 +69,7 @@ const MENTIONS_GIT = /(^|[\s;&|(])git\s/
  */
 function gitMovesField(row: EventRow): Pick<EventPayload, 'gitMoves'> {
   if (!MENTIONS_GIT.test(row.command)) return {}
-  const moves = gitMovesOf(row.command)
+  const moves = withResolvedBranchNames(gitMovesOf(row.command), row)
   const gitMoves = isFailedCommand(row)
     ? moves.filter((move) => move.kind === 'create-branch' && move.branch === row.branch)
     : moves
@@ -66,7 +89,12 @@ export function eventRowToPayload(row: EventRow): EventPayload {
   const payload: EventPayload = {
     category: row.category,
     metadata,
-    exitCode: row.exit_code,
+    exitCode: reportedExitCode({
+      command: row.command,
+      category: row.category,
+      exitCode: row.exit_code,
+      tool: typeof metadata.tool === 'string' ? metadata.tool : null,
+    }),
     durationMs: row.duration_ms,
     branch: row.branch,
     capturedAt: row.captured_at,

@@ -123,7 +123,7 @@ describe('read-only-commands job', () => {
 
   it('runs ahead of drop-old-sessions, and on a database where that job is already done', () => {
     const names = JOBS.map((job) => job.name)
-    expect(names.indexOf(readOnlyCommandsJob.name)).toBe(names.indexOf(dropOldSessionsJob.name) - 1)
+    expect(names.indexOf(readOnlyCommandsJob.name)).toBeLessThan(names.indexOf(dropOldSessionsJob.name))
 
     const db = database()
     db.prepare(

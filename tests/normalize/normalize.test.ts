@@ -722,6 +722,33 @@ describe('normalizeCommand', () => {
     it('classifies npx create-* as script_run', () => {
       expect(category('npx create-react-app my-app')).toBe('running')
     })
+
+    it.each([
+      ['npx --no-install vitest run', 'testing', 'vitest'],
+      ['npx -y vitest run', 'testing', 'vitest'],
+      ['npx --yes eslint .', 'linting', 'eslint'],
+      ['npx --no-install tsc --noEmit', 'building', 'tsc'],
+      ['npx -y --no-install prettier --check .', 'linting', 'prettier'],
+      ['cd app && npx --no-install vitest run 2>&1 | tail -5', 'testing', 'vitest'],
+    ])("reads the tool after npx's own boolean flags in %s", (command, expectedCategory, expectedTool) => {
+      const result = normalize(command)
+
+      expect(result.category).toBe(expectedCategory)
+      expect(result.metadata.tool).toBe(expectedTool)
+    })
+
+    it('names the tool, not the flag, for an npx tool no rule knows', () => {
+      expect(normalize('npx --yes husky init').metadata.tool).toBe('husky')
+    })
+
+    it.each([
+      'npx -p typescript tsc --noEmit',
+      'npx --package=typescript tsc',
+      'npx -c "vitest run"',
+      'npx --registry https://registry.example.com vitest run',
+    ])('leaves %s as it was: a flag with a value is not guessed at', (command) => {
+      expect(normalize(command).category).toBe('running')
+    })
   })
 
   describe('unknown commands', () => {

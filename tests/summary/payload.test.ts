@@ -45,6 +45,95 @@ function makeSpan(overrides: Partial<PayloadSpan> = {}): PayloadSpan {
 }
 
 describe('eventRowToPayload', () => {
+  it.each([
+    ['npx vitest run 2>&1 | tail -25', 'testing'],
+    ['npx vitest run | grep -E "FAIL|Tests "', 'testing'],
+    ['npx vitest run || true', 'testing'],
+    ['npx tsc --noEmit; echo "exit=$?"', 'building'],
+  ])("reports no exit code for `%s`, whose 0 is not the %s step's", (command, category) => {
+    const payload = eventRowToPayload(makeEvent({ command, category, exit_code: 0, metadata: '{}' }))
+
+    expect(payload.exitCode).toBeNull()
+  })
+
+  it.each([
+    ['npx vitest run', 'testing'],
+    ['cd app && npx vitest run', 'testing'],
+    ['npx tsc --noEmit && npx vitest run', 'testing'],
+  ])("keeps the 0 of `%s`, which is the %s step's", (command, category) => {
+    const payload = eventRowToPayload(makeEvent({ command, category, exit_code: 0, metadata: '{}' }))
+
+    expect(payload.exitCode).toBe(0)
+  })
+
+  it('keeps a failure however the run was piped', () => {
+    const row = makeEvent({ command: 'npx vitest run | tail', category: 'testing', exit_code: 1, metadata: '{}' })
+
+    expect(eventRowToPayload(row).exitCode).toBe(1)
+  })
+
+  it('names a branch the shell expanded by the branch the command ended on', () => {
+    const row = makeEvent({
+      command: 'git switch -c $B main',
+      category: 'versioning',
+      branch: 'feat/x',
+      metadata: '{}',
+    })
+
+    expect(eventRowToPayload(row).gitMoves).toEqual([{ kind: 'create-branch', branch: 'feat/x' }])
+  })
+
+  it('names a branch built from a variable the same way', () => {
+    const row = makeEvent({
+      command: 'git checkout -b "fix/$ID-redact" main',
+      category: 'versioning',
+      branch: 'fix/WOR-166-redact',
+      metadata: '{}',
+    })
+
+    expect(eventRowToPayload(row).gitMoves).toEqual([{ kind: 'create-branch', branch: 'fix/WOR-166-redact' }])
+  })
+
+  it('leaves out a branch the shell expanded when the command ended on no branch', () => {
+    const row = makeEvent({ command: 'git switch -c $B main', category: 'versioning', branch: null, metadata: '{}' })
+
+    expect(eventRowToPayload(row)).not.toHaveProperty('gitMoves')
+  })
+
+  it('never names a branch from a variable when the command failed', () => {
+    const row = makeEvent({
+      command: 'git switch -c $B main',
+      category: 'versioning',
+      branch: 'main',
+      exit_code: 128,
+      metadata: '{}',
+    })
+
+    expect(eventRowToPayload(row)).not.toHaveProperty('gitMoves')
+  })
+
+  it('names only the last branch move by the branch the command ended on', () => {
+    const row = makeEvent({
+      command: 'git switch -c $A main && git switch -c $B',
+      category: 'versioning',
+      branch: 'feat/b',
+      metadata: '{}',
+    })
+
+    expect(eventRowToPayload(row).gitMoves).toEqual([{ kind: 'create-branch', branch: 'feat/b' }])
+  })
+
+  it('keeps a branch name that is not an expansion exactly as written', () => {
+    const row = makeEvent({
+      command: 'git switch -c feat/y main',
+      category: 'versioning',
+      branch: 'feat/y',
+      metadata: '{}',
+    })
+
+    expect(eventRowToPayload(row).gitMoves).toEqual([{ kind: 'create-branch', branch: 'feat/y' }])
+  })
+
   it('drops shell expansions that were stored as package names', () => {
     const row = makeEvent({
       category: 'dependencies',
