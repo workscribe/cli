@@ -73,7 +73,8 @@ export function describeDependencies(
   const added = unique(runs.filter((event) => !isRemoval(event)).flatMap((event) => stringsIn(event.metadata.packages)))
   const removed = unique(runs.filter(isRemoval).flatMap((event) => stringsIn(event.metadata.packages)))
   if (added.length === 0 && removed.length === 0) {
-    return [withRunCount ? `Installed dependencies (${pluralize(runs.length, 'run')})` : 'Installed dependencies']
+    const label = runs.every(isRemoval) ? 'Removed dependencies' : 'Installed dependencies'
+    return [withRunCount ? `${label} (${pluralize(runs.length, 'run')})` : label]
   }
 
   return [

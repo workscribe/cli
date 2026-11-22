@@ -159,6 +159,18 @@ describe('describeActivity', () => {
     expect(describeActivity(session(events))).toEqual(['Added dependencies: zod', 'Removed dependencies: lodash'])
   })
 
+  it('says it removed dependencies when every run was a removal that named no package', () => {
+    const events = [event('dependencies', { tool: 'npm', packages: [], action: 'remove' })]
+
+    expect(describeActivity(session(events))).toEqual(['Removed dependencies (1 run)'])
+  })
+
+  it('says it installed dependencies when an install and a removal named no package', () => {
+    const events = [event('dependencies', { tool: 'npm' }), event('dependencies', { tool: 'npm', action: 'remove' })]
+
+    expect(describeActivity(session(events))).toEqual(['Installed dependencies (2 runs)'])
+  })
+
   it('lists at most six packages', () => {
     const packages = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
 

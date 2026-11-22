@@ -58,6 +58,12 @@ describe('storyLines — one branch', () => {
   it('says it installed dependencies, without counting runs, when no package was named', () => {
     expect(storyLines(session([event('dependencies', { tool: 'npm' })]))).toEqual(['- Installed dependencies'])
   })
+
+  it('says it removed dependencies, without counting runs, when a removal named no package', () => {
+    const events = [event('dependencies', { tool: 'npm', action: 'remove' })]
+
+    expect(storyLines(session(events))).toEqual(['- Removed dependencies'])
+  })
 })
 
 describe('storyLines — several branches', () => {

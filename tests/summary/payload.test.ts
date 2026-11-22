@@ -45,6 +45,21 @@ function makeSpan(overrides: Partial<PayloadSpan> = {}): PayloadSpan {
 }
 
 describe('eventRowToPayload', () => {
+  it('drops shell expansions that were stored as package names', () => {
+    const row = makeEvent({
+      category: 'dependencies',
+      metadata: '{"tool":"npm","packages":["$(cat","pkgs.txt)","zod","$EXTRA"],"action":"remove"}',
+    })
+
+    expect(eventRowToPayload(row).metadata).toEqual({ tool: 'npm', packages: ['zod'], action: 'remove' })
+  })
+
+  it('leaves the packages of other categories alone', () => {
+    const row = makeEvent({ category: 'other', metadata: '{"packages":["$(cat"]}' })
+
+    expect(eventRowToPayload(row).metadata).toEqual({ packages: ['$(cat'] })
+  })
+
   it('maps the row and parses its metadata', () => {
     expect(eventRowToPayload(makeEvent())).toEqual({
       category: 'shipping',

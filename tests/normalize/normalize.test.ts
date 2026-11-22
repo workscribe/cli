@@ -112,6 +112,32 @@ describe('normalizeCommand', () => {
       expect(result.metadata.packages).toEqual(['vitest'])
     })
 
+    it('takes no package from a command substitution, which the shell expands before npm sees it', () => {
+      const result = normalize('npm uninstall $(cat $S/rm.txt)')
+
+      expect(result.metadata).toEqual({ tool: 'npm', packages: [], action: 'remove' })
+    })
+
+    it('takes no package from a backtick substitution', () => {
+      expect(normalize('npm install `cat pkgs.txt` zod').metadata.packages).toEqual(['zod'])
+    })
+
+    it.each(['$EXTRA', '${EXTRA}', '"$EXTRA"', '"$(echo a b)"'])('takes no package from the expansion %s', (word) => {
+      expect(normalize(`npm install ${word} zod`).metadata.packages).toEqual(['zod'])
+    })
+
+    it('keeps the real package names beside a substitution', () => {
+      expect(normalize('pnpm add $(cat a.txt) zod axios').metadata.packages).toEqual(['zod', 'axios'])
+    })
+
+    it('keeps a single-quoted dollar sign, which the shell does not expand', () => {
+      expect(normalize("npm install '$x'").metadata.packages).toEqual(["'$x'"])
+    })
+
+    it('still reads the packages after a stray quote mark', () => {
+      expect(normalize("npm install a don't b").metadata.packages).toEqual(['a', "don't", 'b'])
+    })
+
     it('classifies npm i shorthand', () => {
       expect(category('npm i axios')).toBe('dependencies')
     })
