@@ -16,6 +16,7 @@ export function createTestConfig(overrides: Partial<WorkscribeConfig> = {}): Wor
       profiles: [],
       agentEdits: true,
       agentMessages: false,
+      excludePaths: [],
     },
     redact: { extra: [] },
     summary: { format: 'markdown' },

@@ -148,6 +148,32 @@ When paused, the shell hook still fires but all events are silently discarded be
 
 ---
 
+## Excluding directories
+
+To never record anything in a directory — a client's repo, a personal project — while still capturing everything else:
+
+```bash
+workscribe exclude ~/work/client
+workscribe exclude --list
+workscribe exclude --remove ~/work/client
+```
+
+From then on, nothing is stored for that directory or anything under it, from any source: the shell hook, the VS Code extension and coding agents. The event is discarded before it touches disk, the same as while paused. The list lives in your config as `capture.excludePaths`, shows in `workscribe status`, and a removal takes effect with the next command.
+
+What counts as "in" an excluded directory:
+- a command run there, in any subdirectory, or through a symlink to it
+- a file a coding agent or the editor saves under it, even when the session started somewhere else
+- a command anywhere that names the directory by its full path or with `~` (`cd ~/work/client && npm test`), or runs `git -C` into it
+- `workscribe note` there, which saves nothing and says so
+
+**What it doesn't do:**
+- **It doesn't delete what was already recorded.** `workscribe exclude` tells you how many earlier events were kept. They stay in your summaries until you remove them. `workscribe clear --date` removes everything recorded on a day, not just that directory's events.
+- **A relative path in a command isn't detected.** `cd client` from the parent directory looks like any other word, so run from a directory that isn't excluded, it is still recorded. Excluding the parent, or working from inside the excluded directory, avoids this.
+- **An agent's recap can mention excluded work.** With `capture.agentMessages` on (it is off by default), a recap of a session that also worked somewhere else may describe work in an excluded directory. Leave it off if that matters.
+- **It can't cover the home folder or `/`.** Both would stop all capture; use `workscribe pause` for that.
+
+---
+
 ## Removing your data
 
 Delete the entire data directory:

@@ -750,3 +750,93 @@ describe('captureCommand — the commit check, for a source that reports no fail
     expect(latestCommitSubject).not.toHaveBeenCalled()
   })
 })
+
+describe('captureCommand — excluded folders', () => {
+  const excludedConfig = { ...BASE_CONFIG, capture: { ...BASE_CONFIG.capture, excludePaths: ['/work/client'] } }
+
+  beforeEach(() => {
+    mockReadConfig.mockReturnValue(excludedConfig)
+  })
+
+  it('stores nothing for a shell command run in an excluded folder', () => {
+    captureCommand({ command: 'npm test', cwd: '/work/client/src', exitCode: 0, durationMs: 50 })
+
+    expect(mockInsertEvent).not.toHaveBeenCalled()
+    expect(mockGetRepoContext).not.toHaveBeenCalled()
+  })
+
+  it('stores nothing for an editor save in an excluded folder', () => {
+    captureCommand({
+      cwd: '/work/client',
+      exitCode: null,
+      durationMs: null,
+      type: 'code_edit',
+      file: '/work/client/a.ts',
+    })
+
+    expect(mockInsertEvent).not.toHaveBeenCalled()
+  })
+
+  it('stores nothing for an agent edit to a file under an excluded folder, from another folder', () => {
+    captureCommand({
+      cwd: '/work',
+      exitCode: null,
+      durationMs: null,
+      type: 'code_edit',
+      file: '/work/client/a.ts',
+      source: 'claude-code',
+      agentSession: { source: 'claude-code', sessionId: 'abc' },
+    })
+
+    expect(mockInsertEvent).not.toHaveBeenCalled()
+  })
+
+  it('stores nothing for an agent command run in an excluded folder', () => {
+    captureCommand({
+      command: 'npm test',
+      cwd: '/work/client',
+      exitCode: 0,
+      durationMs: 50,
+      source: 'claude-code',
+      agentSession: { source: 'claude-code', sessionId: 'abc' },
+    })
+
+    expect(mockInsertEvent).not.toHaveBeenCalled()
+  })
+
+  it('stores nothing while paused, excluded or not', () => {
+    mockFs.existsSync.mockReturnValue(true)
+
+    captureCommand({ command: 'npm test', cwd: '/work/other', exitCode: 0, durationMs: 50 })
+
+    expect(mockInsertEvent).not.toHaveBeenCalled()
+    expect(mockReadConfig).not.toHaveBeenCalled()
+  })
+
+  it('stores nothing for a command that names an excluded folder', () => {
+    captureCommand({ command: 'cd /work/client && npm test', cwd: '/work', exitCode: 0, durationMs: 50 })
+
+    expect(mockInsertEvent).not.toHaveBeenCalled()
+  })
+
+  it('stores nothing for a git command that worked in an excluded folder through -C', () => {
+    mockNormalize.mockReturnValue({ category: 'versioning', metadata: {}, matchedStep: 'git -C /work/client status' })
+
+    captureCommand({ command: 'git -C ../client status', cwd: '/work/other', exitCode: 0, durationMs: 50 })
+
+    expect(mockInsertEvent).not.toHaveBeenCalled()
+  })
+
+  it('still stores the same events anywhere else', () => {
+    captureCommand({ command: 'npm test', cwd: '/work/client-old', exitCode: 0, durationMs: 50 })
+    captureCommand({
+      cwd: '/work/other',
+      exitCode: null,
+      durationMs: null,
+      type: 'code_edit',
+      file: '/work/other/a.ts',
+    })
+
+    expect(mockInsertEvent).toHaveBeenCalledTimes(2)
+  })
+})

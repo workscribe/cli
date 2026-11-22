@@ -702,6 +702,26 @@ When paused, the shell hook still fires but events are silently discarded. Usefu
 
 ---
 
+## workscribe exclude
+
+Never record anything in a directory, while capture carries on everywhere else.
+
+```bash
+workscribe exclude ~/work/client
+workscribe exclude --list
+workscribe exclude --remove ~/work/client
+```
+
+| Option | Description |
+|---|---|
+| `<path>` | Directory to exclude. Relative paths and `~` are resolved, symlinks followed, and the real path is stored in `capture.excludePaths` |
+| `--list` | Show the excluded directories |
+| `--remove <path>` | Stop excluding a directory. Capture there resumes with the next command |
+
+Everything in or under the directory is dropped before it is stored, from the shell hook, the VS Code extension and coding agents. A command that names the directory by its full path (`cd ~/work/client && npm test`) is dropped too. Events already recorded there are kept, and the command says how many. It refuses `/` and your home directory. See [Excluding directories](/privacy#excluding-directories) for what it covers and what it doesn't.
+
+---
+
 ## workscribe uninstall
 
 Remove everything `workscribe init` added — shell hooks, shell completions, the coding-agent session hooks and the agent skill — and optionally delete all Workscribe data. Run it **before** `npm uninstall -g @workscribe/cli`: npm 7 and later don't run package cleanup scripts, so removing the package alone leaves these behind (see [Troubleshooting](/troubleshooting#errors-after-removing-workscribe-without-workscribe-uninstall) if that already happened).

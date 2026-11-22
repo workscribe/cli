@@ -116,6 +116,26 @@ describe('workscribe status', () => {
     })
   })
 
+  describe('excluded folders', () => {
+    it('lists each excluded folder', async () => {
+      mockReadConfig.mockReturnValue({
+        ...BASE_CONFIG,
+        capture: { profiles: [], excludePaths: ['/w/client', '/w/other'] },
+      })
+
+      await makeProgram().parseAsync(['status'], { from: 'user' })
+
+      expect(mockLog.plain).toHaveBeenCalledWith(expect.stringMatching(/Excluded\s+\/w\/client/))
+      expect(mockLog.plain).toHaveBeenCalledWith(expect.stringContaining('/w/other'))
+    })
+
+    it('shows nothing about exclusions when there are none', async () => {
+      await makeProgram().parseAsync(['status'], { from: 'user' })
+
+      expect(mockLog.plain).not.toHaveBeenCalledWith(expect.stringContaining('Excluded'))
+    })
+  })
+
   describe('event counts', () => {
     it('shows total event count', async () => {
       mockGetEventCount.mockReturnValue(99)

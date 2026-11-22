@@ -46,6 +46,7 @@ The setting applies to activity captured from then on — events already stored 
 | `capture.includeAiderPrompt` | boolean | `true` | Set to `false` to skip reading Aider's history file for last-prompt context |
 | `capture.agentEdits` | boolean | `true` | Files a coding agent changes, with how many lines it added and removed — never the text. Set to `false` to stop recording them; the agent's commands are still recorded |
 | `capture.agentMessages` | boolean | `false` | Set to `true` to keep the agent's own words: its latest recap of a turn and its latest compaction summary, per session. Redacted, at most 2000 characters each, and dropped whole when they look like they hold a credential. Kept on your machine. They show in the closing line of a summary ("With Claude Code: added auth middleware (2 sessions, 14 files changed)"), in `context --file --json`, and, only with `skill.includeAgentMessages`, in `sessions --json`. Turning this off hides them and deletes the ones kept |
+| `capture.excludePaths` | string[] | `[]` | Directories never recorded: a command run in one, a file edited under one, or a command naming one is dropped before it is stored. Set it with `workscribe exclude <path>` rather than by hand; entries are read with `~` expanded and a trailing slash ignored. See [Excluding directories](/privacy#excluding-directories) |
 
 The default ignore list: `cd`, `ls`, `ll`, `la`, `ls -la`, `ls -l`, `ls -a`, `pwd`, `clear`, `exit`, `history`, `man`.
 
