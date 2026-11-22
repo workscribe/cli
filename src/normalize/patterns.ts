@@ -5,6 +5,7 @@ import { classifyCompound, UNCLASSIFIED } from './compound'
 import { commitMessageOf } from './commit-message'
 import { dependencyMetadata, extractPackages, INSTALL_WORDS, REMOVE_WORDS } from './dependency-metadata'
 import { withoutGitGlobalOptions } from './git-invocation'
+import { withoutNpxBooleanFlags } from './npx-invocation'
 import { isReadOnlyCommand, READ_ONLY_CATEGORY, readOnlyMetadata } from './read-only'
 
 export interface NormalizedEvent {
@@ -343,8 +344,9 @@ function getRules(): Rule[] {
 }
 
 function matchRules(command: string, context: RuleContext): NormalizedEvent {
-  // git's own options (`-C <dir>`, `-c k=v`, `--work-tree=…`) are dropped, so the rules see `git <subcommand> …`
-  const flattened = withoutGitGlobalOptions(command.trim()).replace(/\s+/g, ' ')
+  // git's own options (`-C <dir>`, `-c k=v`, `--work-tree=…`) are dropped, so the rules see `git <subcommand> …`, and so
+  // are npx's boolean flags, so they see `npx <tool> …`
+  const flattened = withoutNpxBooleanFlags(withoutGitGlobalOptions(command.trim()).replace(/\s+/g, ' '))
   for (const rule of getRules()) {
     const result = rule.match(flattened, context)
     if (result) return result
