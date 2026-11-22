@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { buildDayBlocks, findSlotsOf, toActiveMinutes, type DayBounds } from '../../src/sessions/blocks'
+import {
+  buildDayBlocks,
+  findSlotsOf,
+  toActiveMinutes,
+  type DayBounds,
+  type SlotBounds,
+} from '../../src/sessions/blocks'
 import type { EventRow } from '../../src/db/types'
 
 const DAY: DayBounds = {
@@ -7,6 +13,10 @@ const DAY: DayBounds = {
   endMs: Date.parse('2026-10-29T00:00:00.000Z'),
 }
 const IDLE_MS = 30 * 60 * 1000
+const SLOT_BOUNDS: SlotBounds = { ...DAY, maxSpanMs: IDLE_MS }
+// The idle timeout is 30 minutes: the 30 minutes before the exit span 7 five-minute slots
+const CAPPED_SESSION_SLOTS = 7
+const TWENTY_FOUR_DAYS_MS = 24 * 24 * 60 * 60 * 1000
 const CLI = 1
 const VSCODE = 2
 const SITE = 3
@@ -102,6 +112,18 @@ describe('buildDayBlocks', () => {
     expect(block.threads[0].activeSlots).toBe(7)
   })
 
+  it('counts a session left open for days as the idle timeout, however far back its duration reaches', () => {
+    // The grouper still reads the full duration, so the session stays in the block before it (a 90-minute dev server
+    // between two commands must not split the work around it); only the active time is capped
+    const events = [event('09:00', CLI), event('15:27', CLI, { command: 'claude', duration_ms: TWENTY_FOUR_DAYS_MS })]
+
+    const { blocks } = buildDayBlocks(events, IDLE_MS, DAY)
+
+    expect(blocks.map((block) => [block.startedAt, block.endedAt, block.activeSlots])).toEqual([
+      ['2026-10-28T09:00:00.000Z', '2026-10-28T15:27:00.000Z', 1 + CAPPED_SESSION_SLOTS],
+    ])
+  })
+
   it('counts events per slot and project', () => {
     const events = [event('10:00', CLI), event('10:03', CLI), event('10:04', null)]
 
@@ -118,11 +140,11 @@ describe('buildDayBlocks', () => {
 
 describe('findSlotsOf', () => {
   it('puts a short event in the slot of its captured time', () => {
-    expect(findSlotsOf(event('10:07', CLI), DAY)).toEqual([Date.parse('2026-10-28T10:05:00.000Z')])
+    expect(findSlotsOf(event('10:07', CLI), SLOT_BOUNDS)).toEqual([Date.parse('2026-10-28T10:05:00.000Z')])
   })
 
   it('spreads a 30-minute build over every slot from its start to its end', () => {
-    const slots = findSlotsOf(event('10:32', CLI, { duration_ms: 30 * 60 * 1000 }), DAY)
+    const slots = findSlotsOf(event('10:32', CLI, { duration_ms: 30 * 60 * 1000 }), SLOT_BOUNDS)
 
     expect(slots).toHaveLength(7)
     expect(new Date(slots[0]).toISOString()).toBe('2026-10-28T10:00:00.000Z')
@@ -130,9 +152,18 @@ describe('findSlotsOf', () => {
   })
 
   it('clamps a long event that started before midnight to the day', () => {
-    const slots = findSlotsOf(event('00:10', CLI, { duration_ms: 60 * 60 * 1000 }), DAY)
+    const slots = findSlotsOf(event('00:10', CLI, { duration_ms: 60 * 60 * 1000 }), SLOT_BOUNDS)
 
     expect(new Date(slots[0]).toISOString()).toBe('2026-10-28T00:00:00.000Z')
     expect(slots).toHaveLength(3)
+  })
+
+  it('caps the span of a session left open for days at the idle timeout', () => {
+    // An interactive `claude` left open for 24 days is recorded once, at exit, with the whole wall time
+    const slots = findSlotsOf(event('15:27', CLI, { command: 'claude', duration_ms: TWENTY_FOUR_DAYS_MS }), SLOT_BOUNDS)
+
+    expect(slots).toHaveLength(CAPPED_SESSION_SLOTS)
+    expect(new Date(slots[0]).toISOString()).toBe('2026-10-28T14:55:00.000Z')
+    expect(new Date(slots[6]).toISOString()).toBe('2026-10-28T15:25:00.000Z')
   })
 })
