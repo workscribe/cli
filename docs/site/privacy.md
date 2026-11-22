@@ -37,14 +37,25 @@ Before any event is written to disk, Workscribe strips sensitive patterns from t
 
 **Automatically redacted:**
 - Bearer tokens (`Bearer <token>`)
-- Authorization, API key, token (such as `PRIVATE-TOKEN` and `X-Token`) and cookie headers
+- Authorization, API key and cookie headers, and any header whose name ends in token, secret, password, credentials or api key, such as `PRIVATE-TOKEN`, `X-Vault-Token`, `X-Amz-Security-Token` and `X-Auth-Key`
 - API keys and tokens from common providers, such as GitHub, GitLab, AWS, Anthropic, OpenAI, Google, npm, Slack and Stripe
 - Passwords and tokens passed as flags (`--password`, `--token=…`), and tools' short flags where they mean a password, such as `mysql -p…` (also `mycli` and `mysqlsh`), `7z -p…`, `sshpass -p`, `docker login -p`, `redis-cli -a`, `openssl -k`, `curl -u user:password` and `http -a user:password`, plus `--from-literal=token=…` and `gh secret set --body`
 - `password=` in connection strings, passwords in URLs, sensitive environment variables and tokens piped to `--password-stdin`
+- Infrastructure and cloud tools (the value only, the rest of the command stays):
+  - **vault:** `vault login <token>`, `vault operator unseal <key>` and every value of `vault kv put` or `patch`
+  - **aws:** `--secret-access-key`, `--session-token`, `--secret-string`, `ssm put-parameter --value` and `configure set aws_session_token`
+  - **az and gcloud:** `az login -p`, `az keyvault secret set --value`, and a secret piped to `gcloud secrets create` or `versions add`
+  - **terraform and tofu:** `-var 'token=…'` and the like, `TF_VAR_…=` and `login -token`
+  - **kubectl and helm:** every `--from-literal` value of `kubectl create secret`, and `--set` or `--set-string` values for a key named password, pass, token, secret, credentials or api key
+  - **ansible:** `-e token=…` and the like, and the plaintext given to `ansible-vault encrypt_string`
+  - **containers and curl:** `--creds user:password` (podman, skopeo), `docker login` and `podman login`, and `curl -u TOKEN:`
+  - A `token=…` or `secret=…` written in a commit message or note is redacted too, as `password=…` always has been, and so is a value such as `docker run --label token=x`. A `token=true` switch is not.
 - Credentials assigned in code, such as `const API_KEY = '…'` or `token: "…"` in a `node -e` or `python3 -c` script: a quoted value of 8 or more characters assigned to a name that ends in key, token, secret, password or similar. A shorter value isn't caught, and a quoted phrase of the same shape in a commit message or note, such as `auth: 'invalid credentials'`, is redacted too. Linear API keys (`lin_api_…`) are redacted wherever they appear.
 - JWT tokens
 - Private keys
 - Slack incoming webhook URLs (`hooks.slack.com/services/...`)
+
+**Not redacted:** a secret written as unquoted YAML (`password: …`) in a manifest you pipe or `echo` into a file, such as `kubectl apply -f - <<EOF`, because a pattern for it would also catch ordinary prose. Keep such values out of the command line: use `--from-file`, a secret manager or an environment variable.
 
 **Backups:** before each upgrade a copy of your database is taken, and the newest 3 files named `workscribe-*.db` are kept. Once the upgrade has removed secrets from your stored events, it removes them from every `.db` copy in `~/.workscribe/backups/` too, and rewrites those files so the old text doesn't stay in them. A backup then holds what your database held, minus the removed secrets: restoring one brings your history back without them. A copy that is locked or in use is retried on a later command, one that isn't a Workscribe database is left alone, and one that can't be written is named in a message once, so you can delete it or fix its permissions. Delete `~/.workscribe/backups/` yourself if you'd rather not keep any.
 

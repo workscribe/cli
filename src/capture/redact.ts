@@ -52,6 +52,11 @@ const LONG_SECRET_FLAGS = [
   'auth[-_]?token',
   'private-key',
   'api[-_]?key',
+  // aws's: `iam create-access-key --secret-access-key`, `sts … --session-token`, `secretsmanager … --secret-string`
+  'secret-access-key',
+  'session-token',
+  'security-token',
+  'secret-string',
 ].join('|')
 // After a long flag, `=` always introduces a value, and a space does unless the next flag follows
 const LONG_FLAG_VALUE_START = String.raw`(?:=|\s+(?!--))`
@@ -65,11 +70,35 @@ const MAX_SLUG_WORDS_AFTER_FIRST = 8
 const SLUG_WORD = `[a-z0-9]{1,${MAX_SLUG_WORD_LENGTH}}`
 const UUID_IN_A_KEY = String.raw`[a-z-]{0,20}[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}`
 const SLUG_AFTER_SK = String.raw`(?!${UUID_IN_A_KEY})${SLUG_WORD}(?:-${SLUG_WORD}){0,${MAX_SLUG_WORDS_AFTER_FIRST}}(?![\w-])`
-const CONTAINER_LOGIN_TOOLS = 'docker|podman|podman-remote|nerdctl|helm'
+const LOGIN_TOOLS = 'docker|podman|podman-remote|nerdctl|helm|az'
 const EVERYDAY_HEADERS = 'api-key|cookie|set-cookie'
-// Not everyday words, unlike `cookie`, so they count anywhere: `http x.io X-Api-Key:SECRET`, `HDR="X-Api-Key: SECRET"`
-const DISTINCTIVE_HEADERS = 'x-api-key|x-auth-token|x-access-token|private-token|x-token'
+// A hyphenated name that ends in a credential word: `X-Vault-Token`, `X-Amz-Security-Token`, `Api-Token`, `X-Auth-Key`,
+// and the older `x-api-key` and `private-token`. Not everyday words, unlike `cookie`, so they count anywhere:
+// `http x.io X-Api-Key:SECRET`, `HDR="X-Api-Key: SECRET"`. `Idempotency-Key` and `X-Request-Id` stay. The bounds keep a
+// very long run of dashed words fast
+export const MAX_HEADER_NAME_WORD_LENGTH = 24
+const MAX_HEADER_NAME_WORDS = 6
+const HEADER_CREDENTIAL_WORDS = 'token|secret|password|passwd|credentials?|api-?key|auth-?key|access-?key'
+const CREDENTIAL_HEADERS = String.raw`(?:[a-z0-9]{1,${MAX_HEADER_NAME_WORD_LENGTH}}-){1,${MAX_HEADER_NAME_WORDS}}(?:${HEADER_CREDENTIAL_WORDS})`
 const HEADER_FLAG = String.raw`(?<![\w-])(?:-\w*H|--(?:proxy-)?header)[\s=]*`
+
+// A key that is a secret word on its own, in `terraform -var 'token=…'`, `helm --set secret=…`, `ansible -e token=…`.
+// Not `key`, which is too common a name for a field (`sort --key`, `label key=value`)
+const SECRET_KEY_NAMES = String.raw`password|passwd|pwd|pass|token|secret|credentials?|api[-_]?key|access[-_]?key|secret[-_]?key|private[-_]?key`
+// `token=true` and `secret=false` are switches
+const NOT_A_SWITCH = String.raw`(?!(?:true|false)(?![\w-]))`
+// `vault login <token>` and `vault operator unseal <key>`: the first word that isn't a flag or a `name=value` pair
+const MAX_VAULT_FLAGS = 6
+const VAULT_FLAGS = String.raw`(?:\s+-[\w-]+(?:=[^\s"']*)?){0,${MAX_VAULT_FLAGS}}`
+const VAULT_ARGUMENT = String.raw`(?:${QUOTED}|[^\s"'=-][^\s"'=]*(?=\s|$))`
+// The key of one `name=value` pair of `vault kv put`; a flag such as `-mount=secret` is not one
+const MAX_VAULT_KEY_LENGTH = 64
+const VAULT_PAIR_KEY = String.raw`[A-Za-z_][\w.-]{0,${MAX_VAULT_KEY_LENGTH - 1}}`
+// A Kubernetes key is at most 253 characters
+const MAX_LITERAL_NAME_LENGTH = 253
+// `ansible-vault encrypt_string --name x 'one' 'two'`: each plaintext, past the flags that take a value
+const MAX_ENCRYPT_STRING_VALUES = 20
+const ANSIBLE_VAULT_VALUE_FLAGS = String.raw`(?:-n|--name|--vault-id|--encrypt-vault-id|--vault-password-file|--vault-pass-file|--stdin-name|--output)`
 
 /** Matches the value that follows `prefix`, leaving the prefix in place. */
 function valueAfter(prefix: string, value = VALUE): RegExp {
@@ -157,12 +186,66 @@ function codeAssignments(): RegExp[] {
   return CODE_QUOTES.flatMap((quote) => CODE_QUOTE_FORMS.map((form) => codeAssignment(form(quote))))
 }
 
+// The credential forms of infrastructure tooling: vault, aws, az, gcloud, terraform and tofu, kubectl, helm, ansible and
+// the container tools. A secret-named key is read wherever it sits (`terraform apply -var 'token=…'`, `helm --set
+// secret=…`, `ansible -e token=…`, `-var=token=…`); the rest are the places a tool takes a value with no secret word
+// next to it, so each is named with its tool
+function infrastructurePatterns(): RegExp[] {
+  const vaultCommand = String.raw`${TOOL_WORD_START}vault${TOOL_WORD_END}`
+  return [
+    // Like `password=` below, this also redacts the same shape in a commit message or a note
+    new RegExp(String.raw`(?<=(?:^|[\s"'.,{(=&;])(?:${SECRET_KEY_NAMES})=)${NOT_A_SWITCH}[^\s"';&]+`, 'gi'),
+    // terraform's and tofu's `login -token <value>`
+    toolFlagValue('terraform|tofu', String.raw`-token[\s=]+`),
+    // The password half of `podman pull --creds user:password`, also skopeo's `--src-creds` and `--dest-creds`
+    ...valuesAfterName(String.raw`(?<![\w-])--(?:src-|dest-)?creds?[\s=]+`, String.raw`[^:\s"']*:`),
+    // `curl -u TOKEN:`, quoted or not: with no password, the secret is the user name
+    valueAfter(
+      String.raw`\bcurl\b["']?${SAME_COMMAND}\s(?:-\w*u[\s=]*|--user[\s=]+)["']?`,
+      String.raw`[^:\s"']+(?=:(?=[\s"']|$))`
+    ),
+    // vault: the token of `vault login <token>`, the key of `vault operator unseal <key>`, and every value of
+    // `vault kv put|patch path name=value`, whatever the name
+    valueAfter(
+      String.raw`${vaultCommand}[^|;&\n]{0,${MAX_PARTS_BEFORE_LOGIN}}?\slogin${TOOL_WORD_END}${VAULT_FLAGS}\s+`,
+      VAULT_ARGUMENT
+    ),
+    valueAfter(
+      String.raw`${vaultCommand}[^|;&\n]{0,${MAX_PARTS_BEFORE_LOGIN}}?\soperator\s+unseal${TOOL_WORD_END}${VAULT_FLAGS}\s+`,
+      VAULT_ARGUMENT
+    ),
+    valueAfter(
+      String.raw`${vaultCommand}${SAME_COMMAND}\skv\s+(?:put|patch)${TOOL_WORD_END}${SAME_COMMAND}\s${VAULT_PAIR_KEY}=`,
+      VALUE_OR_DASHED
+    ),
+    // aws: `ssm put-parameter --value`, whatever `--type` says: a plain String parameter can't be told from a
+    // SecureString when the flags come in either order
+    valueAfter(
+      String.raw`${TOOL_WORD_START}aws${TOOL_WORD_END}${SAME_COMMAND}\sssm\s+put-parameter${TOOL_WORD_END}${SAME_COMMAND}\s--value[\s=]+`,
+      SHELL_VALUE
+    ),
+    // az: a Key Vault secret's `--value` (`az login -p` is read with the other login commands)
+    valueAfter(
+      String.raw`${TOOL_WORD_START}az${TOOL_WORD_END}${SAME_COMMAND}\skeyvault\s+secret\s+set${TOOL_WORD_END}${SAME_COMMAND}\s--value[\s=]+`,
+      SHELL_VALUE
+    ),
+    // ansible-vault encrypt_string takes the plaintext on the command line: each one that follows only other
+    // plaintexts and the flags that take a value, such as `--name x`
+    valueAfter(
+      String.raw`${TOOL_WORD_START}ansible-vault${TOOL_WORD_END}${SAME_COMMAND}\sencrypt_string` +
+        String.raw`(?:\s+(?:${ANSIBLE_VAULT_VALUE_FLAGS}(?:=|\s+)(?:${QUOTED}|[^\s"']+)|${QUOTED}|[^\s"'-][^\s"']*)){0,${MAX_ENCRYPT_STRING_VALUES}}?\s+`,
+      VALUE
+    ),
+  ]
+}
+
 // Patterns that match known sensitive values
 const BUILTIN_PATTERNS: RegExp[] = [
   // AWS access keys
   /AKIA[0-9A-Z]{16}/g,
-  // AWS secret access keys (40 char base64-ish after common env vars)
-  new RegExp(String.raw`(?<=AWS_SECRET_ACCESS_KEY[=\s]+)${VALUE_OR_DASHED}`, 'gi'),
+  // AWS secret access keys (40 char base64-ish after common env vars), and the session and security tokens, as
+  // `aws configure set aws_session_token <value>` has them
+  new RegExp(String.raw`(?<=AWS_(?:SECRET_ACCESS_KEY|SESSION_TOKEN|SECURITY_TOKEN)[=\s]+)${VALUE_OR_DASHED}`, 'gi'),
   // GitHub tokens
   /\bgh[pousr]_[a-zA-Z0-9]{36}/g,
   /github_pat_[a-zA-Z0-9_]{82}/g,
@@ -200,7 +283,7 @@ const BUILTIN_PATTERNS: RegExp[] = [
   toolFlagValue('7z|7za|7zr', '-p'),
   toolFlagValue('openssl', String.raw`-k\s+`),
   valueAfter(
-    String.raw`${TOOL_WORD_START}(?:${CONTAINER_LOGIN_TOOLS})${TOOL_WORD_END}[^|;&\n]{0,${MAX_PARTS_BEFORE_LOGIN}}?\slogin` +
+    String.raw`${TOOL_WORD_START}(?:${LOGIN_TOOLS})${TOOL_WORD_END}[^|;&\n]{0,${MAX_PARTS_BEFORE_LOGIN}}?\slogin` +
       String.raw`${TOOL_WORD_END}${sameCommand(MAX_PARTS_AFTER_LOGIN)}\s-p\s*${NOT_A_PORT_MAPPING}`,
     SHELL_VALUE
   ),
@@ -219,17 +302,16 @@ const BUILTIN_PATTERNS: RegExp[] = [
   // A secret's value given as a flag: `gh secret set NAME --body SECRET`, or `kubectl create secret generic s
   // --from-literal=token=SECRET`
   valueAfter(String.raw`\bgh\s+secret\s+set\b${SAME_COMMAND}\s(?:--body|-b)[\s=]+`, SHELL_VALUE),
-  new RegExp(
-    String.raw`(?<=--from-literal=[\w.-]*(?:token|secret|password|passwd|pwd|api[-_]?key)[\w.-]*=)${VALUE_OR_DASHED}`,
-    'gi'
-  ),
+  // Every value of a Secret is a secret, whatever its key is called, with `=` or a space after the flag
+  new RegExp(String.raw`(?<=--from-literal[=\s]+["']?[\w.-]{1,${MAX_LITERAL_NAME_LENGTH}}=)${VALUE_OR_DASHED}`, 'g'),
   // Tokens handed over on stdin: `echo SECRET | docker login --password-stdin`, `gh auth login --with-token <<< SECRET`
   new RegExp(
     String.raw`(?<=\b(?:echo(?:\s+-[neE]+)*|printf(?:\s+["']?%s(?:\\n)?["']?)?)\s+)${VALUE}` +
-      String.raw`(?=\s*\|[^;&\n]{0,${MAX_COMMAND_PARTS}}?--(?:password-stdin|with-token))`,
+      String.raw`(?=\s*\|[^;&\n]{0,${MAX_COMMAND_PARTS}}?(?:--(?:password-stdin|with-token)|\bgcloud\s+secrets\s+(?:create|versions\s+add)\b))`,
     'g'
   ),
   valueAfter(String.raw`--(?:password-stdin|with-token)\s*<<<\s*`),
+  ...infrastructurePatterns(),
   // Headers. A scheme or a header flag is required for Authorization, so prose like "Authorization: added middleware"
   // stays. An everyday word needs to look like a header, so `git commit -m "cookie: rotate on login"` stays: a header
   // flag, `Cookie:value` with no space, or a quoted `"Cookie: value"` outside a message
@@ -239,7 +321,7 @@ const BUILTIN_PATTERNS: RegExp[] = [
   ...valuesAfterName(HEADER_FLAG, String.raw`authorization:\s*(?!(?:bearer|basic|token)\s)`, 'gi'),
   ...quotedValuesAfterName('', String.raw`${NOT_IN_A_MESSAGE}(?:${EVERYDAY_HEADERS}):\s*`, 'gi'),
   ...valuesAfterName('', String.raw`(?<![\w-])(?:${EVERYDAY_HEADERS}):`, 'gi'),
-  ...valuesAfterName('', String.raw`\b(?:${DISTINCTIVE_HEADERS}):\s*`, 'gi'),
+  ...valuesAfterName('', String.raw`\b(?:${CREDENTIAL_HEADERS}):\s*`, 'gi'),
   // Private keys, whole blocks, as heredocs and `echo` can carry them
   /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g,
   // password=... inside a string or query: `psql "host=x password=SECRET"`, `--set db.password=SECRET`
