@@ -4,6 +4,7 @@ import { formatDate } from '../utils/format'
 import { parseMetadata } from './event-metadata'
 import { storyCommitsOf } from './story-commits'
 import { isFailedCommand } from './commits'
+import { withoutShellExpansions } from '../normalize/dependency-metadata'
 import { gitMovesOf } from '../normalize/git-move'
 import type { AgentSessionPayload, EventPayload, SessionPayload } from '../ai/types'
 import type { AgentSessionInfo } from '../db/agent-sessions'
@@ -52,8 +53,16 @@ function gitMovesField(row: EventRow): Pick<EventPayload, 'gitMoves'> {
   return gitMoves.length > 0 ? { gitMoves } : {}
 }
 
-export function eventRowToPayload(row: EventRow): EventPayload {
+/** Package names stored before WOR-196 can hold shell expansions (`$(cat list.txt)` stored as two words). */
+function metadataOf(row: EventRow): Record<string, unknown> {
   const metadata = parseMetadata(row.metadata)
+  if (row.category !== 'dependencies' || !Array.isArray(metadata.packages)) return metadata
+  const names = metadata.packages.filter((name): name is string => typeof name === 'string')
+  return { ...metadata, packages: withoutShellExpansions(names) }
+}
+
+export function eventRowToPayload(row: EventRow): EventPayload {
+  const metadata = metadataOf(row)
   const payload: EventPayload = {
     category: row.category,
     metadata,
