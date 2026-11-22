@@ -228,6 +228,30 @@ describe('scrub-secrets job', () => {
     })
   })
 
+  describe('a secret a command wrote as plain text, learned in WOR-204', () => {
+    const written = `echo "password: ${SECRET}" > values.yaml`
+    const redactedWritten = 'echo "password: [REDACTED]" > values.yaml'
+
+    it('is scrubbed from a stored command and from the hint beside it', () => {
+      const db = database()
+      const stored = insert(db, { command: written, metadata: JSON.stringify({ hint: written }) })
+
+      run(db)
+
+      expect(row(db, stored).command).toBe(redactedWritten)
+      expect(row(db, stored).metadata).toBe(JSON.stringify({ hint: redactedWritten }))
+    })
+
+    it('is scrubbed when it is a bare secret written to a file named for it', () => {
+      const db = database()
+      const stored = insert(db, { command: `echo ${SECRET} > ~/.vault-pass` })
+
+      run(db)
+
+      expect(row(db, stored).command).toBe('echo [REDACTED] > ~/.vault-pass')
+    })
+  })
+
   it('runs again over a database where an older version of the job was done', () => {
     const db = database()
     db.prepare(
@@ -235,10 +259,12 @@ describe('scrub-secrets job', () => {
        VALUES (?, ?, 0, 'done', '2026-11-19T12:00:00.000Z')`
     ).run(scrubSecretsJob.name, scrubSecretsJob.version - 1)
     const stored = insert(db, { command: `vault login s.${SECRET}` })
+    const written = insert(db, { command: `echo "password: ${SECRET}" > values.yaml` })
 
     run(db)
 
     expect(row(db, stored).command).toBe('vault login [REDACTED]')
+    expect(row(db, written).command).toBe('echo "password: [REDACTED]" > values.yaml')
   })
 
   it('scrubs a note, and a command from an IDE even when it names a file', () => {
