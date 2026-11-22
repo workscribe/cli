@@ -162,13 +162,10 @@ export function setConfigValue(config: WorkscribeConfig, key: string, value: str
 }
 
 function deepMerge<T extends object>(defaults: T, overrides: Partial<T>): T {
-  // structuredClone, not a shallow spread — any key overrides doesn't touch
-  // (e.g. a config file written before a newer top-level key existed) must
-  // still be an independent copy, not a shared reference back into the
-  // caller's `defaults` object. A shallow spread here previously let any
-  // caller that mutates a nested field on the returned config
-  // silently corrupt the module-level DEFAULTS
-  // singleton for the rest of the process.
+  // structuredClone, not a shallow spread — any key overrides doesn't touch (e.g. a config file written before a
+  // newer top-level key existed) must still be an independent copy, not a shared reference back into the caller's
+  // `defaults` object. A shallow spread here previously let any caller that mutates a nested field on the returned
+  // config silently corrupt the module-level DEFAULTS singleton for the rest of the process.
   const result = structuredClone(defaults)
   for (const key of Object.keys(overrides) as (keyof T)[]) {
     const val = overrides[key]
