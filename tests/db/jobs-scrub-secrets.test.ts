@@ -192,6 +192,55 @@ describe('scrub-secrets job', () => {
     expect(row(db, stored).command).toBe('7z a -p[REDACTED] out.7z dir')
   })
 
+  describe('an infrastructure form redaction learned in WOR-191', () => {
+    const terraform = `terraform apply -var 'token=${SECRET}'`
+    const redactedTerraform = "terraform apply -var 'token=[REDACTED]'"
+
+    it('is scrubbed from a stored command', () => {
+      const db = database()
+      const stored = insert(db, { command: terraform })
+
+      run(db)
+
+      expect(row(db, stored).command).toBe(redactedTerraform)
+    })
+
+    it('is scrubbed from the hint kept beside the command', () => {
+      const db = database()
+      const stored = insert(db, { command: terraform, metadata: JSON.stringify({ hint: terraform }) })
+
+      run(db)
+
+      expect(row(db, stored).metadata).toBe(JSON.stringify({ hint: redactedTerraform }))
+    })
+
+    it('is scrubbed from a note', () => {
+      const db = database()
+      const stored = insert(db, {
+        command: 'workscribe note',
+        metadata: JSON.stringify({ text: `ran ${terraform}` }),
+        category: 'note',
+      })
+
+      run(db)
+
+      expect(row(db, stored).metadata).toBe(JSON.stringify({ text: `ran ${redactedTerraform}` }))
+    })
+  })
+
+  it('runs again over a database where an older version of the job was done', () => {
+    const db = database()
+    db.prepare(
+      `INSERT INTO data_jobs (name, version, cursor, status, started_at)
+       VALUES (?, ?, 0, 'done', '2026-11-19T12:00:00.000Z')`
+    ).run(scrubSecretsJob.name, scrubSecretsJob.version - 1)
+    const stored = insert(db, { command: `vault login s.${SECRET}` })
+
+    run(db)
+
+    expect(row(db, stored).command).toBe('vault login [REDACTED]')
+  })
+
   it('scrubs a note, and a command from an IDE even when it names a file', () => {
     const db = database()
     const note = insert(db, {

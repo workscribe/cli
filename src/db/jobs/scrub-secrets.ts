@@ -207,7 +207,7 @@ export function scrubAgentMessages(db: MigrationDatabase): number {
 
 export const scrubSecretsJob: DataJob = {
   name: JOB_NAME,
-  version: 4,
+  version: 5,
   description: 'Remove secrets from stored commands, metadata and agent recaps',
   // Redacting what's already redacted changes nothing, so a rerun only needs the file cleaned again
   prepare: (db) => {

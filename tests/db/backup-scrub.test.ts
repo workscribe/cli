@@ -7,7 +7,7 @@ import { applyMigrations } from '../../src/db/migrate'
 import { MIGRATIONS } from '../../src/db/migrations'
 import { scrubBackups, type BackupDatabase, type BackupScrubResult } from '../../src/db/jobs/backup-scrub'
 import { scrubSecretsJob } from '../../src/db/jobs/scrub-secrets'
-import { getMetaValue } from '../../src/db/jobs/store'
+import { getMetaValue, setMetaValue } from '../../src/db/jobs/store'
 
 // Migration 006 normalises stored events using the user's config — keep it off the real one
 vi.mock('../../src/config', () => ({ readConfig: vi.fn(() => ({ capture: { aiTools: true } })) }))
@@ -40,7 +40,7 @@ function temporaryDirectory(): string {
 }
 
 /** A real backup file: the full schema, one event holding a secret in its command and metadata, and a recap. */
-function writeBackup(file: string, options: { withSecret?: boolean } = {}): void {
+function writeBackup(file: string, options: { withSecret?: boolean; command?: string } = {}): void {
   const hasSecret = options.withSecret ?? true
   const db = new DatabaseSync(file)
   applyMigrations(db, MIGRATIONS)
@@ -48,7 +48,7 @@ function writeBackup(file: string, options: { withSecret?: boolean } = {}): void
     `INSERT INTO events (captured_at, command, cwd, exit_code, repo_name, branch, category, metadata, source)
      VALUES ('2026-10-28T12:00:00.000Z', ?, '/code/cli', 0, 'cli', 'main', 'other', ?, 'zsh')`
   ).run(
-    hasSecret ? COMMAND_WITH_SECRET : 'npm test',
+    options.command ?? (hasSecret ? COMMAND_WITH_SECRET : 'npm test'),
     JSON.stringify({ prompt: hasSecret ? COMMAND_WITH_SECRET : 'ok' })
   )
   db.prepare(
@@ -307,6 +307,21 @@ describe('scrubBackups', () => {
 
     expect(result).toEqual(outcomes({ untouched: 1 }))
     expect(fs.readFileSync(file).equals(before)).toBe(true)
+  })
+
+  it('scrubs again a copy an older version of the job had scrubbed, with the forms redaction learned since', () => {
+    const directory = temporaryDirectory()
+    const file = path.join(directory, 'workscribe-3.5.0-2026-11-19T10-00-00-000Z.db')
+    writeBackup(file, { command: `aws ssm put-parameter --name /a --value ${SECRET} --type SecureString` })
+    const live = liveDatabase()
+    markScrubJobDone(live)
+    setMetaValue(live, `scrub-secrets:backup:${scrubSecretsJob.version - 1}:${path.basename(file)}`, 'done')
+
+    const result = scrub(live, directory)
+
+    expect(result.scrubbed).toBe(1)
+    expect(read(file).command).toBe('aws ssm put-parameter --name /a --value [REDACTED] --type SecureString')
+    expect(holdsSecret(file)).toBe(false)
   })
 
   it('scrubs each copy once per job version, and forgets a copy that was pruned', () => {
