@@ -45,6 +45,33 @@ function makeSpan(overrides: Partial<PayloadSpan> = {}): PayloadSpan {
 }
 
 describe('eventRowToPayload', () => {
+  it.each([
+    ['npx vitest run 2>&1 | tail -25', 'testing'],
+    ['npx vitest run | grep -E "FAIL|Tests "', 'testing'],
+    ['npx vitest run || true', 'testing'],
+    ['npx tsc --noEmit; echo "exit=$?"', 'building'],
+  ])("reports no exit code for `%s`, whose 0 is not the %s step's", (command, category) => {
+    const payload = eventRowToPayload(makeEvent({ command, category, exit_code: 0, metadata: '{}' }))
+
+    expect(payload.exitCode).toBeNull()
+  })
+
+  it.each([
+    ['npx vitest run', 'testing'],
+    ['cd app && npx vitest run', 'testing'],
+    ['npx tsc --noEmit && npx vitest run', 'testing'],
+  ])("keeps the 0 of `%s`, which is the %s step's", (command, category) => {
+    const payload = eventRowToPayload(makeEvent({ command, category, exit_code: 0, metadata: '{}' }))
+
+    expect(payload.exitCode).toBe(0)
+  })
+
+  it('keeps a failure however the run was piped', () => {
+    const row = makeEvent({ command: 'npx vitest run | tail', category: 'testing', exit_code: 1, metadata: '{}' })
+
+    expect(eventRowToPayload(row).exitCode).toBe(1)
+  })
+
   it('names a branch the shell expanded by the branch the command ended on', () => {
     const row = makeEvent({
       command: 'git switch -c $B main',

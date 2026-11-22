@@ -5,6 +5,7 @@ import { parseMetadata } from './event-metadata'
 import { storyCommitsOf } from './story-commits'
 import { isFailedCommand } from './commits'
 import { isShellExpansion, withoutShellExpansions } from '../normalize/dependency-metadata'
+import { reportedExitCode } from '../normalize/exit-evidence'
 import { gitMovesOf, type GitMove } from '../normalize/git-move'
 import type { AgentSessionPayload, EventPayload, SessionPayload } from '../ai/types'
 import type { AgentSessionInfo } from '../db/agent-sessions'
@@ -88,7 +89,12 @@ export function eventRowToPayload(row: EventRow): EventPayload {
   const payload: EventPayload = {
     category: row.category,
     metadata,
-    exitCode: row.exit_code,
+    exitCode: reportedExitCode({
+      command: row.command,
+      category: row.category,
+      exitCode: row.exit_code,
+      tool: typeof metadata.tool === 'string' ? metadata.tool : null,
+    }),
     durationMs: row.duration_ms,
     branch: row.branch,
     capturedAt: row.captured_at,

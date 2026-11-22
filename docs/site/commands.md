@@ -502,7 +502,7 @@ Event = {
   metadata: Record<string, unknown> // structured fields the normaliser extracted (tool, packages, message, …); on
                                    // code_edit: linesAdded, linesRemoved (null when unknown), lastEditAt
   hint?: string                    // only on unclassified ("other") events: redacted, ≤120-char command prefix
-  exitCode: number | null          // 0 passed; another code failed; -1 failed, no code known; null unknown (agent hooks that report none, interrupts)
+  exitCode: number | null          // 0 passed; another code failed; -1 failed, no code known; null unknown (agent hooks that report none, interrupts, and runs whose 0 isn't their own; see below)
   durationMs: number | null
   source: string | null            // shell, claude-code, vscode, …
 }
@@ -510,6 +510,7 @@ Event = {
 
 **What's included:**
 
+- `exitCode` is `null` for a test, build or lint run whose exit code can't be credited to it: the line pipes it (`… | tail`), follows it with `|| true`, `; echo` or another command, negates it, or has a shape Workscribe doesn't read. The summary then says the run happened, not that it passed. Failures are never hidden this way.
 - Events follow the same exclusions as summaries: `exploring` and `linting` are left out unless listed in `summary.includeCategories`. Notes appear in `notes`, never in `events`. In `events --json`, `total` counts events after filtering and `--limit` caps the list.
 - Full command strings, event working directories and IDE file paths are never included. See [Privacy](/privacy) for what the structured fields can contain.
 
