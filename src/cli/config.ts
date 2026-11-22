@@ -2,6 +2,7 @@ import { Command } from 'commander'
 import chalk from 'chalk'
 import { readConfig, writeConfig, getConfigValue, setConfigValue } from '../config'
 import { REMOVED_AI_SETTING_MESSAGE, isRemovedAiSetting } from '../summary/legacy-ai'
+import { REMOVED_TELEMETRY_SETTING_MESSAGE, isRemovedTelemetrySetting } from '../config/removed-settings'
 import { log } from '../utils/logger'
 import { getDb } from '../db'
 import { requestTicketRelink } from '../db/jobs/ticket-refs'
@@ -53,6 +54,10 @@ export function registerConfig(program: Command): void {
       // Checked before reading or writing, so a refused key never touches config.json
       if (isRemovedAiSetting(key)) {
         log.error(REMOVED_AI_SETTING_MESSAGE)
+        process.exit(1)
+      }
+      if (isRemovedTelemetrySetting(key)) {
+        log.error(REMOVED_TELEMETRY_SETTING_MESSAGE)
         process.exit(1)
       }
       if (key === TICKET_PATTERN_KEY) {

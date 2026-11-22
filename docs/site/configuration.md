@@ -168,21 +168,6 @@ workscribe config set skill.includeAgentMessages true
 
 ---
 
-## Telemetry
-
-| Key | Type | Default | Description |
-|---|---|---|---|
-| `telemetry.enabled` | boolean | `true` | Send an anonymous install ping on startup — install ID, CLI version, platform, and Node.js version. Never commands, events, or summaries. |
-| `telemetry.installId` | string | `""` | Randomly generated on first use — not meant to be set manually |
-
-```bash
-workscribe config set telemetry.enabled false
-```
-
-See [Privacy & Security](/privacy) for exactly what's sent and when.
-
----
-
 ## Tickets
 
 | Key | Type | Default | Description |
@@ -303,10 +288,6 @@ Workscribe ships with built-in support for Claude Code, Aider, Gemini, GitHub Co
   },
   "summary": {
     "format": "markdown"
-  },
-  "telemetry": {
-    "enabled": true,
-    "installId": "f47ac10b-58cc-4372-a567-0e02b2c3d479"
   },
   "projects": {
     "/Users/me/sandbox/chronicle": "workscribe"

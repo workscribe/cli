@@ -8,7 +8,7 @@ export { bashCompletion, zshCompletion, fishCompletion }
 export const HIDDEN_COMMANDS = new Set(['_capture', '_hook'])
 
 // _capture/_hook fire on every shell command as a detached background process
-// that must never add latency — startup checks (update check, telemetry) skip
+// that must never add latency — startup checks (the update check) skip
 // those outright rather than relying on a cache alone.
 export function shouldRunStartupChecks(invokedCommand: string | undefined): boolean {
   if (invokedCommand === undefined) return true

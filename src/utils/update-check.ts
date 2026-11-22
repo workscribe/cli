@@ -1,15 +1,5 @@
 import fs from 'fs'
-import os from 'os'
 import { UPDATE_CHECK_PATH } from './paths'
-import { readConfig, WorkscribeConfig } from '../config'
-import { debugLog } from './logger'
-
-export interface TelemetryPayload {
-  installId: string
-  cliVersion: string
-  platform: string
-  nodeVersion: string
-}
 
 declare const __WORKSCRIBE_VERSION__: string
 
@@ -18,7 +8,6 @@ const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000
 interface UpdateCache {
   lastChecked: number
   latestVersion: string
-  lastTelemetryPing?: number
 }
 
 function readCache(): UpdateCache | null {
@@ -29,9 +18,8 @@ function readCache(): UpdateCache | null {
   }
 }
 
-// Merges with whatever's already on disk rather than overwriting — checkForUpdate()
-// and pingTelemetry() each own one field in the same cache file and must not
-// silently wipe out the other's value when they write.
+// Merges with whatever's already on disk rather than overwriting, so a field an older CLI wrote to the same cache
+// file isn't wiped out by a write that doesn't mention it.
 function writeCache(updates: Partial<UpdateCache>): void {
   try {
     const current = readCache() ?? {}
@@ -72,41 +60,4 @@ export function checkForUpdate(): void {
         // Network unavailable — will retry next run
       })
   }
-}
-
-export function buildTelemetryPayload(config: WorkscribeConfig): TelemetryPayload {
-  return {
-    installId: config.telemetry.installId,
-    cliVersion: __WORKSCRIBE_VERSION__,
-    platform: os.platform(),
-    nodeVersion: process.version,
-  }
-}
-
-export function pingTelemetry(): void {
-  const config = readConfig()
-  if (!config.telemetry.enabled || !config.telemetry.installId) return
-
-  const cache = readCache()
-  const now = Date.now()
-  if (cache?.lastTelemetryPing && now - cache.lastTelemetryPing <= CHECK_INTERVAL_MS) return
-
-  fetch('https://workscribe.co/api/telemetry/ping', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(buildTelemetryPayload(config)),
-  })
-    .then((response) => {
-      // fetch() only rejects on network failure — a 4xx/5xx still resolves,
-      // so without this check a server-side outage would silently look like
-      // a successful ping and get throttled for a full day.
-      if (!response.ok) {
-        debugLog('pingTelemetry', new Error(`Ping failed with HTTP ${response.status}`))
-        return
-      }
-      writeCache({ lastTelemetryPing: now })
-    })
-    .catch((error) => {
-      debugLog('pingTelemetry', error)
-    })
 }

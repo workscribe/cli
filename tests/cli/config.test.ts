@@ -92,6 +92,24 @@ describe('workscribe config', () => {
     })
 
     it.each([
+      ['telemetry', 'false'],
+      ['telemetry.enabled', 'false'],
+      ['Telemetry.installId', 'abc'],
+    ])('refuses the removed telemetry setting %s without reading or writing the config', async (key, value) => {
+      const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+        throw new Error('exit')
+      }) as never)
+      onTestFinished(() => exitSpy.mockRestore())
+
+      await expect(makeProgram().parseAsync(['config', 'set', key, value], { from: 'user' })).rejects.toThrow('exit')
+
+      expect(mockLog.error).toHaveBeenCalledWith(expect.stringContaining('Telemetry was removed'))
+      expect(exitSpy).toHaveBeenCalledWith(1)
+      expect(mockReadConfig).not.toHaveBeenCalled()
+      expect(mockWriteConfig).not.toHaveBeenCalled()
+    })
+
+    it.each([
       ['ai.provider', 'openai'],
       ['ai.apiKey', 'sk-new'],
       ['summary.engine', 'ollama'],

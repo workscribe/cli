@@ -20,7 +20,6 @@ export function createTestConfig(overrides: Partial<WorkscribeConfig> = {}): Wor
     },
     redact: { extra: [] },
     summary: { format: 'markdown' },
-    telemetry: { enabled: true, installId: 'existing-install-id' },
     tickets: { pattern: DEFAULT_TICKET_PATTERN },
     ...overrides,
   }

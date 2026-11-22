@@ -16,7 +16,6 @@ vi.mock('../../src/db', () => ({ getDb: vi.fn() }))
 vi.mock('../../src/config', () => ({
   readConfig: vi.fn(),
   writeConfig: vi.fn(),
-  ensureInstallId: vi.fn(),
 }))
 
 vi.mock('../../src/utils/paths', () => ({
@@ -91,7 +90,7 @@ vi.mock('../../src/skills/package-path', () => ({ resolvePackagedSkillDir: vi.fn
 import fs from 'fs'
 import { Command } from 'commander'
 import prompts from 'prompts'
-import { readConfig, ensureInstallId } from '../../src/config'
+import { readConfig } from '../../src/config'
 import {
   hasChronicleHook,
   removeChronicleHook,
@@ -114,7 +113,6 @@ import { skillAgent as agent } from '../helpers/skill-agents'
 const mockFs = fs as unknown as Record<string, ReturnType<typeof vi.fn>>
 const mockPrompts = prompts as ReturnType<typeof vi.fn>
 const mockReadConfig = readConfig as ReturnType<typeof vi.fn>
-const mockEnsureInstallId = ensureInstallId as ReturnType<typeof vi.fn>
 const mockIsHookInstalled = isHookInstalled as ReturnType<typeof vi.fn>
 const mockInstallHook = installHook as ReturnType<typeof vi.fn>
 const mockIsCompletionsInstalled = isCompletionsInstalled as ReturnType<typeof vi.fn>
@@ -122,8 +120,8 @@ const mockLog = log as Record<string, ReturnType<typeof vi.fn>>
 const claudeIntegration = AI_HOOK_INTEGRATIONS['claude-code'] as Record<string, ReturnType<typeof vi.fn>>
 const aiderIntegration = AI_HOOK_INTEGRATIONS['aider'] as Record<string, ReturnType<typeof vi.fn>>
 
-// init.ts mutates config in place (telemetry.*) — always generate a fresh object per test rather than
-// sharing one, or mutations from one test (e.g. answering the telemetry prompt with false) would leak into the next.
+// init.ts can mutate the config it reads in place — always generate a fresh object per test rather than sharing
+// one, or a mutation from one test would leak into the next.
 const legacyAiConfig = () =>
   createTestConfig({ ai: { provider: 'anthropic', apiKey: 'sk-old', model: '', baseUrl: '' } })
 
@@ -134,17 +132,16 @@ function makeProgram() {
   return program
 }
 
-// prompts() is called many times across one `init` run (telemetry, shell hook,
+// prompts() is called many times across one `init` run (shell hook,
 // completions, per-AI-tool, AI provider, apiKey, retry, ...) — routing by the
 // prompt's `name` rather than call position means adding a new prompt anywhere
-// in the flow (as CLI-04 just did) can't silently shift every other test's
+// in the flow can't silently shift every other test's
 // positional mockResolvedValueOnce queue out of sync. Pass an array per name
 // for tests that need a different answer on each successive call to that name
 // (e.g. two different AI tools both prompting `install`); a single-value array
 // repeats forever.
 function mockPromptAnswers(overrides: Record<string, unknown[]> = {}) {
   const defaults: Record<string, unknown[]> = {
-    telemetryEnabled: [true],
     update: [true],
     installComps: [true],
     updateShellCompletions: [true],
@@ -177,10 +174,6 @@ beforeEach(() => {
 
   // A 2.0 config (no old AI settings) — skips the legacy-cleanup prompt
   mockReadConfig.mockReturnValue(createTestConfig())
-
-  mockEnsureInstallId.mockImplementation(
-    (config: { telemetry: { installId: string } }) => config.telemetry.installId || 'generated-install-id'
-  )
 
   mockPrompts.mockReset()
   mockPromptAnswers()
@@ -379,47 +372,6 @@ describe('workscribe init — no AI provider step (2.0)', () => {
 
     for (const [savedConfig] of mockWriteConfig.mock.calls) expect(savedConfig).toHaveProperty('ai')
     expect(mockLog.info).toHaveBeenCalledWith(expect.stringContaining('Kept the old AI settings'))
-  })
-})
-
-describe('workscribe init — telemetry disclosure (CLI-04)', () => {
-  it('prompts with initial: true (opt-out-by-default policy)', async () => {
-    await makeProgram().parseAsync(['init'], { from: 'user' })
-    expect(mockPrompts).toHaveBeenCalledWith(expect.objectContaining({ name: 'telemetryEnabled', initial: true }))
-  })
-
-  it('discloses the four fields collected and the opt-out command', async () => {
-    await makeProgram().parseAsync(['init'], { from: 'user' })
-    const allOutput = (mockLog.plain as ReturnType<typeof vi.fn>).mock.calls.flat().join('\n')
-    expect(allOutput).toContain('install ID')
-    expect(allOutput).toContain('CLI version')
-    expect(allOutput).toContain('platform')
-    expect(allOutput).toContain('Node.js version')
-    expect(allOutput).toContain('workscribe config set telemetry.enabled false')
-  })
-
-  it('writes telemetry.enabled per the prompt answer', async () => {
-    mockPromptAnswers({ telemetryEnabled: [false] })
-    await makeProgram().parseAsync(['init'], { from: 'user' })
-    // config.telemetry.enabled is set before ensureInstallId(config) is called,
-    // so the argument it received reflects the prompt answer.
-    expect(mockEnsureInstallId).toHaveBeenCalledWith(
-      expect.objectContaining({ telemetry: expect.objectContaining({ enabled: false }) })
-    )
-  })
-
-  it('calls ensureInstallId and persists the returned id onto config, not just on disk', async () => {
-    // With no config file yet, init's final writeConfig(config) saves the in-memory config — so a regression
-    // where the returned id isn't synced back onto that object shows up here (ensureInstallId's own write is mocked).
-    mockFs.existsSync.mockImplementation((file: string) => file !== '/home/user/.workscribe/config.json')
-    mockEnsureInstallId.mockReturnValue('brand-new-id')
-    const { writeConfig } = await import('../../src/config')
-    const mockWriteConfig = writeConfig as ReturnType<typeof vi.fn>
-    await makeProgram().parseAsync(['init'], { from: 'user' })
-    expect(mockEnsureInstallId).toHaveBeenCalled()
-    expect(mockWriteConfig).toHaveBeenCalledWith(
-      expect.objectContaining({ telemetry: expect.objectContaining({ installId: 'brand-new-id' }) })
-    )
   })
 })
 
