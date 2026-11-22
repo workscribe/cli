@@ -11,6 +11,7 @@ import { normalizeCommand } from '../normalize/patterns'
 import { readConfig } from '../config'
 import { shouldFilter, isDuplicate } from './filter'
 import { canMergeAcrossSources } from './merge-rules'
+import { isExcluded } from './excluded-paths'
 import { mergeRuleOf } from './event-merge-rule'
 import type { HookOverlaps } from './hooks/types'
 import { boundedCommand } from './command-steps'
@@ -81,6 +82,9 @@ export function captureCommand(opts: {
 
   const config = readConfig()
   const { cwd, exitCode, durationMs } = opts
+
+  // An excluded folder is never recorded: dropped like a pause, before anything is looked up or stored
+  if (isExcluded({ cwd, file: opts.file, command: opts.command }, config.capture.excludePaths)) return
 
   // ─── IDE event path ──────────────────────────────────────────────────────────
   // When --type is provided, the caller has already classified the event.
@@ -170,6 +174,8 @@ export function captureCommand(opts: {
   // 5. Extract git context from where the work happened — `git -C ../web commit` belongs to web, not here — named
   // exactly as the IDE path, notes and `context` name it
   const workDirectory = effectiveDirectory({ matchedStep: matchedStep ?? safeCommand, cwd })
+  // `git -C <excluded> …` run from elsewhere worked in the excluded folder
+  if (workDirectory !== cwd && isExcluded({ cwd: workDirectory }, config.capture.excludePaths)) return
   const context = getRepoContext(workDirectory, config)
   const { repoName, branch } = context
   const metadata = withMessageFromFile(normalizedMetadata, workDirectory, config.redact.extra)

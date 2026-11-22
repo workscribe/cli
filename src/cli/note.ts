@@ -3,6 +3,7 @@ import { insertEvent } from '../db'
 import { getRepoContext } from '../capture/git'
 import { eventDimensions } from '../capture/dimensions'
 import { redact } from '../capture/redact'
+import { isExcluded } from '../capture/excluded-paths'
 import { readConfig } from '../config'
 import { currentDirectory } from '../utils/working-directory'
 import { log } from '../utils/logger'
@@ -15,6 +16,10 @@ export function registerNote(program: Command): void {
       // As you reached it, like the shell hook's `$PWD`, so a `projects.<path>` override and `context` match it
       const directory = currentDirectory()
       const config = readConfig()
+      if (isExcluded({ cwd: directory }, config.capture.excludePaths)) {
+        log.warn('This directory is excluded; note not saved.')
+        return
+      }
       const context = getRepoContext(directory, config)
       const { repoName, branch } = context
       insertEvent({

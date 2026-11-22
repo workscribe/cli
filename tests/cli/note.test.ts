@@ -123,3 +123,17 @@ describe('workscribe note — repo naming (WOR-118)', () => {
     expect(mockInsertEvent).toHaveBeenCalledWith(expect.objectContaining({ cwd: '/Users/dev/link/my-app' }))
   })
 })
+
+describe('workscribe note in an excluded folder', () => {
+  it('saves nothing and says so', () => {
+    mockReadConfig.mockReturnValue(
+      createTestConfig({ capture: { ...createTestConfig().capture, excludePaths: ['/Users/dev/link/my-app'] } })
+    )
+
+    makeProgram().parse(['note', 'something private'], { from: 'user' })
+
+    expect(mockInsertEvent).not.toHaveBeenCalled()
+    expect(mockGetRepoContext).not.toHaveBeenCalled()
+    expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining('excluded'))
+  })
+})

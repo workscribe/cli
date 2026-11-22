@@ -115,6 +115,12 @@ export function registerStatus(program: Command): void {
         log.plain(`  Capture      ${chalk.green('active')}`)
       }
 
+      const [firstExcluded, ...otherExcluded] = config.capture.excludePaths ?? []
+      if (firstExcluded) {
+        log.plain(`  Excluded     ${firstExcluded}`)
+        for (const excludedPath of otherExcluded) log.plain(`               ${excludedPath}`)
+      }
+
       log.plain(`  Events today ${chalk.cyan(String(todayEvents.length))}`)
       log.plain(`  Events total ${chalk.cyan(String(total))}`)
 

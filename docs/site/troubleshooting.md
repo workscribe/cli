@@ -98,6 +98,8 @@ If events exist but `workscribe summary` shows nothing, check the date:
 workscribe summary --date $(date +%Y-%m-%d)
 ```
 
+**One repo never shows up:** check whether its directory is excluded. `workscribe status` lists excluded directories, and `workscribe exclude --list` prints them. A directory above it counts too. Remove it with `workscribe exclude --remove <path>`; capture resumes with the next command, but what happened while it was excluded was never stored and can't be recovered.
+
 ---
 
 ## Summary looks wrong or generic

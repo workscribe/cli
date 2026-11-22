@@ -38,6 +38,8 @@ export interface WorkscribeConfig {
     agentEdits: boolean
     // Coding agents' own recaps and compaction summaries: free text, so off by default; redacted and capped when on
     agentMessages: boolean
+    // Directories never recorded: an event run in, or editing a file under, one is dropped before it is stored
+    excludePaths: string[]
   }
   skill: {
     // Whether `sessions --json` gives the agent skill the agents' recaps, which are free text. Off by default; it
@@ -87,6 +89,7 @@ const DEFAULTS: WorkscribeConfig = {
     profiles: [],
     agentEdits: true,
     agentMessages: false,
+    excludePaths: [],
   },
   skill: {
     includeAgentMessages: false,
@@ -123,7 +126,11 @@ export function writeConfig(config: WorkscribeConfig): void {
   // run. CLI-05's fallback can now call this as the very first filesystem
   // touch for a user who skipped init entirely, so it can't assume the dir exists.
   fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true, mode: 0o700 })
-  fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), { encoding: 'utf-8', mode: 0o600 })
+  // Written beside the config and renamed over it, so a capture process reading while it is saved sees the old file
+  // or the new one, never half of it: a half-written config reads as the defaults, with no folder excluded
+  const temporaryPath = `${CONFIG_PATH}.${process.pid}.tmp`
+  fs.writeFileSync(temporaryPath, JSON.stringify(config, null, 2), { encoding: 'utf-8', mode: 0o600 })
+  fs.renameSync(temporaryPath, CONFIG_PATH)
   // Enforce permissions on existing files (mode only applies on creation above)
   try {
     fs.chmodSync(CONFIG_PATH, 0o600)

@@ -11,6 +11,7 @@ import { registerSummary } from './cli/summary'
 import { registerExport } from './cli/export'
 import { registerConfig } from './cli/config'
 import { registerPause } from './cli/pause'
+import { registerExclude } from './cli/exclude'
 import { registerUndo } from './cli/undo'
 import { registerClear } from './cli/clear'
 import { registerUninstall } from './cli/uninstall'
@@ -63,6 +64,7 @@ registerSummary(program)
 registerExport(program)
 registerConfig(program)
 registerPause(program)
+registerExclude(program)
 registerUndo(program)
 registerClear(program)
 registerUninstall(program)
