@@ -81,7 +81,7 @@ export function daysBetween(from: string, to: string): number {
   return Math.round((toUtc(to) - toUtc(from)) / (24 * 60 * 60 * 1000))
 }
 
-function oldestEventDay(db: MigrationDatabase): string | null {
+export function oldestEventDay(db: MigrationDatabase): string | null {
   const row = db.prepare("SELECT date(MIN(captured_at), 'localtime') AS day FROM events").get() as {
     day: string | null
   }
@@ -92,14 +92,14 @@ function oldestEventDay(db: MigrationDatabase): string | null {
  * The first day anything will be removed: after the grace period, and not before the oldest event is older than the
  * limit. A fresh install has nothing to remove for 100 days, so its first day is the day after that.
  */
-function firstRemovalDay(db: MigrationDatabase, today: string, days: number): string {
+export function firstRemovalDay(db: MigrationDatabase, today: string, days: number): string {
   const graceEnds = addDays(today, GRACE_DAYS)
   const firstExpiry = addDays(oldestEventDay(db) ?? today, days + 1)
   return firstExpiry > graceEnds ? firstExpiry : graceEnds
 }
 
 /** The events that go on `firstRemovalOn`: those before its cutoff, as `removeExpiredEvents` will see it. */
-function previewOf(db: MigrationDatabase, firstRemovalOn: string, days: number): RemovalPreview {
+export function previewOf(db: MigrationDatabase, firstRemovalOn: string, days: number): RemovalPreview {
   const [year, month, day] = firstRemovalOn.split('-').map(Number)
   const cutoff = cutoffOf(new Date(year, month - 1, day), days)
   const row = db
@@ -131,7 +131,7 @@ function crossReminders(db: MigrationDatabase, daysUntil: number): boolean {
   return isNew
 }
 
-function pausedBy(db: MigrationDatabase, jobs: DataJob[]): string | null {
+export function pausedBy(db: MigrationDatabase, jobs: DataJob[]): string | null {
   for (const name of GATE_JOB_NAMES) {
     const job = jobs.find((candidate) => candidate.name === name)
     if (job === undefined || !isJobDone(getJobRow(db, name), job)) return name

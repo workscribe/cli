@@ -445,6 +445,23 @@ describe('workscribe init — agent skill step', () => {
     expect(allOutput).toContain('Setup complete!')
   })
 
+  it('tells people, before anything is captured, that old data is removed, and how to keep it (WOR-179)', async () => {
+    await makeProgram().parseAsync(['init'], { from: 'user' })
+
+    const allOutput = mockLog.plain.mock.calls.flat().join('\n')
+    expect(allOutput).toContain('Captured events are removed after 100 days')
+    expect(allOutput).toContain('your summaries stay')
+    expect(allOutput).toContain('workscribe config set retention.keepForever true')
+  })
+
+  it('says the limit the person has set, not the default', async () => {
+    mockReadConfig.mockReturnValue(createTestConfig({ retention: { days: 30, keepForever: false, summaryDays: null } }))
+
+    await makeProgram().parseAsync(['init'], { from: 'user' })
+
+    expect(mockLog.plain.mock.calls.flat().join('\n')).toContain('Captured events are removed after 30 days')
+  })
+
   it('warns and finishes setup when the skill files are missing from the install', async () => {
     vi.mocked(resolvePackagedSkillDir).mockImplementationOnce(() => {
       throw new Error('The Workscribe skill files are missing from this install.')

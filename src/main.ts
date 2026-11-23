@@ -23,6 +23,7 @@ import { registerCompletions, shouldRunDataJobs, shouldRunStartupChecks } from '
 import { registerUpgrade } from './cli/upgrade'
 import { runDataJobsBeforeCommand } from './cli/data-jobs'
 import { runRetentionBeforeCommand } from './cli/retention-run'
+import { registerRetention } from './cli/retention'
 import { registerAlerts } from './cli/alerts'
 import { registerContext } from './cli/context'
 import { registerHistory } from './cli/history'
@@ -51,6 +52,7 @@ registerCapture(program)
 registerHook(program)
 registerInit(program)
 registerStatus(program)
+registerRetention(program)
 registerEvents(program)
 registerSessions(program)
 registerSummary(program)

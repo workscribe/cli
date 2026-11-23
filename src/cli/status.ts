@@ -15,6 +15,7 @@ import { detectAgents } from '../skills/detect'
 import { formatAgentSkillLine } from '../skills/actions'
 import { printLegacyAiNotice } from './notices'
 import { getDataStatus } from './data-jobs'
+import { currentRetentionStatus, retentionStatusLine } from './retention'
 import type { DataStatus } from '../db/jobs/state'
 
 // Labelled on the first agent's row only, like the other status sections
@@ -138,6 +139,7 @@ export function registerStatus(program: Command): void {
         `  Profiles     ${activeProfiles.length > 0 ? chalk.cyan(activeProfiles.join(', ')) : chalk.dim('none')}`
       )
 
+      log.plain(retentionStatusLine(currentRetentionStatus()))
       for (const line of formatDataLines(getDataStatus())) log.plain(line)
 
       agents.forEach((agent, index) => {
