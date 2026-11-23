@@ -10,11 +10,13 @@ vi.mock('../../src/config', () => ({
 vi.mock('../../src/db', () => ({ getDb: vi.fn(() => ({})) }))
 vi.mock('../../src/db/jobs/ticket-refs', () => ({ requestTicketRelink: vi.fn() }))
 vi.mock('../../src/db/agent-sessions', () => ({ clearAgentMessages: vi.fn() }))
+vi.mock('../../src/db/retention-state', () => ({ setKeepForeverMirror: vi.fn() }))
 
 import { Command } from 'commander'
 import { readConfig, writeConfig, getConfigValue, setConfigValue } from '../../src/config'
 import { requestTicketRelink } from '../../src/db/jobs/ticket-refs'
 import { clearAgentMessages } from '../../src/db/agent-sessions'
+import { setKeepForeverMirror } from '../../src/db/retention-state'
 import { log } from '../../src/utils/logger'
 import { registerConfig } from '../../src/cli/config'
 
@@ -216,6 +218,70 @@ describe('workscribe config', () => {
 
       expect(clearAgentMessages).not.toHaveBeenCalled()
       expect(mockWriteConfig).toHaveBeenCalled()
+    })
+  })
+  describe('config set retention.* (WOR-179)', () => {
+    const RETENTION_CONFIG = { ...BASE_CONFIG, retention: { days: 100, keepForever: false, summaryDays: null } }
+    const set = (key: string, value: string) => {
+      mockReadConfig.mockReturnValue(RETENTION_CONFIG)
+      return makeProgram().parseAsync(['config', 'set', key, value], { from: 'user' })
+    }
+
+    it('saves a valid value without going through the coercing setter', async () => {
+      await set('retention.days', '60')
+
+      expect(mockSetConfigValue).not.toHaveBeenCalled()
+      expect(mockWriteConfig).toHaveBeenCalledWith({
+        ...RETENTION_CONFIG,
+        retention: { days: 60, keepForever: false, summaryDays: null },
+      })
+    })
+
+    it.each([
+      ['retention.days', ''],
+      ['retention.days', 'null'],
+      ['retention.days', '3'],
+      ['retention.keepForever', 'yes'],
+      ['retention.summaryDays', '50'],
+      ['retention', 'x'],
+    ])('refuses %s %j and writes nothing', async (key, value) => {
+      const exit = vi.spyOn(process, 'exit').mockImplementation((() => {
+        throw new Error('exit')
+      }) as never)
+      onTestFinished(() => exit.mockRestore())
+
+      await expect(set(key, value)).rejects.toThrow('exit')
+
+      expect(mockWriteConfig).not.toHaveBeenCalled()
+      expect(setKeepForeverMirror).not.toHaveBeenCalled()
+      expect(mockLog.error).toHaveBeenCalled()
+    })
+
+    it('records keeping everything in the database too, before config.json', async () => {
+      const order: string[] = []
+      vi.mocked(setKeepForeverMirror).mockImplementationOnce(() => {
+        order.push('database')
+      })
+      mockWriteConfig.mockImplementationOnce(() => {
+        order.push('config')
+      })
+
+      await set('retention.keepForever', 'true')
+
+      expect(order).toEqual(['database', 'config'])
+      expect(setKeepForeverMirror).toHaveBeenCalledWith(expect.anything(), true)
+    })
+
+    it('clears that record when removal is turned back on', async () => {
+      await set('retention.keepForever', 'false')
+
+      expect(setKeepForeverMirror).toHaveBeenCalledWith(expect.anything(), false)
+    })
+
+    it('does not mask keepForever as a secret', async () => {
+      await set('retention.keepForever', 'true')
+
+      expect(mockLog.success).toHaveBeenCalledWith(expect.stringContaining('true'))
     })
   })
 })

@@ -8,6 +8,8 @@ import { getDb } from '../db'
 import { requestTicketRelink } from '../db/jobs/ticket-refs'
 import { ticketPatternProblem } from '../capture/tickets'
 import { clearAgentMessages } from '../db/agent-sessions'
+import { applyRetentionSetting, isRetentionKey, RETENTION_KEEP_FOREVER_KEY } from '../config/retention'
+import { setKeepForeverMirror } from '../db/retention-state'
 
 const TICKET_PATTERN_KEY = 'tickets.pattern'
 const AGENT_MESSAGES_KEY = 'capture.agentMessages'
@@ -32,6 +34,23 @@ function setTicketPattern(pattern: string): void {
       '  New captures use it now; your history is re-linked the next time a data command runs (or: workscribe upgrade).'
     )
   )
+}
+
+/**
+ * Sets one `retention.*` value, strictly: nothing is coerced, so `retention.days ""` or `retention.keepForever yes` is
+ * refused instead of becoming 0 or a string. Keeping everything is also written to the database, ahead of config.json,
+ * so a config file that is later damaged or deleted still can't lead to removal (WOR-179).
+ */
+function setRetentionSetting(key: string, value: string): void {
+  const config = readConfig()
+  const result = applyRetentionSetting(config.retention, key, value)
+  if (!result.ok) {
+    log.error(result.message)
+    process.exit(1)
+  }
+  if (key === RETENTION_KEEP_FOREVER_KEY) setKeepForeverMirror(getDb(), result.retention.keepForever)
+  writeConfig({ ...config, retention: result.retention })
+  log.success(`Set ${chalk.cyan(key)} = ${chalk.yellow(value)}`)
 }
 
 export function registerConfig(program: Command): void {
@@ -62,6 +81,10 @@ export function registerConfig(program: Command): void {
       }
       if (key === TICKET_PATTERN_KEY) {
         setTicketPattern(value)
+        return
+      }
+      if (isRetentionKey(key)) {
+        setRetentionSetting(key, value)
         return
       }
       const config = readConfig()
