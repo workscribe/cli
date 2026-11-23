@@ -824,6 +824,53 @@ describe('redact', () => {
     })
   })
 
+  describe('stays fast on a long run of whitespace (WOR-205)', () => {
+    // Took about 15 s at this length before the fix, and grew with the square of the run
+    const WHITESPACE_RUN_LENGTH = 20_000
+
+    it.each([
+      ['spaces', ' '],
+      ['tabs', '\t'],
+      ['spaces and tabs', ' \t'],
+      ['newlines', '\n'],
+    ])('%s', (_shape, unit) => {
+      const run = unit.repeat(WHITESPACE_RUN_LENGTH / unit.length)
+      const startedAt = performance.now()
+      redact(run)
+      redact(`echo${run}`)
+      redact(`a${run}b`)
+      expect(performance.now() - startedAt).toBeLessThan(MAX_REDACT_MS)
+    })
+
+    // Inside the 1,000 parts a command's flags are read across, so the tool still finds its flag
+    const SPACES_BEFORE_SECRET = 500
+
+    it.each([
+      [
+        'mysql',
+        `mysql${' '.repeat(SPACES_BEFORE_SECRET)}-pFAKEVALUE`,
+        `mysql${' '.repeat(SPACES_BEFORE_SECRET)}-p[REDACTED]`,
+      ],
+      [
+        'curl',
+        `curl${' '.repeat(SPACES_BEFORE_SECRET)}-u me:FAKEVALUE`,
+        `curl${' '.repeat(SPACES_BEFORE_SECRET)}-u me:[REDACTED]`,
+      ],
+      [
+        'a flag',
+        `--password${' '.repeat(SPACES_BEFORE_SECRET)}FAKEVALUE`,
+        `--password${' '.repeat(SPACES_BEFORE_SECRET)}[REDACTED]`,
+      ],
+      [
+        'a tab run',
+        `export TOKEN=FAKEVALUE${'\t'.repeat(SPACES_BEFORE_SECRET)}ls`,
+        `export TOKEN=[REDACTED]${'\t'.repeat(SPACES_BEFORE_SECRET)}ls`,
+      ],
+    ])('still redacts a secret after a long run: %s', (_shape, command, expected) => {
+      expect(redact(command)).toBe(expected)
+    })
+  })
+
   describe('leaves prose alone, so a prompt about these topics raises no secret alert', () => {
     it.each([
       'Bearer tokens are sent in the header',
