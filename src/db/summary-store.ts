@@ -1,6 +1,7 @@
 import type { MigrationDatabase } from './migration-types'
 import type { StoredEngine } from '../ai/engine'
 import type { AnchorRange } from '../summary/anchors'
+import { dayOfSessionKey } from '../summary/store'
 
 // The `summary` table (migration 010): summaries anchored to the events they describe. `sessions summary set` writes
 // here only; the `summary-anchors` job mapped the old `session_summaries` store into it.
@@ -31,6 +32,8 @@ export interface SummaryRow {
   anchor_source: AnchorSource
   /** 1 when its session mixed projects, so it matches no thread */
   is_mixed: number
+  /** The local day it describes (WOR-179), read from its key; null until the `summary-days` job has seen the row */
+  day: string | null
 }
 
 /** A summary of a thread or an old session, by the key it was saved under. */
@@ -46,13 +49,13 @@ export interface SessionSummaryRecord {
 const SESSION_SCOPE = 'session'
 
 const INSERT_SUMMARY = `INSERT INTO summary
-    (scope, project_id, first_event_id, last_event_id, engine, text, created_at, source_key, origin, anchor_source, is_mixed)
+    (scope, project_id, first_event_id, last_event_id, engine, text, created_at, source_key, origin, anchor_source, is_mixed, day)
   VALUES ('${SESSION_SCOPE}', $project_id, $first_event_id, $last_event_id, $engine, $text, $created_at, $source_key,
-    $origin, $anchor_source, $is_mixed)
+    $origin, $anchor_source, $is_mixed, $day)
   ON CONFLICT (source_key, engine) DO UPDATE SET
     project_id = excluded.project_id, first_event_id = excluded.first_event_id, last_event_id = excluded.last_event_id,
     text = excluded.text, created_at = excluded.created_at, origin = excluded.origin,
-    anchor_source = excluded.anchor_source, is_mixed = excluded.is_mixed`
+    anchor_source = excluded.anchor_source, is_mixed = excluded.is_mixed, day = excluded.day`
 
 /** A saved summary replaces whatever row its key and engine had. */
 const SAVE_SUMMARY = INSERT_SUMMARY
@@ -71,6 +74,7 @@ function parametersOf(record: SessionSummaryRecord, origin: SummaryOrigin): Reco
     origin,
     anchor_source: record.anchorSource,
     is_mixed: record.anchor.isMixed ? 1 : 0,
+    day: dayOfSessionKey(record.sourceKey),
   }
 }
 
