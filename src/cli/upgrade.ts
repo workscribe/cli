@@ -3,6 +3,7 @@ import chalk from 'chalk'
 import { log } from '../utils/logger'
 import type { JobRunResult, RunResult } from '../db/jobs/runner'
 import { getDataStatus, runDataJobs } from './data-jobs'
+import { runRetentionAfterUpgrade } from './retention-run'
 
 declare const __WORKSCRIBE_VERSION__: string
 
@@ -80,6 +81,9 @@ export function registerUpgrade(program: Command): void {
           log.info(`Upgrading: ${job.description}`)
         },
       })
-      if (!reportRun(result)) process.exit(1)
+      const isUpToDate = reportRun(result)
+      // Once the jobs are done, so removal never gets ahead of the summaries they prepare
+      if (isUpToDate) runRetentionAfterUpgrade()
+      if (!isUpToDate) process.exit(1)
     })
 }

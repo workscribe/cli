@@ -4,10 +4,12 @@ vi.mock('../../src/cli/data-jobs', () => ({
   runDataJobs: vi.fn(),
   getDataStatus: vi.fn(),
 }))
+vi.mock('../../src/cli/retention-run', () => ({ runRetentionAfterUpgrade: vi.fn() }))
 
 import { Command } from 'commander'
 import { getDataStatus, runDataJobs } from '../../src/cli/data-jobs'
 import { registerUpgrade } from '../../src/cli/upgrade'
+import { runRetentionAfterUpgrade } from '../../src/cli/retention-run'
 import { log } from '../../src/utils/logger'
 import type { JobRunResult } from '../../src/db/jobs/runner'
 
@@ -144,5 +146,26 @@ describe('workscribe upgrade', () => {
 
     expect(mockLog.error).toHaveBeenCalledWith(expect.stringContaining("Couldn't back up"))
     expect(exit).toHaveBeenCalledWith(1)
+  })
+
+  describe('removing old data once the jobs are done (WOR-179)', () => {
+    it('runs the removal after an upgrade that left the data up to date', async () => {
+      mockRunDataJobs.mockReturnValue({ backup: 'not-needed', jobs: [] })
+
+      await makeProgram().parseAsync(['upgrade'], { from: 'user' })
+
+      expect(runRetentionAfterUpgrade).toHaveBeenCalledOnce()
+    })
+
+    it('does not run it when a job failed or a check did not pass, so it never gets ahead of the jobs', async () => {
+      mockRunDataJobs.mockReturnValue({
+        backup: 'ready',
+        jobs: [jobResult({ outcome: 'failed', error: 'boom', verification: undefined })],
+      })
+
+      await makeProgram().parseAsync(['upgrade'], { from: 'user' })
+
+      expect(runRetentionAfterUpgrade).not.toHaveBeenCalled()
+    })
   })
 })
