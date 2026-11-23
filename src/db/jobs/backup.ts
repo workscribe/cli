@@ -4,7 +4,7 @@ import type { MigrationDatabase } from '../migration-types'
 import { isDatabaseLocked, withImmediateTransaction } from '../transaction'
 import { debugLog } from '../../utils/logger'
 import { errorMessage } from '../../utils/error-message'
-import { deleteMetaValue, getMetaValue, setMetaValue } from './store'
+import { deleteMetaValue, getMetaValue, getMetaValuesWithPrefix, setMetaValue } from './store'
 
 export const BACKUP_KEY_PREFIX = 'backup:'
 export const BACKUPS_KEPT = 3
@@ -49,7 +49,8 @@ type Claim = { status: 'exists'; path: string } | { status: 'busy' } | { status:
 function claimBackup(db: MigrationDatabase, key: string, now: Date): Claim {
   return withImmediateTransaction(db, () => {
     const record = parseBackupRecord(getMetaValue(db, key))
-    if (record?.state === 'done') return { status: 'exists', path: record.path }
+    // A backup that was removed (by age, or by hand) is no backup: a claim that names a file that is gone is taken again
+    if (record?.state === 'done' && fs.existsSync(record.path)) return { status: 'exists', path: record.path }
     const isClaimedElsewhere = record?.state === 'claimed' && now.getTime() - Date.parse(record.at) < STALE_CLAIM_MS
     if (isClaimedElsewhere) return { status: 'busy' }
     setMetaValue(db, key, JSON.stringify({ state: 'claimed', at: now.toISOString() }))
@@ -74,6 +75,35 @@ export function pruneBackups(directory: string, keep: number = BACKUPS_KEPT): vo
     .map((file) => ({ file, modifiedAt: fs.statSync(path.join(directory, file)).mtimeMs }))
     .sort((first, second) => second.modifiedAt - first.modifiedAt)
   for (const backup of backups.slice(keep)) fs.rmSync(path.join(directory, backup.file), { force: true })
+}
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000
+
+/**
+ * Removes the automatic backups (`workscribe-*.db`, the same files `pruneBackups` counts) older than `days` by their
+ * modification time, which the backup scrub restores. Anything else in the folder, such as a copy someone made by hand,
+ * is theirs and stays. Returns the files it removed, so the claims that name them can be forgotten (`forgetBackups`).
+ */
+export function pruneExpiredBackups(directory: string, days: number, now: Date): string[] {
+  if (!fs.existsSync(directory)) return []
+  const oldestKept = now.getTime() - days * MS_PER_DAY
+  const expired = fs
+    .readdirSync(directory)
+    .filter((file) => FINISHED_BACKUP.test(file))
+    .map((file) => path.join(directory, file))
+    .filter((file) => fs.statSync(file).mtimeMs < oldestKept)
+  for (const file of expired) fs.rmSync(file, { force: true })
+  return expired
+}
+
+/** Forgets the `done` claims whose backup was removed, so `status` doesn't name a file that is gone. */
+export function forgetBackups(db: MigrationDatabase, removedPaths: string[]): void {
+  if (removedPaths.length === 0) return
+  const removed = new Set(removedPaths)
+  for (const [version, value] of getMetaValuesWithPrefix(db, BACKUP_KEY_PREFIX)) {
+    const record = parseBackupRecord(value)
+    if (record?.state === 'done' && removed.has(record.path)) deleteMetaValue(db, backupKey(version))
+  }
 }
 
 function backupKey(cliVersion: string): string {
