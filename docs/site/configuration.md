@@ -183,6 +183,25 @@ Set it with `workscribe config set`: that also re-links your history the next ti
 
 ---
 
+## Retention
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `retention.days` | number | `100` | Captured events older than this many days are removed, a whole day at a time. A whole number of at least 7. |
+| `retention.keepForever` | boolean | `false` | `true` removes nothing, ever, backups by age included. It is also recorded in the database, so a damaged or deleted `config.json` can't turn removal back on. |
+| `retention.summaryDays` | number or `none` | `none` | Saved summaries of days older than this are removed too. At least `retention.days`; `none` keeps them. |
+
+```bash
+workscribe config set retention.days 180
+workscribe config set retention.keepForever true
+workscribe config set retention.summaryDays 365
+workscribe config set retention.summaryDays none
+```
+
+Values are read strictly: `retention.days ""`, `1.5` or `3` is refused, and so is `keepForever yes`. Edited by hand in `config.json`, a wrong value or a `retention` that isn't an object means nothing is removed until it is fixed. See [How long data is kept](/privacy#how-long-data-is-kept) for what is removed and when, and `workscribe retention` to see it.
+
+---
+
 ## Projects
 
 Override the display name for a repository whose local folder name differs from the actual project name.
@@ -288,6 +307,11 @@ Workscribe ships with built-in support for Claude Code, Aider, Gemini, GitHub Co
   },
   "summary": {
     "format": "markdown"
+  },
+  "retention": {
+    "days": 100,
+    "keepForever": false,
+    "summaryDays": null
   },
   "projects": {
     "/Users/me/sandbox/chronicle": "workscribe"

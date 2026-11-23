@@ -24,6 +24,7 @@ Safe to re-run at any time — installs missing hooks, updates outdated ones, an
 - Detects installed AI coding tools (Claude Code, Antigravity, Aider, etc.) and offers to install a session capture hook for each — opt-in, defaults to no. If a hook is already there but outdated (from an older version, or pinned to a Node.js version that's since been removed), offers to update it instead — defaults to yes, since you opted in before
 - Detects coding agents (Claude Code, Codex, GitHub Copilot, Cursor) and offers to install the [Workscribe agent skill](#agent-skill) for each — defaults to yes, and only asks when the skill is missing or outdated
 - If your config still has AI provider settings from Workscribe 1.x (including an API key), offers to remove them — 2.0 doesn't use them
+- Says that captured events are removed after 100 days (your limit, if you changed it) while summaries stay, and how to keep everything — see [How long data is kept](/privacy#how-long-data-is-kept)
 
 **Shell hook updates:**
 
@@ -426,6 +427,8 @@ workscribe export --fresh
 | `--output <path>` | Custom output path (default: `~/.workscribe/exports/workscribe-<date>.md`) |
 | `--fresh` | Ignore saved summaries and write the template's summary for every session |
 
+For a day whose events were removed (see [How long data is kept](/privacy#how-long-data-is-kept)), `workscribe summary --date` and `export --date` show the summaries saved for it, with a note that the activity is gone; with `--format json` that is one document with `activityRemoved: true` and `keptSummaries`. A day that never had activity still says so.
+
 The file holds the same day `workscribe summary` shows: a summary the agent skill saved for a thread is used, and the template tells the rest, each thread under its own `## ` heading, with the `Alongside:` lines and the day's `Time worked:` line. It's always markdown, whatever `summary.format` is set to. Notes about the summary (which sessions came from saved summaries, events left out) are printed to the terminal, not written to the file.
 
 ---
@@ -613,6 +616,7 @@ workscribe status
 - Last captured event
 - How summaries are made (the offline template, plus the agent skill)
 - A notice if your config still has AI provider settings from Workscribe 1.x, with how to remove them
+- A "Retention" line: how long events are kept and when the oldest day goes, or that everything is kept, or why removal is paused
 - A "Data" line: whether your stored data is up to date, has upgrades pending, or an upgrade failed — with rows a data upgrade couldn't resolve and the latest backup, when there are any
 - An "Agent skill" line for each detected coding agent: installed (with version), outdated, or not installed — with the command to fix it
 - Pending security alerts count (if any)
@@ -630,12 +634,14 @@ workscribe upgrade
 
 Some updates change how stored activity is organised. Workscribe does that work in small steps: a little at a time before `status`, `summary`, `week`, `export`, `events` and `history` (at most about 2 seconds each time), never while capturing and never for `context` or `sessions`, which editors and coding agents call. `workscribe upgrade` does all of it in one go and prints what it checked.
 
-- **A backup comes first.** Before the first change after an update, Workscribe copies your database to `~/.workscribe/backups/` (once per version; the newest 3 are kept). If the backup can't be made, nothing is changed.
+- **A backup comes first.** Before the first change after an update, Workscribe copies your database to `~/.workscribe/backups/` (once per version; the newest 3 are kept, none older than your [retention limit](/privacy#how-long-data-is-kept)). If the backup can't be made, nothing is changed.
 - **Interrupted is fine.** Each step is saved as it finishes; the next run carries on where the last one stopped.
 - **Nothing is deleted.** Rows an upgrade can't sort out are kept as they are and listed, and `workscribe status` shows how many. The one thing an upgrade removes is text matching a secret pattern, which is replaced with `[REDACTED]` (see [Privacy](/privacy)).
 - **Past days can read differently.** An upgrade can change which category a stored command belongs to, as when commands that only read moved to `exploring`. Summaries you saved aren't changed.
 
 Exits with 1 if an upgrade failed or its check didn't pass, so it can run in a script. With nothing to do, it says your data is up to date.
+
+Once the data is up to date, `upgrade` also runs the [removal of old data](#workscribe-retention) with no time limit, and, if events were removed, rewrites the database file so their text leaves it. That rewrite stops capture from writing while it runs (on a large database, that can be a while), so run `upgrade` when you aren't working: a command run in that time may not be recorded.
 
 ---
 
@@ -720,6 +726,23 @@ workscribe exclude --remove ~/work/client
 | `--remove <path>` | Stop excluding a directory. Capture there resumes with the next command |
 
 Everything in or under the directory is dropped before it is stored, from the shell hook, the VS Code extension and coding agents. A command that names the directory by its full path (`cd ~/work/client && npm test`) is dropped too. Events already recorded there are kept, and the command says how many. It refuses `/` and your home directory. See [Excluding directories](/privacy#excluding-directories) for what it covers and what it doesn't.
+
+---
+
+## workscribe retention
+
+Show how long captured data is kept, and what the next removal takes.
+
+```bash
+workscribe retention
+workscribe retention run
+```
+
+`workscribe retention` shows how long events are kept, how long summaries are, the oldest day still stored and the day it goes, when removal starts if it hasn't, and what the next removal takes (a count of events and days: it never changes anything). If removal is paused it names the data upgrade it is waiting for, and if your config can't be read it says nothing is removed.
+
+`workscribe retention run` removes what has expired now, ignoring the once-a-day limit and with no time limit. It does not start removal early: until the day removal starts, it says when that is and removes nothing. It doesn't rewrite the database file; `workscribe upgrade` does that.
+
+Change the limit with `workscribe config set retention.days`, keep everything with `workscribe config set retention.keepForever true`. See [How long data is kept](/privacy#how-long-data-is-kept).
 
 ---
 
