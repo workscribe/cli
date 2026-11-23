@@ -7,6 +7,7 @@ export const LAST_RUN_KEY = 'retention:last-run'
 export const ANNOUNCED_AT_KEY = 'retention:announced-at'
 export const WARNED_KEY = 'retention:warned'
 export const CLEANUP_KEY = 'retention:cleanup'
+export const VACUUMED_KEY = 'retention:vacuumed'
 
 const KEEP_FOREVER_VALUE = 'true'
 
