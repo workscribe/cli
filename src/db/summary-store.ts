@@ -105,3 +105,8 @@ export function getSummaryBySource(db: MigrationDatabase, sourceKey: string, eng
     | undefined
   return row ?? null
 }
+
+/** The summaries stored for a local day, by the `day` they describe (WOR-179): what is left of a day whose events were removed. */
+export function getSummariesOfDay(db: MigrationDatabase, day: string): SummaryRow[] {
+  return db.prepare('SELECT * FROM summary WHERE day = ? ORDER BY created_at, id').all(day) as unknown as SummaryRow[]
+}

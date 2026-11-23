@@ -2,7 +2,9 @@ import { describe, it, expect, vi } from 'vitest'
 import { DatabaseSync } from 'node:sqlite'
 import { applyMigrations } from '../../src/db/migrate'
 import { MIGRATIONS } from '../../src/db/migrations'
-import { getSummaryBySource, mapSummary, saveAnchoredSummary } from '../../src/db/summary-store'
+import { getSummariesOfDay, getSummaryBySource, mapSummary, saveAnchoredSummary } from '../../src/db/summary-store'
+import { removeExpiredEvents } from '../../src/db/retention'
+import { localDateOf } from '../../src/utils/format'
 
 // Migration 006 normalises stored events using the user's config — keep it off the real one
 vi.mock('../../src/config', () => ({ readConfig: vi.fn(() => ({ capture: { aiTools: true } })) }))
@@ -98,5 +100,27 @@ describe('summary-store', () => {
     mapSummary(db, record())
 
     expect(getSummaryBySource(db, KEY, 'skill')).toMatchObject({ origin: 'mapped', first_event_id: 7 })
+  })
+})
+
+describe('summaries of a day whose events were removed (WOR-179)', () => {
+  it('are still found by their day, with the events they described gone', () => {
+    const db = database()
+    const eventId = Number(
+      db
+        .prepare(
+          "INSERT INTO events (captured_at, command, cwd, category) VALUES ('2026-10-28T09:30:00.000Z', 'npm test', '/r', 'testing')"
+        )
+        .run().lastInsertRowid
+    )
+    saveAnchoredSummary(db, record({ anchor: { ...ANCHOR, firstEventId: eventId, lastEventId: eventId } }))
+    saveAnchoredSummary(db, record({ sourceKey: 'api|2026-10-29T09:00:00.000Z', text: 'the next day' }))
+
+    removeExpiredEvents(db, { cutoff: '2026-11-15T00:00:00.000Z' })
+
+    expect(db.prepare('SELECT COUNT(*) AS count FROM events').get()).toEqual({ count: 0 })
+    const day = localDateOf('2026-10-28T09:00:00.000Z')
+    expect(getSummariesOfDay(db, day).map((summary) => summary.text)).toEqual(['Fixed the token refresh race'])
+    expect(getSummariesOfDay(db, '2020-01-01')).toEqual([])
   })
 })

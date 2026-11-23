@@ -11,6 +11,16 @@ import { printExcludedFooter, printSavedNote } from './day-notes'
 import { createSummaryWriter } from '../summary/writer'
 import { printLegacyAiNotice } from './notices'
 import { loadDayThreads, requireThreadData } from './thread-day'
+import { renderKeptDay } from '../summary/kept'
+import { keptSummariesOf } from './kept-day'
+
+/** Writes the day's markdown to `output`, or to the exports folder, and says where. */
+function writeExport(output: string | undefined, date: string, summary: string): void {
+  const outputPath = output ?? path.join(EXPORTS_DIR, `workscribe-${date}.md`)
+  if (!fs.existsSync(EXPORTS_DIR)) fs.mkdirSync(EXPORTS_DIR, { recursive: true, mode: 0o700 })
+  fs.writeFileSync(outputPath, `# Work Summary — ${date}\n\n${summary}\n`, { encoding: 'utf-8', mode: 0o600 })
+  log.success(`Saved: ${outputPath}`)
+}
 
 export function registerExport(program: Command): void {
   program
@@ -36,7 +46,13 @@ export function registerExport(program: Command): void {
       requireThreadData()
       const blocks = loadDayThreads(date)
       if (blocks.length === 0) {
-        log.plain(`No activity captured for ${date}`)
+        // A day whose events were removed (WOR-179) still has the summaries saved for it
+        const kept = keptSummariesOf(date)
+        if (kept.length === 0) {
+          log.plain(`No activity captured for ${date}`)
+          return
+        }
+        writeExport(options.output, date, renderKeptDay(kept))
         return
       }
 
@@ -49,15 +65,7 @@ export function registerExport(program: Command): void {
         process.exit(1)
       }
 
-      const outputPath = options.output ?? path.join(EXPORTS_DIR, `workscribe-${date}.md`)
-
-      if (!fs.existsSync(EXPORTS_DIR)) fs.mkdirSync(EXPORTS_DIR, { recursive: true, mode: 0o700 })
-
-      fs.writeFileSync(outputPath, `# Work Summary — ${date}\n\n${day.fullSummary}\n`, {
-        encoding: 'utf-8',
-        mode: 0o600,
-      })
-      log.success(`Saved: ${outputPath}`)
+      writeExport(options.output, date, day.fullSummary)
       // Notes about the summary stay on the console, out of the file
       printSavedNote(day.saved)
       if (day.needsGeneration) {

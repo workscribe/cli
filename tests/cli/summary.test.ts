@@ -15,6 +15,8 @@ vi.mock('../../src/summary/writer', () => ({
   createSummaryWriter: vi.fn(),
 }))
 
+vi.mock('../../src/cli/kept-day', () => ({ keptSummariesOf: vi.fn(() => []) }))
+
 vi.mock('../../src/config', () => ({
   readConfig: vi.fn(),
 }))
@@ -64,6 +66,7 @@ import fs from 'fs'
 import { createSummaryWriter } from '../../src/summary/writer'
 import { readConfig } from '../../src/config'
 import { saveThreadSummary } from '../../src/db'
+import { keptSummariesOf } from '../../src/cli/kept-day'
 import { loadDayThreads, requireThreadData } from '../../src/cli/thread-day'
 import { postToWebhook } from '../../src/integrations/webhook'
 import { isSlackWebhookUrl } from '../../src/integrations/slack'
@@ -349,6 +352,50 @@ describe('workscribe summary (daily)', () => {
 
     expect(mockLog.plain).toHaveBeenCalledWith('No activity captured for 2026-08-17')
     expect(summarize).not.toHaveBeenCalled()
+  })
+
+  describe('a day whose events were removed (WOR-179)', () => {
+    const KEPT = ['## api (main) — 1h\n\nFixed the refresh race.']
+
+    it('shows the summaries saved for it, with a note saying the activity is gone', async () => {
+      vi.mocked(loadDayThreads).mockReturnValue([])
+      vi.mocked(keptSummariesOf).mockReturnValue(KEPT)
+      const summarize = mockSummarize()
+
+      await makeProgram().parseAsync(['summary', '--date', '2026-08-01'], { from: 'user' })
+
+      expect(keptSummariesOf).toHaveBeenCalledWith('2026-08-01')
+      const printed = mockLog.plain.mock.calls.map((call) => String(call[0])).join('\n')
+      expect(printed).toContain('Fixed the refresh race.')
+      expect(printed).toContain('has been removed')
+      expect(printed).not.toContain('No activity captured')
+      expect(summarize).not.toHaveBeenCalled()
+    })
+
+    it('still says there was no activity for a day that never had any', async () => {
+      vi.mocked(loadDayThreads).mockReturnValue([])
+      vi.mocked(keptSummariesOf).mockReturnValue([])
+
+      await makeProgram().parseAsync(['summary', '--date', '2026-08-02'], { from: 'user' })
+
+      expect(mockLog.plain).toHaveBeenCalledWith('No activity captured for 2026-08-02')
+    })
+
+    it('prints only JSON with the json format, so it can be piped', async () => {
+      vi.mocked(loadDayThreads).mockReturnValue([])
+      vi.mocked(keptSummariesOf).mockReturnValue(KEPT)
+
+      await makeProgram().parseAsync(['summary', '--date', '2026-08-01', '--format', 'json'], { from: 'user' })
+
+      expect(mockLog.plain).toHaveBeenCalledTimes(1)
+      expect(JSON.parse(String(mockLog.plain.mock.calls[0][0]))).toEqual({
+        date: '2026-08-01',
+        activeMinutes: null,
+        sessions: [],
+        activityRemoved: true,
+        keptSummaries: KEPT,
+      })
+    })
   })
 
   it("stops before reading the day while the data upgrade isn't finished", async () => {
