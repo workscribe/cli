@@ -302,3 +302,67 @@ describe('runRetention: reminders before the first removal (WOR-179)', () => {
     expect(reminderOn(fixture, 92)).toEqual({ eventDays: 1, events: 1 })
   })
 })
+
+describe('runRetention: summaries have a limit of their own (WOR-179)', () => {
+  const withSummaryDays = (summaryDays: number | null) => ({
+    policy: { status: 'ok' as const, retention: { days: LIMIT_DAYS, keepForever: false, summaryDays } },
+  })
+
+  function started(): Setup {
+    const fixture = setup()
+    insertEvent(fixture.db, onDay(1))
+    for (const [index, day] of ['2026-11-23', '2027-01-01', '2027-04-01'].entries()) {
+      fixture.db
+        .prepare(
+          `INSERT INTO summary (scope, engine, text, created_at, source_key, origin, anchor_source, day)
+           VALUES ('session', 'skill', 'text', '2027-05-01T10:00:00.000Z', ?, 'saved', 'thread', ?)`
+        )
+        .run(`api|${index}`, day)
+    }
+    run(fixture, onDay(1, 10), withSummaryDays(150))
+    return fixture
+  }
+
+  const summaryDays = (fixture: Setup) =>
+    fixture.db.prepare('SELECT day FROM summary ORDER BY day').all() as { day: string }[]
+
+  it('keeps every summary when there is no limit for them, however old', () => {
+    const fixture = started()
+
+    run(fixture, onDay(400), withSummaryDays(null))
+
+    expect(summaryDays(fixture)).toHaveLength(3)
+  })
+
+  it('removes the summaries of days older than its own limit when removal runs', () => {
+    const fixture = started()
+
+    // Day 500 is 2028-04-06; 150 days before it is 2027-11-08, so all three days of summaries are older
+    const outcome = run(fixture, onDay(500), withSummaryDays(150))
+
+    expect(outcome).toMatchObject({ status: 'ran', summaries: 3 })
+    expect(summaryDays(fixture)).toEqual([])
+  })
+
+  it("keeps the newer ones, and the events' limit is a separate one", () => {
+    const fixture = started()
+
+    const outcome = run(fixture, onDay(150), withSummaryDays(150))
+
+    expect(outcome).toMatchObject({ status: 'ran', summaries: 0 })
+    expect(summaryDays(fixture)).toHaveLength(3)
+  })
+
+  it('waits for the grace like everything else: nothing is removed on the announcing run', () => {
+    const fixture = setup()
+    fixture.db
+      .prepare(
+        `INSERT INTO summary (scope, engine, text, created_at, source_key, origin, anchor_source, day)
+         VALUES ('session', 'skill', 'text', '2026-01-01T10:00:00.000Z', 'api|1', 'saved', 'thread', '2026-01-01')`
+      )
+      .run()
+
+    expect(run(fixture, onDay(300), withSummaryDays(150))).toMatchObject({ status: 'announced' })
+    expect(summaryDays(fixture)).toHaveLength(1)
+  })
+})

@@ -115,6 +115,14 @@ describe('runRetentionBeforeCommand', () => {
     expect(mockLog.notice).not.toHaveBeenCalled()
   })
 
+  it('says how many summaries went when summaryDays removed some', () => {
+    mockRun.mockReturnValue({ ...RAN, summaries: 3 })
+
+    runRetentionBeforeCommand()
+
+    expect(mockLog.notice).toHaveBeenCalledWith(expect.stringContaining('3 saved summaries'))
+  })
+
   it('stays quiet while paused: only `upgrade` says so', () => {
     mockRun.mockReturnValue({ status: 'skipped', reason: { kind: 'paused', job: 'summary-days' } })
 

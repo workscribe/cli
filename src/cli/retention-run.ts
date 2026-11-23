@@ -55,6 +55,9 @@ function report(outcome: RetentionOutcome, options: { isExplicit: boolean }): vo
   if (outcome.status === 'ran' && outcome.events > 0) {
     log.notice(`Removed ${outcome.events} captured events older than ${outcome.days} days. Your summaries stay.`)
   }
+  if (outcome.status === 'ran' && outcome.summaries > 0) {
+    log.notice(`Removed ${outcome.summaries} saved summaries, as retention.summaryDays says.`)
+  }
   if (outcome.status === 'skipped' && options.isExplicit) {
     const paused = pausedMessage(outcome.reason)
     if (paused !== null) log.notice(paused)

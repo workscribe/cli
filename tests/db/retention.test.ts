@@ -5,7 +5,7 @@ import os from 'os'
 import path from 'path'
 import { applyMigrations } from '../../src/db/migrate'
 import { MIGRATIONS } from '../../src/db/migrations'
-import { cutoffOf, removeExpiredEvents, removeOrphans } from '../../src/db/retention'
+import { cutoffOf, removeExpiredEvents, removeExpiredSummaries, removeOrphans } from '../../src/db/retention'
 import { localDateOf } from '../../src/utils/format'
 
 vi.mock('../../src/config', () => ({ readConfig: vi.fn(() => ({ capture: { aiTools: true } })) }))
@@ -223,5 +223,38 @@ describe('removeOrphans', () => {
     expect(db.prepare('SELECT date FROM activity_slot').all()).toEqual([{ date: '2026-11-01' }])
     expect(db.prepare('SELECT date FROM grouping_day').all()).toEqual([{ date: '2026-11-01' }])
     expect(count(db, 'project')).toBe(1)
+  })
+})
+
+describe('removeExpiredSummaries', () => {
+  function insertSummary(db: DatabaseSync, key: string, day: string | null): void {
+    db.prepare(
+      `INSERT INTO summary (scope, engine, text, created_at, source_key, origin, anchor_source, day)
+       VALUES ('session', 'skill', 'text', '2026-11-30T10:00:00.000Z', ?, 'saved', 'thread', ?)`
+    ).run(key, day)
+  }
+
+  it('removes the summaries of days before the cutoff, and keeps the others, whatever day they were saved on', () => {
+    const { db } = openDatabase()
+    insertSummary(db, 'a|1', '2026-07-31')
+    insertSummary(db, 'a|2', '2026-10-31')
+    insertSummary(db, 'a|3', '2026-11-01')
+    insertSummary(db, 'a|4', '2026-11-20')
+
+    const removed = removeExpiredSummaries(db, noon(2026, 11, 1).toISOString())
+
+    expect(removed).toBe(2)
+    expect(db.prepare('SELECT day FROM summary ORDER BY day').all()).toEqual([
+      { day: '2026-11-01' },
+      { day: '2026-11-20' },
+    ])
+  })
+
+  it('never removes a summary whose day is not known: it cannot be said to be old', () => {
+    const { db } = openDatabase()
+    insertSummary(db, 'a|1', null)
+
+    expect(removeExpiredSummaries(db, noon(2026, 11, 1).toISOString())).toBe(0)
+    expect(count(db, 'summary')).toBe(1)
   })
 })

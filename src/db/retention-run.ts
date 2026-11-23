@@ -2,7 +2,7 @@ import type { MigrationDatabase } from './migration-types'
 import type { DataJob } from './jobs/types'
 import { forgetBackups, pruneExpiredBackups } from './jobs/backup'
 import { getJobRow, getMetaValue, isJobDone, setMetaValue } from './jobs/store'
-import { cutoffOf, removeExpiredEvents, removeOrphans, type RemovalStop } from './retention'
+import { cutoffOf, removeExpiredEvents, removeExpiredSummaries, removeOrphans, type RemovalStop } from './retention'
 import { isFileCleanupPending, requestFileCleanup, runFileCleanup, type FileCleanupStatus } from './retention-cleanup'
 import { ANNOUNCED_AT_KEY, FIRST_REMOVAL_KEY, LAST_RUN_KEY, WARNED_KEY, isKeepForeverMirrored } from './retention-state'
 import type { RetentionPolicy } from '../config/retention'
@@ -61,6 +61,7 @@ export type RetentionOutcome =
       status: 'ran'
       days: number
       events: number
+      summaries: number
       backupsRemoved: number
       stoppedBecause: RemovalStop
       cleanup: FileCleanupStatus
@@ -139,24 +140,32 @@ function pausedBy(db: MigrationDatabase, jobs: DataJob[]): string | null {
 }
 
 /** The limit to use, or why nothing is removed. Fails closed: a damaged config, or the opt-out in the database, removes nothing. */
-function limitOrReason(db: MigrationDatabase, options: RetentionRunOptions): { days: number } | { skip: SkipReason } {
+function limitOrReason(
+  db: MigrationDatabase,
+  options: RetentionRunOptions
+): { days: number; summaryDays: number | null } | { skip: SkipReason } {
   const { policy } = options
   if (policy.status === 'unreadable') return { skip: { kind: 'unreadable', reason: policy.reason } }
   if (policy.retention.keepForever || isKeepForeverMirrored(db)) return { skip: { kind: 'keep-forever' } }
   const paused = pausedBy(db, options.jobs)
-  return paused === null ? { days: policy.retention.days } : { skip: { kind: 'paused', job: paused } }
+  if (paused !== null) return { skip: { kind: 'paused', job: paused } }
+  return { days: policy.retention.days, summaryDays: policy.retention.summaryDays }
 }
 
 function runRemoval(
   db: MigrationDatabase,
   options: RetentionRunOptions,
-  days: number,
+  limit: { days: number; summaryDays: number | null },
   today: string
 ): RetentionOutcome {
+  const { days, summaryDays } = limit
   const cutoff = cutoffOf(options.now, days)
   const removal = removeExpiredEvents(db, { cutoff, isOverBudget: options.isOverBudget })
   if (removal.events > 0) requestFileCleanup(db)
   if (removal.stoppedBecause === 'finished') removeOrphans(db, cutoff)
+  // Summaries have a limit of their own, none unless it is set; their text can hold what a command did
+  const summaries = summaryDays === null ? 0 : removeExpiredSummaries(db, cutoffOf(options.now, summaryDays))
+  if (summaries > 0) requestFileCleanup(db)
   const removedBackups = pruneExpiredBackups(options.backupsDirectory, days, options.now)
   forgetBackups(db, removedBackups)
   const cleanup = isFileCleanupPending(db) ? runFileCleanup(db, { canVacuum: options.canVacuum }) : 'clean'
@@ -166,6 +175,7 @@ function runRemoval(
     status: 'ran',
     days,
     events: removal.events,
+    summaries,
     backupsRemoved: removedBackups.length,
     stoppedBecause: removal.stoppedBecause,
     cleanup,
@@ -195,5 +205,5 @@ export function runRetention(db: MigrationDatabase, options: RetentionRunOptions
   if (!options.ignoreThrottle && getMetaValue(db, LAST_RUN_KEY) === today) {
     return { status: 'skipped', reason: { kind: 'throttled' } }
   }
-  return runRemoval(db, options, days, today)
+  return runRemoval(db, options, limit, today)
 }

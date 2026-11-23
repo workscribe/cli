@@ -112,3 +112,14 @@ export function removeOrphans(db: MigrationDatabase, cutoff: string): OrphanCoun
     })
   )
 }
+
+/**
+ * Removes the saved summaries of days before the cutoff, for `retention.summaryDays`. A summary whose day is not known
+ * (null) is never removed: it can't be said to be old. Returns how many went.
+ */
+export function removeExpiredSummaries(db: MigrationDatabase, cutoff: string): number {
+  const firstKeptDay = localDateOf(cutoff)
+  return withSecureDelete(db, () =>
+    withImmediateTransaction(db, () => changesOf(db.prepare('DELETE FROM summary WHERE day < ?').run(firstKeptDay)))
+  )
+}
