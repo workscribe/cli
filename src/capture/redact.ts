@@ -334,7 +334,7 @@ function writtenTextPatterns(): RegExp[] {
 }
 
 // Patterns that match known sensitive values
-const BUILTIN_PATTERNS: RegExp[] = [
+const PATTERNS_WITHOUT_GUARD: RegExp[] = [
   // AWS access keys
   /AKIA[0-9A-Z]{16}/g,
   // AWS secret access keys (40 char base64-ish after common env vars), and the session and security tokens, as
@@ -446,6 +446,18 @@ const BUILTIN_PATTERNS: RegExp[] = [
   // A value assigned in code, last so the patterns above get the first look: `node -e "const API_KEY = '…'"`
   ...codeAssignments(),
 ]
+
+/**
+ * Lets a pattern skip whitespace without looking behind it (WOR-205). A pattern is `(?<=prefix)value`, and the engine
+ * tries the prefix at every position first: inside a run of whitespace each position read back over the whole run
+ * (`\s+`, `[\s=]*`), so a run of n took n² steps. No value starts with whitespace, so a lookahead that needs a
+ * non-space character first costs one step per position and the prefix is read only where a value could start.
+ */
+function skippingWhitespace(pattern: RegExp): RegExp {
+  return new RegExp(String.raw`(?=\S)${pattern.source}`, pattern.flags)
+}
+
+const BUILTIN_PATTERNS = PATTERNS_WITHOUT_GUARD.map(skippingWhitespace)
 
 export const REDACTED_TEXT = '[REDACTED]'
 
