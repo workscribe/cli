@@ -126,7 +126,7 @@ describe('runRetention: the first run announces and removes nothing', () => {
 
     const outcome = run(fixture, today)
 
-    expect(outcome).toEqual({
+    expect(outcome).toMatchObject({
       status: 'announced',
       days: LIMIT_DAYS,
       firstRemovalOn: addDays(localDateStr(today), GRACE_DAYS),
@@ -235,5 +235,70 @@ describe('runRetention: removing', () => {
     expect(run(fixture, onDay(102), { canVacuum: false })).toMatchObject({ cleanup: 'waiting-for-vacuum' })
     expect(run(fixture, onDay(103), { canVacuum: true })).toMatchObject({ cleanup: 'clean' })
     expect(run(fixture, onDay(104), { canVacuum: false })).toMatchObject({ cleanup: 'clean' })
+  })
+})
+
+describe('runRetention: reminders before the first removal (WOR-179)', () => {
+  /** Told on day 200 with events from days 1 to 5, so the first removal is on day 214 (200 + 14). */
+  function announcedFixture(): Setup {
+    const fixture = setup()
+    for (let day = 1; day <= 5; day++) {
+      insertEvent(fixture.db, onDay(day, 9))
+      insertEvent(fixture.db, onDay(day, 15))
+    }
+    run(fixture, onDay(200))
+    return fixture
+  }
+  const reminderOn = (fixture: Setup, day: number) => {
+    const outcome = run(fixture, onDay(day))
+    return outcome.status === 'waiting' ? outcome.reminder : 'not waiting'
+  }
+
+  it('says what the first removal takes: the days with events, and how many events', () => {
+    const fixture = setup()
+    for (let day = 1; day <= 5; day++) insertEvent(fixture.db, onDay(day))
+    insertEvent(fixture.db, onDay(5, 15))
+
+    expect(run(fixture, onDay(200))).toMatchObject({ status: 'announced', preview: { eventDays: 5, events: 6 } })
+  })
+
+  it('counts the announcement as the 14 day reminder, then reminds at 10, 5 and 1 days, once each', () => {
+    const fixture = announcedFixture()
+
+    expect(reminderOn(fixture, 201)).toBeNull()
+    expect(reminderOn(fixture, 203)).toBeNull()
+    expect(reminderOn(fixture, 204)).toEqual({ eventDays: 5, events: 10 })
+    expect(reminderOn(fixture, 204)).toBeNull()
+    expect(reminderOn(fixture, 205)).toBeNull()
+    expect(reminderOn(fixture, 209)).toEqual({ eventDays: 5, events: 10 })
+    expect(reminderOn(fixture, 210)).toBeNull()
+    expect(reminderOn(fixture, 213)).toEqual({ eventDays: 5, events: 10 })
+    expect(reminderOn(fixture, 213)).toBeNull()
+  })
+
+  it('shows one reminder, not several, when days went by without a command', () => {
+    const fixture = announcedFixture()
+
+    expect(reminderOn(fixture, 212)).toEqual({ eventDays: 5, events: 10 })
+    expect(reminderOn(fixture, 212)).toBeNull()
+    expect(reminderOn(fixture, 213)).toEqual({ eventDays: 5, events: 10 })
+  })
+
+  it('never reminds again once the removal has started', () => {
+    const fixture = announcedFixture()
+    reminderOn(fixture, 213)
+
+    expect(run(fixture, onDay(214))).toMatchObject({ status: 'ran', events: 10 })
+    expect(run(fixture, onDay(215))).toMatchObject({ status: 'ran' })
+  })
+
+  it('reminds a fresh install 14 days before day 102, when the first day goes', () => {
+    const fixture = setup()
+    insertEvent(fixture.db, onDay(1))
+    run(fixture, onDay(1))
+
+    expect(reminderOn(fixture, 87)).toBeNull()
+    expect(reminderOn(fixture, 88)).toEqual({ eventDays: 1, events: 1 })
+    expect(reminderOn(fixture, 92)).toEqual({ eventDays: 1, events: 1 })
   })
 })

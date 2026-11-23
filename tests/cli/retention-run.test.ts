@@ -42,12 +42,66 @@ describe('runRetentionBeforeCommand', () => {
   })
 
   it('tells people about the removal the first time, with the date and how to keep everything', () => {
-    mockRun.mockReturnValue({ status: 'announced', days: 100, firstRemovalOn: '2026-12-07' })
+    mockRun.mockReturnValue({
+      status: 'announced',
+      days: 100,
+      firstRemovalOn: '2026-12-07',
+      preview: { eventDays: 12, events: 340 },
+    })
 
     runRetentionBeforeCommand()
 
     expect(mockLog.notice).toHaveBeenCalledWith(expect.stringContaining('2026-12-07'))
     expect(mockLog.notice).toHaveBeenCalledWith(expect.stringContaining('retention.keepForever'))
+    expect(mockLog.notice).toHaveBeenCalledWith(expect.stringContaining('340 captured events, from 12 days'))
+  })
+
+  it.each([
+    [10, 'in 10 days'],
+    [1, 'tomorrow'],
+  ])('reminds %i days before, saying "%s", the date and what goes', (daysUntil, wording) => {
+    mockRun.mockReturnValue({
+      status: 'waiting',
+      days: 100,
+      firstRemovalOn: '2026-12-07',
+      daysUntil,
+      reminder: { eventDays: 3, events: 20 },
+    })
+
+    runRetentionBeforeCommand()
+
+    const message = mockLog.notice.mock.calls[0][0] as string
+    expect(message).toContain(wording)
+    expect(message).toContain('2026-12-07')
+    expect(message).toContain('20 captured events, from 3 days')
+    expect(message).toContain('retention.keepForever')
+  })
+
+  it('says nothing on a day with no reminder due', () => {
+    mockRun.mockReturnValue({
+      status: 'waiting',
+      days: 100,
+      firstRemovalOn: '2026-12-07',
+      daysUntil: 8,
+      reminder: null,
+    })
+
+    runRetentionBeforeCommand()
+
+    expect(mockLog.notice).not.toHaveBeenCalled()
+  })
+
+  it('says, when nothing is old enough yet, that it then removes one day at a time', () => {
+    mockRun.mockReturnValue({
+      status: 'announced',
+      days: 100,
+      firstRemovalOn: '2027-03-04',
+      preview: { eventDays: 0, events: 0 },
+    })
+
+    runRetentionBeforeCommand()
+
+    expect(mockLog.notice).toHaveBeenCalledWith(expect.stringContaining('one day at a time'))
   })
 
   it('says how many events a run removed, and is silent when it removed none', () => {
