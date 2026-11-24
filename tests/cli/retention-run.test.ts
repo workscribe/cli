@@ -7,12 +7,11 @@ vi.mock('../../src/utils/paths', () => ({ BACKUPS_DIR: '/backups' }))
 vi.mock('../../src/db/retention-run', () => ({ runRetention: vi.fn() }))
 vi.mock('../../src/db/retention-cleanup', () => ({
   isFileCleanupPending: vi.fn(() => false),
-  isVacuumPending: vi.fn(() => false),
   runFileCleanup: vi.fn(),
 }))
 
 import { runRetention } from '../../src/db/retention-run'
-import { isFileCleanupPending, isVacuumPending, runFileCleanup } from '../../src/db/retention-cleanup'
+import { isFileCleanupPending, runFileCleanup } from '../../src/db/retention-cleanup'
 import { runRetentionAfterUpgrade, runRetentionBeforeCommand } from '../../src/cli/retention-run'
 import { log } from '../../src/utils/logger'
 
@@ -157,13 +156,28 @@ describe('runRetentionAfterUpgrade', () => {
     expect(mockLog.notice).toHaveBeenCalledWith(expect.stringContaining('summary-days'))
   })
 
-  it('finishes a pending file cleanup, warning first that captures may be lost while the file is rewritten', () => {
-    vi.mocked(isFileCleanupPending).mockReturnValue(true)
-    vi.mocked(isVacuumPending).mockReturnValue(true)
+  it('warns, right before the VACUUM that this run does, that captures may be lost while it runs', () => {
+    mockRun.mockImplementation((_db, options) => {
+      options.beforeVacuum?.()
+      return RAN
+    })
 
     runRetentionAfterUpgrade()
 
     expect(mockLog.notice).toHaveBeenCalledWith(expect.stringContaining('may be lost'))
-    expect(runFileCleanup).toHaveBeenCalledWith(expect.anything(), { canVacuum: true })
+    expect(mockLog.notice).toHaveBeenCalledTimes(1)
+  })
+
+  it('finishes a cleanup left from an earlier run, with the same warning first', () => {
+    vi.mocked(isFileCleanupPending).mockReturnValue(true)
+    vi.mocked(runFileCleanup).mockImplementation((_db, options) => {
+      options.beforeVacuum?.()
+      return 'clean'
+    })
+
+    runRetentionAfterUpgrade()
+
+    expect(runFileCleanup).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ canVacuum: true }))
+    expect(mockLog.notice).toHaveBeenCalledWith(expect.stringContaining('may be lost'))
   })
 })

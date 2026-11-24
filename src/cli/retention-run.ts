@@ -1,7 +1,7 @@
 import { readRetentionPolicy } from '../config'
 import { getDb } from '../db'
 import { JOBS } from '../db/jobs'
-import { isVacuumPending, isFileCleanupPending, runFileCleanup } from '../db/retention-cleanup'
+import { isFileCleanupPending, runFileCleanup } from '../db/retention-cleanup'
 import { runRetention, type RemovalPreview, type RetentionOutcome, type SkipReason } from '../db/retention-run'
 import { BACKUPS_DIR } from '../utils/paths'
 import { debugLog, log } from '../utils/logger'
@@ -86,6 +86,10 @@ const VACUUM_NOTICE =
   'Clearing removed text from the database file. Captures made while this runs, which can take a while on a large ' +
   'database, may be lost.'
 
+const warnAboutVacuum = (): void => {
+  log.notice(VACUUM_NOTICE)
+}
+
 /** After `workscribe upgrade`'s data jobs: no time limit, and the one VACUUM that rewrites the file may run. */
 export function runRetentionAfterUpgrade(): void {
   try {
@@ -97,12 +101,12 @@ export function runRetentionAfterUpgrade(): void {
         jobs: JOBS,
         backupsDirectory: BACKUPS_DIR,
         canVacuum: true,
+        beforeVacuum: warnAboutVacuum,
       }),
       { isExplicit: true }
     )
-    if (!isFileCleanupPending(db)) return
-    if (isVacuumPending(db)) log.notice(VACUUM_NOTICE)
-    runFileCleanup(db, { canVacuum: true })
+    // A cleanup left over from an earlier run, when this one removed nothing
+    if (isFileCleanupPending(db)) runFileCleanup(db, { canVacuum: true, beforeVacuum: warnAboutVacuum })
   } catch (error) {
     debugLog('retention: run after an upgrade', error)
   }

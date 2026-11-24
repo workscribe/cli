@@ -30,6 +30,8 @@ export interface RetentionRunOptions {
   isOverBudget?: () => boolean
   /** Whether the VACUUM may run, which holds the write lock for as long as the file is big */
   canVacuum: boolean
+  /** Called right before a VACUUM this run does, to warn that captures may be lost while it runs */
+  beforeVacuum?: () => void
   /** Run again today even if it already ran (`retention run`) */
   ignoreThrottle?: boolean
 }
@@ -168,7 +170,9 @@ function runRemoval(
   if (summaries > 0) requestFileCleanup(db)
   const removedBackups = pruneExpiredBackups(options.backupsDirectory, days, options.now)
   forgetBackups(db, removedBackups)
-  const cleanup = isFileCleanupPending(db) ? runFileCleanup(db, { canVacuum: options.canVacuum }) : 'clean'
+  const cleanup = isFileCleanupPending(db)
+    ? runFileCleanup(db, { canVacuum: options.canVacuum, beforeVacuum: options.beforeVacuum })
+    : 'clean'
   // Only a run that finished counts as today's: one stopped by its time or by a lock carries on at the next command
   if (removal.stoppedBecause === 'finished') setMetaValue(db, LAST_RUN_KEY, today)
   return {

@@ -40,22 +40,33 @@ function checkpoint(db: MigrationDatabase): boolean {
   return !result?.busy
 }
 
+export interface FileCleanupOptions {
+  /** Whether the VACUUM may run, which holds the write lock for as long as the file is big */
+  canVacuum: boolean
+  /** Called right before the VACUUM, so the person is told first that captures may be lost while it runs */
+  beforeVacuum?: () => void
+}
+
+function vacuum(db: MigrationDatabase, beforeVacuum: (() => void) | undefined): void {
+  beforeVacuum?.()
+  db.exec('VACUUM')
+  setMetaValue(db, VACUUMED_KEY, 'true')
+  setMetaValue(db, CLEANUP_KEY, NEEDS_CHECKPOINT)
+}
+
 /**
  * Carries on from the recorded step. The VACUUM runs only when `canVacuum` says so, since a capture can't write while
  * it does; without it the file is checkpointed and the VACUUM stays pending. Never throws: a locked or busy database
  * leaves the step for the next run.
  */
-export function runFileCleanup(db: MigrationDatabase, options: { canVacuum: boolean }): FileCleanupStatus {
+export function runFileCleanup(db: MigrationDatabase, options: FileCleanupOptions): FileCleanupStatus {
   const step = getMetaValue(db, CLEANUP_KEY)
   if (step === null) return 'clean'
   try {
     db.exec(`PRAGMA busy_timeout = ${CLEANUP_LOCK_WAIT_MS}`)
-    if (step === NEEDS_VACUUM) {
-      if (!options.canVacuum) return checkpoint(db) ? 'waiting-for-vacuum' : 'checkpoint-busy'
-      db.exec('VACUUM')
-      setMetaValue(db, VACUUMED_KEY, 'true')
-      setMetaValue(db, CLEANUP_KEY, NEEDS_CHECKPOINT)
-    }
+    const isVacuumNext = step === NEEDS_VACUUM
+    if (isVacuumNext && !options.canVacuum) return checkpoint(db) ? 'waiting-for-vacuum' : 'checkpoint-busy'
+    if (isVacuumNext) vacuum(db, options.beforeVacuum)
     if (!checkpoint(db)) return 'checkpoint-busy'
     deleteMetaValue(db, CLEANUP_KEY)
     return 'clean'

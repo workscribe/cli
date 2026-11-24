@@ -153,6 +153,22 @@ describe('file cleanup steps', () => {
     expect(isVacuumPending(db)).toBe(true)
   })
 
+  it('says so right before the VACUUM, once, and not when the VACUUM is not allowed or not due', () => {
+    const { db } = openDatabase()
+    const beforeVacuum = vi.fn()
+    requestFileCleanup(db)
+
+    runFileCleanup(db, { canVacuum: false, beforeVacuum })
+    expect(beforeVacuum).not.toHaveBeenCalled()
+
+    runFileCleanup(db, { canVacuum: true, beforeVacuum })
+    expect(beforeVacuum).toHaveBeenCalledTimes(1)
+
+    requestFileCleanup(db)
+    runFileCleanup(db, { canVacuum: true, beforeVacuum })
+    expect(beforeVacuum).toHaveBeenCalledTimes(1)
+  })
+
   it('does nothing when nothing was asked for', () => {
     const { db } = openDatabase()
 
