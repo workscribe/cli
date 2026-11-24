@@ -55,7 +55,8 @@ const INSERT_SUMMARY = `INSERT INTO summary
   ON CONFLICT (source_key, engine) DO UPDATE SET
     project_id = excluded.project_id, first_event_id = excluded.first_event_id, last_event_id = excluded.last_event_id,
     text = excluded.text, created_at = excluded.created_at, origin = excluded.origin,
-    anchor_source = excluded.anchor_source, is_mixed = excluded.is_mixed, day = excluded.day`
+    anchor_source = excluded.anchor_source, is_mixed = excluded.is_mixed,
+    day = COALESCE(excluded.day, summary.day)`
 
 /** A saved summary replaces whatever row its key and engine had. */
 const SAVE_SUMMARY = INSERT_SUMMARY

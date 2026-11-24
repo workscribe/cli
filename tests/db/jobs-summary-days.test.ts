@@ -131,4 +131,22 @@ describe('a summary saved from now on', () => {
 
     expect(getSummaryBySource(db, KEY, 'skill')).toMatchObject({ text: 'second', day: localDateOf(THREAD_START) })
   })
+
+  it('does not lose the day when a re-save of the same summary has a key that names none', () => {
+    const db = database()
+    const record = {
+      sourceKey: 'not a key',
+      engine: 'skill' as const,
+      text: 'first',
+      createdAt: '2026-11-30T10:00:00.000Z',
+      anchor: ANCHOR,
+      anchorSource: 'thread' as const,
+    }
+    saveAnchoredSummary(db, record)
+    db.prepare("UPDATE summary SET day = '2026-10-28' WHERE source_key = 'not a key'").run()
+
+    saveAnchoredSummary(db, { ...record, text: 'second' })
+
+    expect(getSummaryBySource(db, 'not a key', 'skill')).toMatchObject({ text: 'second', day: '2026-10-28' })
+  })
 })
