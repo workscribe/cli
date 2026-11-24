@@ -27,7 +27,9 @@ export const RETENTION_SUMMARY_DAYS_KEY = 'retention.summaryDays'
 const RETENTION_KEYS = [RETENTION_DAYS_KEY, RETENTION_KEEP_FOREVER_KEY, RETENTION_SUMMARY_DAYS_KEY]
 const NO_SUMMARY_LIMIT = 'none'
 
-export type RetentionPolicy = { status: 'ok'; retention: RetentionConfig } | { status: 'unreadable'; reason: string }
+export type RetentionPolicy =
+  // `isDefault`: the config says nothing about retention, so these are the defaults, not something the person chose
+  { status: 'ok'; retention: RetentionConfig; isDefault: boolean } | { status: 'unreadable'; reason: string }
 
 export type RetentionSettingResult = { ok: true; retention: RetentionConfig } | { ok: false; message: string }
 
@@ -62,13 +64,13 @@ export function retentionPolicyOf(parsedConfig: unknown): RetentionPolicy {
     return { status: 'unreadable', reason: 'the config file is not a JSON object' }
   }
   const stored = (parsedConfig as Record<string, unknown>).retention
-  if (stored === undefined) return { status: 'ok', retention: { ...DEFAULT_RETENTION } }
+  if (stored === undefined) return { status: 'ok', retention: { ...DEFAULT_RETENTION }, isDefault: true }
   if (typeof stored !== 'object' || stored === null || Array.isArray(stored)) {
     return { status: 'unreadable', reason: 'retention in the config file is not an object' }
   }
   const retention = { ...DEFAULT_RETENTION, ...stored } as RetentionConfig
   const problem = retentionProblem(retention)
-  return problem ? { status: 'unreadable', reason: problem } : { status: 'ok', retention }
+  return problem ? { status: 'unreadable', reason: problem } : { status: 'ok', retention, isDefault: false }
 }
 
 function parseKeepForever(value: string): boolean | null {

@@ -10,13 +10,13 @@ vi.mock('../../src/config', () => ({
 vi.mock('../../src/db', () => ({ getDb: vi.fn(() => ({})) }))
 vi.mock('../../src/db/jobs/ticket-refs', () => ({ requestTicketRelink: vi.fn() }))
 vi.mock('../../src/db/agent-sessions', () => ({ clearAgentMessages: vi.fn() }))
-vi.mock('../../src/db/retention-state', () => ({ setKeepForeverMirror: vi.fn() }))
+vi.mock('../../src/db/retention-state', () => ({ setKeepForeverMirror: vi.fn(), setLimitsSnapshot: vi.fn() }))
 
 import { Command } from 'commander'
 import { readConfig, writeConfig, getConfigValue, setConfigValue } from '../../src/config'
 import { requestTicketRelink } from '../../src/db/jobs/ticket-refs'
 import { clearAgentMessages } from '../../src/db/agent-sessions'
-import { setKeepForeverMirror } from '../../src/db/retention-state'
+import { setKeepForeverMirror, setLimitsSnapshot } from '../../src/db/retention-state'
 import { log } from '../../src/utils/logger'
 import { registerConfig } from '../../src/cli/config'
 
@@ -237,6 +237,25 @@ describe('workscribe config', () => {
       })
     })
 
+    it('records the limits in the database too, before config.json, so a lost config is noticed', async () => {
+      const order: string[] = []
+      vi.mocked(setLimitsSnapshot).mockImplementationOnce(() => {
+        order.push('database')
+      })
+      mockWriteConfig.mockImplementationOnce(() => {
+        order.push('config')
+      })
+
+      await set('retention.days', '365')
+
+      expect(order).toEqual(['database', 'config'])
+      expect(setLimitsSnapshot).toHaveBeenCalledWith(expect.anything(), {
+        days: 365,
+        keepForever: false,
+        summaryDays: null,
+      })
+    })
+
     it.each([
       ['retention.days', ''],
       ['retention.days', 'null'],
@@ -254,6 +273,7 @@ describe('workscribe config', () => {
 
       expect(mockWriteConfig).not.toHaveBeenCalled()
       expect(setKeepForeverMirror).not.toHaveBeenCalled()
+      expect(setLimitsSnapshot).not.toHaveBeenCalled()
       expect(mockLog.error).toHaveBeenCalled()
     })
 

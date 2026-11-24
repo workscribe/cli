@@ -4,7 +4,15 @@ import { forgetBackups, pruneExpiredBackups } from './jobs/backup'
 import { getJobRow, getMetaValue, isJobDone, setMetaValue } from './jobs/store'
 import { cutoffOf, removeExpiredEvents, removeExpiredSummaries, removeOrphans, type RemovalStop } from './retention'
 import { isFileCleanupPending, requestFileCleanup, runFileCleanup, type FileCleanupStatus } from './retention-cleanup'
-import { ANNOUNCED_AT_KEY, FIRST_REMOVAL_KEY, LAST_RUN_KEY, WARNED_KEY, isKeepForeverMirrored } from './retention-state'
+import {
+  ANNOUNCED_AT_KEY,
+  FIRST_REMOVAL_KEY,
+  LAST_RUN_KEY,
+  WARNED_KEY,
+  getLimitsSnapshot,
+  isKeepForeverMirrored,
+  setLimitsSnapshot,
+} from './retention-state'
 import type { RetentionPolicy } from '../config/retention'
 import { localDateStr } from '../utils/format'
 
@@ -145,13 +153,13 @@ export function pausedBy(db: MigrationDatabase, jobs: DataJob[]): string | null 
 function limitOrReason(
   db: MigrationDatabase,
   options: RetentionRunOptions
-): { days: number; summaryDays: number | null } | { skip: SkipReason } {
+): { days: number; summaryDays: number | null; isDefault: boolean } | { skip: SkipReason } {
   const { policy } = options
   if (policy.status === 'unreadable') return { skip: { kind: 'unreadable', reason: policy.reason } }
   if (policy.retention.keepForever || isKeepForeverMirrored(db)) return { skip: { kind: 'keep-forever' } }
   const paused = pausedBy(db, options.jobs)
   if (paused !== null) return { skip: { kind: 'paused', job: paused } }
-  return { days: policy.retention.days, summaryDays: policy.retention.summaryDays }
+  return { days: policy.retention.days, summaryDays: policy.retention.summaryDays, isDefault: policy.isDefault }
 }
 
 function runRemoval(
@@ -186,9 +194,25 @@ function runRemoval(
   }
 }
 
+/**
+ * Why a config that says nothing about retention can't be trusted: Workscribe saw other limits before, so the file was
+ * deleted, replaced or edited, and the defaults would remove more than the person chose. Null when it can.
+ */
+function lostLimitsProblem(
+  db: MigrationDatabase,
+  limit: { days: number; summaryDays: number | null; isDefault: boolean }
+): string | null {
+  if (!limit.isDefault) return null
+  const seen = getLimitsSnapshot(db)
+  if (seen === null || (seen.days === limit.days && seen.summaryDays === limit.summaryDays)) return null
+  return `retention is missing from config.json; it was ${seen.days} days when Workscribe last saw it. Set it again with: workscribe config set retention.days ${seen.days}`
+}
+
 export function runRetention(db: MigrationDatabase, options: RetentionRunOptions): RetentionOutcome {
   const limit = limitOrReason(db, options)
   if ('skip' in limit) return { status: 'skipped', reason: limit.skip }
+  const lost = lostLimitsProblem(db, limit)
+  if (lost !== null) return { status: 'skipped', reason: { kind: 'unreadable', reason: lost } }
   const { days } = limit
   const today = localDateStr(options.now)
 
@@ -197,6 +221,7 @@ export function runRetention(db: MigrationDatabase, options: RetentionRunOptions
     const firstDay = firstRemovalDay(db, today, days)
     setMetaValue(db, FIRST_REMOVAL_KEY, firstDay)
     setMetaValue(db, ANNOUNCED_AT_KEY, options.now.toISOString())
+    setLimitsSnapshot(db, limit)
     // The announcement is the reminder for every day it is already inside of
     crossReminders(db, daysBetween(today, firstDay))
     return { status: 'announced', days, firstRemovalOn: firstDay, preview: previewOf(db, firstDay, days) }

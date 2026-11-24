@@ -27,6 +27,7 @@ describe('readRetentionPolicy: the setting removal reads (WOR-179)', () => {
     expect(readRetentionPolicy()).toEqual({
       status: 'ok',
       retention: { days: 100, keepForever: false, summaryDays: null },
+      isDefault: true,
     })
   })
 

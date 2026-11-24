@@ -9,7 +9,7 @@ import { requestTicketRelink } from '../db/jobs/ticket-refs'
 import { ticketPatternProblem } from '../capture/tickets'
 import { clearAgentMessages } from '../db/agent-sessions'
 import { applyRetentionSetting, isRetentionKey, RETENTION_KEEP_FOREVER_KEY } from '../config/retention'
-import { setKeepForeverMirror } from '../db/retention-state'
+import { setKeepForeverMirror, setLimitsSnapshot } from '../db/retention-state'
 
 const TICKET_PATTERN_KEY = 'tickets.pattern'
 const AGENT_MESSAGES_KEY = 'capture.agentMessages'
@@ -49,6 +49,7 @@ function setRetentionSetting(key: string, value: string): void {
     process.exit(1)
   }
   if (key === RETENTION_KEEP_FOREVER_KEY) setKeepForeverMirror(getDb(), result.retention.keepForever)
+  else setLimitsSnapshot(getDb(), result.retention)
   writeConfig({ ...config, retention: result.retention })
   log.success(`Set ${chalk.cyan(key)} = ${chalk.yellow(value)}`)
 }

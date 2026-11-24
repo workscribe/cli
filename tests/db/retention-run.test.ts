@@ -16,7 +16,11 @@ vi.mock('../../src/config', () => ({ readConfig: vi.fn(() => ({ capture: { aiToo
 vi.mock('../../src/profiles/loader', () => ({ getActiveProfileRules: vi.fn(() => []) }))
 
 const LIMIT_DAYS = 100
-const POLICY = { status: 'ok' as const, retention: { days: LIMIT_DAYS, keepForever: false, summaryDays: null } }
+const POLICY = {
+  status: 'ok' as const,
+  retention: { days: LIMIT_DAYS, keepForever: false, summaryDays: null },
+  isDefault: false,
+}
 const DAY_ONE = new Date(2026, 10, 23, 9)
 const onDay = (dayNumber: number, hour = 9) =>
   new Date(DAY_ONE.getFullYear(), DAY_ONE.getMonth(), DAY_ONE.getDate() + dayNumber - 1, hour)
@@ -305,7 +309,7 @@ describe('runRetention: reminders before the first removal (WOR-179)', () => {
 
 describe('runRetention: summaries have a limit of their own (WOR-179)', () => {
   const withSummaryDays = (summaryDays: number | null) => ({
-    policy: { status: 'ok' as const, retention: { days: LIMIT_DAYS, keepForever: false, summaryDays } },
+    policy: { ...POLICY, retention: { days: LIMIT_DAYS, keepForever: false, summaryDays } },
   })
 
   function started(): Setup {
@@ -364,5 +368,45 @@ describe('runRetention: summaries have a limit of their own (WOR-179)', () => {
 
     expect(run(fixture, onDay(300), withSummaryDays(150))).toMatchObject({ status: 'announced' })
     expect(summaryDays(fixture)).toHaveLength(1)
+  })
+})
+
+describe('runRetention: a config that lost the limits (WOR-179)', () => {
+  const customised = { ...POLICY, retention: { ...POLICY.retention, days: 365 } }
+  const lost = { ...POLICY, isDefault: true }
+
+  function startedWith(policy: typeof POLICY): Setup {
+    const fixture = setup()
+    for (let day = 1; day <= 400; day++) insertEvent(fixture.db, onDay(day))
+    run(fixture, onDay(1, 10), { policy })
+    return fixture
+  }
+
+  it('removes nothing when the config now says nothing and Workscribe last saw a longer limit, and says what to do', () => {
+    const fixture = startedWith(customised)
+
+    const outcome = run(fixture, onDay(400), { policy: lost })
+
+    expect(outcome).toMatchObject({ status: 'skipped', reason: { kind: 'unreadable' } })
+    expect(JSON.stringify(outcome)).toContain('workscribe config set retention.days 365')
+    expect(eventCount(fixture.db)).toBe(400)
+  })
+
+  it('removes as before when the config still states the limits', () => {
+    const fixture = startedWith(customised)
+
+    expect(run(fixture, onDay(400), { policy: customised })).toMatchObject({ status: 'ran', events: 34 })
+  })
+
+  it('treats the defaults as what the person has when they were what Workscribe saw', () => {
+    const fixture = startedWith(lost)
+
+    expect(run(fixture, onDay(400), { policy: lost })).toMatchObject({ status: 'ran' })
+  })
+
+  it('also protects a summary limit that was lost', () => {
+    const fixture = startedWith({ ...customised, retention: { ...customised.retention, summaryDays: 500 } })
+
+    expect(run(fixture, onDay(400), { policy: lost })).toMatchObject({ status: 'skipped' })
   })
 })

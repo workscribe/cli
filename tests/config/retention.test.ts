@@ -60,13 +60,18 @@ describe('applyRetentionSetting', () => {
 
 describe('retentionPolicyOf', () => {
   it('has the defaults when the config does not mention retention', () => {
-    expect(retentionPolicyOf({ session: { idleTimeout: 30 } })).toEqual({ status: 'ok', retention: DEFAULT_RETENTION })
+    expect(retentionPolicyOf({ session: { idleTimeout: 30 } })).toEqual({
+      status: 'ok',
+      retention: DEFAULT_RETENTION,
+      isDefault: true,
+    })
   })
 
   it('fills the values a partial retention block leaves out', () => {
     expect(retentionPolicyOf({ retention: { keepForever: true } })).toEqual({
       status: 'ok',
       retention: { days: 100, keepForever: true, summaryDays: null },
+      isDefault: false,
     })
   })
 

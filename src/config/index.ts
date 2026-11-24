@@ -122,7 +122,7 @@ export function readConfig(): WorkscribeConfig {
  * caught out by a damaged file. No file at all is a fresh install, which has the defaults.
  */
 export function readRetentionPolicy(): RetentionPolicy {
-  if (!fs.existsSync(CONFIG_PATH)) return { status: 'ok', retention: { ...DEFAULT_RETENTION } }
+  if (!fs.existsSync(CONFIG_PATH)) return { status: 'ok', retention: { ...DEFAULT_RETENTION }, isDefault: true }
   try {
     return retentionPolicyOf(JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8')))
   } catch {
