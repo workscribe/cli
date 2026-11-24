@@ -9,6 +9,8 @@ export const ANNOUNCED_AT_KEY = 'retention:announced-at'
 export const FIRST_REMOVAL_KEY = 'retention:first-removal'
 export const WARNED_KEY = 'retention:warned'
 export const SEEN_KEY = 'retention:seen'
+// Set when an absence made the announcement start over: that happens once per announcement, not again and again
+export const ABSENCE_RESTART_KEY = 'retention:absence-restart'
 export const CLEANUP_KEY = 'retention:cleanup'
 export const VACUUMED_KEY = 'retention:vacuumed'
 const LIMITS_KEY = 'retention:limits'
@@ -64,5 +66,5 @@ export function limitsShortened(before: RetentionLimit, after: RetentionLimit): 
  * absence.
  */
 export function restartAnnouncement(db: MigrationDatabase): void {
-  for (const key of [ANNOUNCED_AT_KEY, FIRST_REMOVAL_KEY, WARNED_KEY]) deleteMetaValue(db, key)
+  for (const key of [ANNOUNCED_AT_KEY, FIRST_REMOVAL_KEY, WARNED_KEY, ABSENCE_RESTART_KEY]) deleteMetaValue(db, key)
 }

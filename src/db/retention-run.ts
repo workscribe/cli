@@ -5,12 +5,14 @@ import { getJobRow, getMetaValue, isJobDone, setMetaValue } from './jobs/store'
 import { cutoffOf, removeExpiredEvents, removeExpiredSummaries, removeOrphans, type RemovalStop } from './retention'
 import { isFileCleanupPending, requestFileCleanup, runFileCleanup, type FileCleanupStatus } from './retention-cleanup'
 import {
+  ABSENCE_RESTART_KEY,
   ANNOUNCED_AT_KEY,
   FIRST_REMOVAL_KEY,
   LAST_RUN_KEY,
   SEEN_KEY,
   getLimitsSnapshot,
   isKeepForeverMirrored,
+  limitsShortened,
   restartAnnouncement,
   setLimitsSnapshot,
 } from './retention-state'
@@ -58,7 +60,7 @@ export type SkipReason =
 
 export type RetentionOutcome =
   | { status: 'skipped'; reason: SkipReason }
-  | { status: 'announced'; days: number; firstRemovalOn: string; preview: RemovalPreview }
+  | { status: 'announced'; days: number; summaryDays: number | null; firstRemovalOn: string; preview: RemovalPreview }
   | {
       status: 'waiting'
       days: number
@@ -70,6 +72,7 @@ export type RetentionOutcome =
   | {
       status: 'ran'
       days: number
+      summaryDays: number | null
       events: number
       summaries: number
       backupsRemoved: number
@@ -139,6 +142,7 @@ function runRemoval(
   return {
     status: 'ran',
     days,
+    summaryDays,
     events: removal.events,
     summaries,
     backupsRemoved: removedBackups.length,
@@ -163,12 +167,31 @@ export function lostLimitsProblem(
 
 /**
  * Someone away for longer than the grace period saw none of the reminders, and the date announced may have passed. If
- * something is due now, announce again instead of removing it unannounced.
+ * something is due now, announce again instead of removing it unannounced. Once per announcement, and only before
+ * removal has started: a person who comes back every few weeks is told twice, then removal goes ahead, instead of
+ * being told again at every return. Records the visit, which the next run measures its gap from.
  */
-function restartAfterAbsence(db: MigrationDatabase, today: string, days: number): void {
+function recordVisit(db: MigrationDatabase, today: string, days: number): void {
   const lastSeen = getMetaValue(db, SEEN_KEY)
-  if (lastSeen === null || daysBetween(lastSeen, today) <= GRACE_DAYS) return
-  if (previewOf(db, today, days).events > 0) restartAnnouncement(db)
+  const wasAway = lastSeen !== null && daysBetween(lastSeen, today) > GRACE_DAYS
+  const isTold = getMetaValue(db, LAST_RUN_KEY) !== null || getMetaValue(db, ABSENCE_RESTART_KEY) !== null
+  if (wasAway && !isTold && previewOf(db, today, days).events > 0) {
+    restartAnnouncement(db)
+    setMetaValue(db, ABSENCE_RESTART_KEY, today)
+  }
+  setMetaValue(db, SEEN_KEY, today)
+}
+
+/**
+ * Limits set by editing config.json, not `config set`, are noticed here: shorter than the ones announced starts the
+ * announcement over, any other change is recorded so a lost config is measured against what the person has now.
+ */
+function followLimits(db: MigrationDatabase, limit: RetentionLimit & { isDefault: boolean }): void {
+  if (limit.isDefault) return
+  const seen = getLimitsSnapshot(db)
+  if (seen === null || (seen.days === limit.days && seen.summaryDays === limit.summaryDays)) return
+  if (limitsShortened(seen, limit)) restartAnnouncement(db)
+  setLimitsSnapshot(db, limit)
 }
 
 export function runRetention(db: MigrationDatabase, options: RetentionRunOptions): RetentionOutcome {
@@ -179,8 +202,8 @@ export function runRetention(db: MigrationDatabase, options: RetentionRunOptions
   const { days } = limit
   const today = localDateStr(options.now)
 
-  restartAfterAbsence(db, today, days)
-  setMetaValue(db, SEEN_KEY, today)
+  followLimits(db, limit)
+  recordVisit(db, today, days)
 
   const firstRemovalOn = getMetaValue(db, FIRST_REMOVAL_KEY)
   if (firstRemovalOn === null || getMetaValue(db, ANNOUNCED_AT_KEY) === null) {
@@ -190,7 +213,13 @@ export function runRetention(db: MigrationDatabase, options: RetentionRunOptions
     setLimitsSnapshot(db, limit)
     // The announcement is the reminder for every day it is already inside of
     crossReminders(db, daysBetween(today, firstDay))
-    return { status: 'announced', days, firstRemovalOn: firstDay, preview: previewOf(db, firstDay, days) }
+    return {
+      status: 'announced',
+      days,
+      summaryDays: limit.summaryDays,
+      firstRemovalOn: firstDay,
+      preview: previewOf(db, firstDay, days),
+    }
   }
   if (today < firstRemovalOn) {
     const daysUntil = daysBetween(today, firstRemovalOn)

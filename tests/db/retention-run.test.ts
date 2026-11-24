@@ -7,7 +7,7 @@ import { GATE_JOB_NAMES, runRetention } from '../../src/db/retention-run'
 import { GRACE_DAYS, addDays, daysBetween } from '../../src/db/retention-schedule'
 import type { RetentionRunOptions } from '../../src/db/retention-run'
 import { getMetaValue, setMetaValue } from '../../src/db/jobs/store'
-import { SEEN_KEY, setKeepForeverMirror } from '../../src/db/retention-state'
+import { SEEN_KEY, restartAnnouncement, setKeepForeverMirror } from '../../src/db/retention-state'
 import { localDateStr } from '../../src/utils/format'
 import { countRows, insertEventAt, openTemporaryDatabase } from '../helpers/retention-db'
 
@@ -482,7 +482,7 @@ describe('runRetention: someone away longer than the grace period (WOR-179)', ()
     expect(run(fixture, onDay(134))).toMatchObject({ status: 'ran' })
   })
 
-  it('does not announce again when a gap of the grace period or less', () => {
+  it('does not announce again when the gap is the grace period or shorter', () => {
     const fixture = startedFixture()
     usedRegularly(fixture, 120 - GRACE_DAYS)
 
@@ -495,5 +495,63 @@ describe('runRetention: someone away longer than the grace period (WOR-179)', ()
     run(fixture, onDay(1, 10))
 
     expect(run(fixture, onDay(60))).toMatchObject({ status: 'waiting' })
+  })
+
+  it('announces again once only: a person who comes back every few weeks is then told, not told again', () => {
+    const fixture = startedFixture()
+    expect(run(fixture, onDay(120))).toMatchObject({ status: 'announced', firstRemovalOn: localDateStr(onDay(134)) })
+
+    // Back after 20 more days, past the date announced: removal goes ahead
+    expect(run(fixture, onDay(140))).toMatchObject({ status: 'ran' })
+  })
+
+  it('does not announce again for an absence once removal has started', () => {
+    const fixture = startedFixture()
+    usedRegularly(fixture, 101)
+    run(fixture, onDay(102))
+
+    expect(run(fixture, onDay(130))).toMatchObject({ status: 'ran' })
+  })
+
+  it('announces again for a new reason after an absence already did', () => {
+    const fixture = startedFixture()
+    run(fixture, onDay(120))
+    restartAnnouncement(fixture.db)
+
+    expect(run(fixture, onDay(121))).toMatchObject({ status: 'announced' })
+    expect(run(fixture, onDay(150))).toMatchObject({ status: 'announced' })
+  })
+})
+
+describe('runRetention: limits edited in config.json (WOR-179)', () => {
+  const policyWith = (days: number, summaryDays: number | null = null) => ({
+    ...POLICY,
+    retention: { days, keepForever: false, summaryDays },
+  })
+
+  function announcedAt(days: number): Setup {
+    const fixture = setup()
+    for (let day = 1; day <= 250; day++) insertEvent(fixture.db, onDay(day))
+    run(fixture, onDay(1, 10), { policy: policyWith(days) })
+    return fixture
+  }
+
+  it('announces again when the file now holds a shorter limit than the one announced', () => {
+    const fixture = announcedAt(200)
+    usedRegularly(fixture, 220)
+
+    const outcome = run(fixture, onDay(221), { policy: policyWith(100) })
+
+    expect(outcome).toMatchObject({ status: 'announced', days: 100 })
+    expect(eventCount(fixture.db)).toBe(250)
+  })
+
+  it('records a longer limit, so a lost config is then measured against it', () => {
+    const fixture = announcedAt(100)
+    usedRegularly(fixture, 220)
+    run(fixture, onDay(221), { policy: policyWith(365) })
+    const lost = { ...POLICY, isDefault: true }
+
+    expect(run(fixture, onDay(222), { policy: lost })).toMatchObject({ status: 'skipped' })
   })
 })

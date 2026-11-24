@@ -21,6 +21,7 @@ const mockLog = log as Record<string, ReturnType<typeof vi.fn>>
 const RAN = {
   status: 'ran',
   days: 100,
+  summaryDays: null,
   events: 0,
   backupsRemoved: 0,
   stoppedBecause: 'finished',
@@ -44,6 +45,7 @@ describe('runRetentionBeforeCommand', () => {
     mockRun.mockReturnValue({
       status: 'announced',
       days: 100,
+      summaryDays: null,
       firstRemovalOn: '2026-12-07',
       preview: { eventDays: 12, events: 340 },
     })
@@ -90,10 +92,30 @@ describe('runRetentionBeforeCommand', () => {
     expect(mockLog.notice).not.toHaveBeenCalled()
   })
 
+  it('says the summaries stay when they have no limit, and when they go when they have one', () => {
+    const announced = {
+      status: 'announced',
+      days: 100,
+      firstRemovalOn: '2027-03-04',
+      preview: { eventDays: 1, events: 1 },
+    }
+    mockRun.mockReturnValue({ ...announced, summaryDays: null })
+    runRetentionBeforeCommand()
+    expect(mockLog.notice).toHaveBeenCalledWith(expect.stringContaining('Your summaries stay.'))
+
+    mockLog.notice.mockClear()
+    mockRun.mockReturnValue({ ...announced, summaryDays: 365 })
+    runRetentionBeforeCommand()
+    const message = mockLog.notice.mock.calls[0][0] as string
+    expect(message).toContain('Saved summaries are removed after 365 days')
+    expect(message).not.toContain('Your summaries stay.')
+  })
+
   it('says, when nothing is old enough yet, that it then removes one day at a time', () => {
     mockRun.mockReturnValue({
       status: 'announced',
       days: 100,
+      summaryDays: null,
       firstRemovalOn: '2027-03-04',
       preview: { eventDays: 0, events: 0 },
     })

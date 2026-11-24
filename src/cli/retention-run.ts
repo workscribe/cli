@@ -20,10 +20,22 @@ function whatGoes(preview: RemovalPreview): string {
   return `That removes ${removalCounts(preview)}.`
 }
 
-function announcement(days: number, firstRemovalOn: string, preview: RemovalPreview): string {
+/** What happens to saved summaries: they have a limit of their own, none unless it is set. */
+function summariesNote(summaryDays: number | null): string {
+  return summaryDays === null
+    ? 'Your summaries stay.'
+    : `Saved summaries are removed after ${summaryDays} days (retention.summaryDays).`
+}
+
+function announcement(
+  days: number,
+  summaryDays: number | null,
+  firstRemovalOn: string,
+  preview: RemovalPreview
+): string {
   return (
     `Workscribe now removes captured events older than ${days} days. The first removal is on ${firstRemovalOn}. ` +
-    `${whatGoes(preview)} Your summaries stay. To keep everything instead: ${KEEP_EVERYTHING_COMMAND}. Details: workscribe retention`
+    `${whatGoes(preview)} ${summariesNote(summaryDays)} To keep everything instead: ${KEEP_EVERYTHING_COMMAND}. Details: workscribe retention`
   )
 }
 
@@ -50,7 +62,7 @@ function skippedMessage(reason: SkipReason): string | null {
 function report(outcome: RetentionOutcome, options: { isExplicit: boolean }): void {
   switch (outcome.status) {
     case 'announced':
-      log.notice(announcement(outcome.days, outcome.firstRemovalOn, outcome.preview))
+      log.notice(announcement(outcome.days, outcome.summaryDays, outcome.firstRemovalOn, outcome.preview))
       return
     case 'waiting':
       if (outcome.reminder !== null) {
@@ -59,7 +71,9 @@ function report(outcome: RetentionOutcome, options: { isExplicit: boolean }): vo
       return
     case 'ran':
       if (outcome.events > 0) {
-        log.notice(`Removed ${outcome.events} captured events older than ${outcome.days} days. Your summaries stay.`)
+        log.notice(
+          `Removed ${outcome.events} captured events older than ${outcome.days} days. ${summariesNote(outcome.summaryDays)}`
+        )
       }
       if (outcome.summaries > 0)
         log.notice(`Removed ${outcome.summaries} saved summaries, as retention.summaryDays says.`)

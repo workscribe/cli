@@ -44,16 +44,16 @@ function setTicketPattern(pattern: string): void {
   )
 }
 
+function restartAfterChange(db: ReturnType<typeof getDb>, reason: string): void {
+  restartAnnouncement(db)
+  log.notice(`${reason}: Workscribe announces the first removal date again, with ${GRACE_DAYS} days before it.`)
+}
+
 /**
  * Sets one `retention.*` value, strictly: nothing is coerced, so `retention.days ""` or `retention.keepForever yes` is
  * refused instead of becoming 0 or a string. Keeping everything is also written to the database, ahead of config.json,
  * so a config file that is later damaged or deleted still can't lead to removal (WOR-179).
  */
-function restartAfterChange(db: ReturnType<typeof getDb>, why: string): void {
-  restartAnnouncement(db)
-  log.notice(`${why}: Workscribe announces the first removal date again, with ${GRACE_DAYS} days before it.`)
-}
-
 function setRetentionSetting(key: string, value: string): void {
   const config = readConfig()
   const result = applyRetentionSetting(config.retention, key, value)
