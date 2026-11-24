@@ -8,6 +8,7 @@ export const LAST_RUN_KEY = 'retention:last-run'
 export const ANNOUNCED_AT_KEY = 'retention:announced-at'
 export const FIRST_REMOVAL_KEY = 'retention:first-removal'
 export const WARNED_KEY = 'retention:warned'
+export const SEEN_KEY = 'retention:seen'
 export const CLEANUP_KEY = 'retention:cleanup'
 export const VACUUMED_KEY = 'retention:vacuumed'
 const LIMITS_KEY = 'retention:limits'
@@ -45,4 +46,23 @@ export function getLimitsSnapshot(db: MigrationDatabase): RetentionLimit | null 
   } catch {
     return null
   }
+}
+
+/**
+ * Whether `after` removes more than `before` did: events or summaries kept for fewer days, or summaries that were kept
+ * for ever now limited. What was announced no longer covers it.
+ */
+export function limitsShortened(before: RetentionLimit, after: RetentionLimit): boolean {
+  if (after.days < before.days) return true
+  if (after.summaryDays === null) return false
+  return before.summaryDays === null || after.summaryDays < before.summaryDays
+}
+
+/**
+ * Forgets the announcement, the first removal day and the reminders shown, so the next run announces again with a new
+ * grace period. For a change that makes the announced date or amount wrong: opting back in, shorter limits, or a long
+ * absence.
+ */
+export function restartAnnouncement(db: MigrationDatabase): void {
+  for (const key of [ANNOUNCED_AT_KEY, FIRST_REMOVAL_KEY, WARNED_KEY]) deleteMetaValue(db, key)
 }

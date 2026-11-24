@@ -9,7 +9,15 @@ import { requestTicketRelink } from '../db/jobs/ticket-refs'
 import { ticketPatternProblem } from '../capture/tickets'
 import { clearAgentMessages } from '../db/agent-sessions'
 import { applyRetentionSetting, isRetentionKey, RETENTION_KEEP_FOREVER_KEY } from '../config/retention'
-import { setKeepForeverMirror, setLimitsSnapshot } from '../db/retention-state'
+import {
+  getLimitsSnapshot,
+  isKeepForeverMirrored,
+  limitsShortened,
+  restartAnnouncement,
+  setKeepForeverMirror,
+  setLimitsSnapshot,
+} from '../db/retention-state'
+import { GRACE_DAYS } from '../db/retention-schedule'
 
 const TICKET_PATTERN_KEY = 'tickets.pattern'
 const AGENT_MESSAGES_KEY = 'capture.agentMessages'
@@ -41,6 +49,11 @@ function setTicketPattern(pattern: string): void {
  * refused instead of becoming 0 or a string. Keeping everything is also written to the database, ahead of config.json,
  * so a config file that is later damaged or deleted still can't lead to removal (WOR-179).
  */
+function restartAfterChange(db: ReturnType<typeof getDb>, why: string): void {
+  restartAnnouncement(db)
+  log.notice(`${why}: Workscribe announces the first removal date again, with ${GRACE_DAYS} days before it.`)
+}
+
 function setRetentionSetting(key: string, value: string): void {
   const config = readConfig()
   const result = applyRetentionSetting(config.retention, key, value)
@@ -48,8 +61,19 @@ function setRetentionSetting(key: string, value: string): void {
     log.error(result.message)
     process.exit(1)
   }
-  if (key === RETENTION_KEEP_FOREVER_KEY) setKeepForeverMirror(getDb(), result.retention.keepForever)
-  else setLimitsSnapshot(getDb(), result.retention)
+  const db = getDb()
+  if (key === RETENTION_KEEP_FOREVER_KEY) {
+    // Opting back in starts over: the date announced before is no longer one the person has been told about
+    const isOptingBackIn = isKeepForeverMirrored(db) && !result.retention.keepForever
+    setKeepForeverMirror(db, result.retention.keepForever)
+    if (isOptingBackIn) restartAfterChange(db, 'Removal was switched back on')
+  } else {
+    const before = getLimitsSnapshot(db)
+    if (before !== null && limitsShortened(before, result.retention)) {
+      restartAfterChange(db, 'The limit is shorter, so more is removed')
+    }
+    setLimitsSnapshot(db, result.retention)
+  }
   writeConfig({ ...config, retention: result.retention })
   log.success(`Set ${chalk.cyan(key)} = ${chalk.yellow(value)}`)
 }

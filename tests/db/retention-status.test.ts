@@ -3,7 +3,8 @@ import type { DatabaseSync } from 'node:sqlite'
 import { JOBS } from '../../src/db/jobs'
 import { runRetention } from '../../src/db/retention-run'
 import { retentionStatusOf } from '../../src/db/retention-status'
-import { setKeepForeverMirror } from '../../src/db/retention-state'
+import { SEEN_KEY, setKeepForeverMirror } from '../../src/db/retention-state'
+import { setMetaValue } from '../../src/db/jobs/store'
 import { localDateStr } from '../../src/utils/format'
 import { insertEventAt, openTemporaryDatabase } from '../helpers/retention-db'
 
@@ -61,6 +62,7 @@ describe('retentionStatusOf', () => {
     runRetention(db, { now: onDay(1), policy: POLICY, jobs: JOBS, backupsDirectory: '/none', canVacuum: false })
 
     expect(statusOn(db, 102)).toMatchObject({ mode: 'removing', next: { on: localDateStr(onDay(102)), events: 1 } })
+    setMetaValue(db, SEEN_KEY, localDateStr(onDay(101)))
     runRetention(db, { now: onDay(102), policy: POLICY, jobs: JOBS, backupsDirectory: '/none', canVacuum: false })
 
     const after = statusOn(db, 102)

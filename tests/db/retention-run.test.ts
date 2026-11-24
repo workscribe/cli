@@ -7,7 +7,7 @@ import { GATE_JOB_NAMES, runRetention } from '../../src/db/retention-run'
 import { GRACE_DAYS, addDays, daysBetween } from '../../src/db/retention-schedule'
 import type { RetentionRunOptions } from '../../src/db/retention-run'
 import { getMetaValue, setMetaValue } from '../../src/db/jobs/store'
-import { setKeepForeverMirror } from '../../src/db/retention-state'
+import { SEEN_KEY, setKeepForeverMirror } from '../../src/db/retention-state'
 import { localDateStr } from '../../src/utils/format'
 import { countRows, insertEventAt, openTemporaryDatabase } from '../helpers/retention-db'
 
@@ -39,6 +39,11 @@ const insertEvent = (db: DatabaseSync, capturedAt: Date): void => {
 }
 
 const eventCount = (db: DatabaseSync): number => countRows(db, 'events')
+
+/** Someone who uses Workscribe regularly: the last run was the day before removal starts, not weeks ago. */
+function usedRegularly(fixture: Setup, lastDay = 101): void {
+  setMetaValue(fixture.db, SEEN_KEY, localDateStr(onDay(lastDay)))
+}
 
 function run(fixture: Setup, now: Date, overrides: Partial<RetentionRunOptions> = {}) {
   return runRetention(fixture.db, {
@@ -160,6 +165,7 @@ describe('runRetention: removing', () => {
     const fixture = setup()
     for (let day = 1; day <= 104; day++) insertEvent(fixture.db, onDay(day))
     run(fixture, onDay(1, 10))
+    usedRegularly(fixture)
     return fixture
   }
 
@@ -206,6 +212,7 @@ describe('runRetention: removing', () => {
     }
     setMetaValue(fixture.db, 'backup:3.2.0', JSON.stringify({ state: 'done', at: 'x', path: old }))
 
+    usedRegularly(fixture, 149)
     const outcome = run(fixture, onDay(150))
 
     expect(outcome).toMatchObject({ status: 'ran', backupsRemoved: 1 })
@@ -323,6 +330,7 @@ describe('runRetention: summaries have a limit of their own (WOR-179)', () => {
   it('removes the summaries of days older than its own limit when removal runs', () => {
     const fixture = started()
     insertEvent(fixture.db, onDay(500))
+    usedRegularly(fixture, 499)
 
     // Day 500 is 2028-04-06; 150 days before it is 2027-11-08, so all three days of summaries are older
     const outcome = run(fixture, onDay(500), withSummaryDays(150))
@@ -334,6 +342,7 @@ describe('runRetention: summaries have a limit of their own (WOR-179)', () => {
   it("keeps the newer ones, and the events' limit is a separate one", () => {
     const fixture = started()
 
+    usedRegularly(fixture, 149)
     const outcome = run(fixture, onDay(150), withSummaryDays(150))
 
     expect(outcome).toMatchObject({ status: 'ran', summaries: 0 })
@@ -378,11 +387,15 @@ describe('runRetention: a config that lost the limits (WOR-179)', () => {
   it('removes as before when the config still states the limits', () => {
     const fixture = startedWith(customised)
 
+    usedRegularly(fixture, 399)
+
     expect(run(fixture, onDay(400), { policy: customised })).toMatchObject({ status: 'ran', events: 34 })
   })
 
   it('treats the defaults as what the person has when they were what Workscribe saw', () => {
     const fixture = startedWith(lost)
+
+    usedRegularly(fixture, 399)
 
     expect(run(fixture, onDay(400), { policy: lost })).toMatchObject({ status: 'ran' })
   })
@@ -399,6 +412,7 @@ describe('runRetention: a clock that jumps (WOR-179)', () => {
     const fixture = setup()
     for (let day = 1; day <= 120; day++) insertEvent(fixture.db, onDay(day))
     run(fixture, onDay(1, 10))
+    usedRegularly(fixture)
     return fixture
   }
 
@@ -406,6 +420,7 @@ describe('runRetention: a clock that jumps (WOR-179)', () => {
     const fixture = startedFixture()
 
     // A year later by the clock, with nothing captured since day 120
+    usedRegularly(fixture, 499)
     const outcome = run(fixture, onDay(500))
 
     expect(outcome).toMatchObject({ status: 'ran', events: 20 })
@@ -426,6 +441,7 @@ describe('runRetention: a clock that jumps (WOR-179)', () => {
 
   it('counts from the clock when work was captured today, so a normal day is not delayed', () => {
     const fixture = startedFixture()
+    usedRegularly(fixture, 129)
     insertEvent(fixture.db, onDay(130))
 
     expect(run(fixture, onDay(130))).toMatchObject({ status: 'ran', events: 29 })
@@ -436,5 +452,48 @@ describe('runRetention: a clock that jumps (WOR-179)', () => {
 
     expect(run(fixture, onDay(50))).toMatchObject({ status: 'waiting' })
     expect(eventCount(fixture.db)).toBe(120)
+  })
+})
+
+describe('runRetention: someone away longer than the grace period (WOR-179)', () => {
+  function startedFixture(): Setup {
+    const fixture = setup()
+    for (let day = 1; day <= 130; day++) insertEvent(fixture.db, onDay(day))
+    run(fixture, onDay(1, 10))
+    return fixture
+  }
+
+  it('announces again instead of removing what came due while away, with a new grace and new reminders', () => {
+    const fixture = startedFixture()
+
+    // Back on day 120 after 119 days without a run: day 1 to day 18 are older than the limit
+    const outcome = run(fixture, onDay(120))
+
+    expect(outcome).toMatchObject({ status: 'announced', firstRemovalOn: localDateStr(onDay(134)) })
+    expect(eventCount(fixture.db)).toBe(130)
+    expect(run(fixture, onDay(124))).toMatchObject({ status: 'waiting', daysUntil: 10, reminder: expect.anything() })
+  })
+
+  it('removes as usual after that announced date', () => {
+    const fixture = startedFixture()
+    run(fixture, onDay(120))
+    usedRegularly(fixture, 133)
+
+    expect(run(fixture, onDay(134))).toMatchObject({ status: 'ran' })
+  })
+
+  it('does not announce again when a gap of the grace period or less', () => {
+    const fixture = startedFixture()
+    usedRegularly(fixture, 120 - GRACE_DAYS)
+
+    expect(run(fixture, onDay(120))).toMatchObject({ status: 'ran' })
+  })
+
+  it('does not announce again when nothing is old enough to remove', () => {
+    const fixture = setup()
+    insertEvent(fixture.db, onDay(1))
+    run(fixture, onDay(1, 10))
+
+    expect(run(fixture, onDay(60))).toMatchObject({ status: 'waiting' })
   })
 })

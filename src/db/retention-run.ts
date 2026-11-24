@@ -8,11 +8,20 @@ import {
   ANNOUNCED_AT_KEY,
   FIRST_REMOVAL_KEY,
   LAST_RUN_KEY,
+  SEEN_KEY,
   getLimitsSnapshot,
   isKeepForeverMirrored,
+  restartAnnouncement,
   setLimitsSnapshot,
 } from './retention-state'
-import { crossReminders, daysBetween, firstRemovalDay, previewOf, type RemovalPreview } from './retention-schedule'
+import {
+  GRACE_DAYS,
+  crossReminders,
+  daysBetween,
+  firstRemovalDay,
+  previewOf,
+  type RemovalPreview,
+} from './retention-schedule'
 import type { RetentionLimit, RetentionPolicy } from '../config/retention'
 import { localDateStr } from '../utils/format'
 
@@ -152,6 +161,16 @@ export function lostLimitsProblem(
   return `retention is missing from config.json; it was ${seen.days} days when Workscribe last saw it. Set it again with: workscribe config set retention.days ${seen.days}`
 }
 
+/**
+ * Someone away for longer than the grace period saw none of the reminders, and the date announced may have passed. If
+ * something is due now, announce again instead of removing it unannounced.
+ */
+function restartAfterAbsence(db: MigrationDatabase, today: string, days: number): void {
+  const lastSeen = getMetaValue(db, SEEN_KEY)
+  if (lastSeen === null || daysBetween(lastSeen, today) <= GRACE_DAYS) return
+  if (previewOf(db, today, days).events > 0) restartAnnouncement(db)
+}
+
 export function runRetention(db: MigrationDatabase, options: RetentionRunOptions): RetentionOutcome {
   const limit = limitOrReason(db, options)
   if ('skip' in limit) return { status: 'skipped', reason: limit.skip }
@@ -159,6 +178,9 @@ export function runRetention(db: MigrationDatabase, options: RetentionRunOptions
   if (lost !== null) return { status: 'skipped', reason: { kind: 'unreadable', reason: lost } }
   const { days } = limit
   const today = localDateStr(options.now)
+
+  restartAfterAbsence(db, today, days)
+  setMetaValue(db, SEEN_KEY, today)
 
   const firstRemovalOn = getMetaValue(db, FIRST_REMOVAL_KEY)
   if (firstRemovalOn === null || getMetaValue(db, ANNOUNCED_AT_KEY) === null) {

@@ -10,13 +10,27 @@ vi.mock('../../src/config', () => ({
 vi.mock('../../src/db', () => ({ getDb: vi.fn(() => ({})) }))
 vi.mock('../../src/db/jobs/ticket-refs', () => ({ requestTicketRelink: vi.fn() }))
 vi.mock('../../src/db/agent-sessions', () => ({ clearAgentMessages: vi.fn() }))
-vi.mock('../../src/db/retention-state', () => ({ setKeepForeverMirror: vi.fn(), setLimitsSnapshot: vi.fn() }))
+vi.mock('../../src/db/retention-state', () => ({
+  setKeepForeverMirror: vi.fn(),
+  setLimitsSnapshot: vi.fn(),
+  getLimitsSnapshot: vi.fn(() => null),
+  isKeepForeverMirrored: vi.fn(() => false),
+  limitsShortened: vi.fn(() => false),
+  restartAnnouncement: vi.fn(),
+}))
 
 import { Command } from 'commander'
 import { readConfig, writeConfig, getConfigValue, setConfigValue } from '../../src/config'
 import { requestTicketRelink } from '../../src/db/jobs/ticket-refs'
 import { clearAgentMessages } from '../../src/db/agent-sessions'
-import { setKeepForeverMirror, setLimitsSnapshot } from '../../src/db/retention-state'
+import {
+  getLimitsSnapshot,
+  isKeepForeverMirrored,
+  limitsShortened,
+  restartAnnouncement,
+  setKeepForeverMirror,
+  setLimitsSnapshot,
+} from '../../src/db/retention-state'
 import { log } from '../../src/utils/logger'
 import { registerConfig } from '../../src/cli/config'
 
@@ -296,6 +310,38 @@ describe('workscribe config', () => {
       await set('retention.keepForever', 'false')
 
       expect(setKeepForeverMirror).toHaveBeenCalledWith(expect.anything(), false)
+    })
+
+    it('announces again when removal is switched back on after keeping everything', async () => {
+      vi.mocked(isKeepForeverMirrored).mockReturnValueOnce(true)
+
+      await set('retention.keepForever', 'false')
+
+      expect(restartAnnouncement).toHaveBeenCalledTimes(1)
+      expect(mockLog.notice).toHaveBeenCalledWith(expect.stringContaining('announces the first removal date again'))
+    })
+
+    it('does not start over when removal was already on', async () => {
+      await set('retention.keepForever', 'false')
+
+      expect(restartAnnouncement).not.toHaveBeenCalled()
+    })
+
+    it('announces again when the limit is made shorter than the one announced', async () => {
+      vi.mocked(getLimitsSnapshot).mockReturnValueOnce({ days: 365, summaryDays: null })
+      vi.mocked(limitsShortened).mockReturnValueOnce(true)
+
+      await set('retention.days', '60')
+
+      expect(restartAnnouncement).toHaveBeenCalledTimes(1)
+    })
+
+    it('keeps the announced date when the limit is longer', async () => {
+      vi.mocked(getLimitsSnapshot).mockReturnValueOnce({ days: 60, summaryDays: null })
+
+      await set('retention.days', '365')
+
+      expect(restartAnnouncement).not.toHaveBeenCalled()
     })
 
     it('does not mask keepForever as a secret', async () => {
