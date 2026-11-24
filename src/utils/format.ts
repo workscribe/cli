@@ -20,11 +20,19 @@ export function parseDate(input: string): string {
   return input
 }
 
+export const MS_PER_DAY = 24 * 60 * 60 * 1000
+
 export function localDateStr(d: Date): string {
   const y = d.getFullYear()
   const m = String(d.getMonth() + 1).padStart(2, '0')
   const day = String(d.getDate()).padStart(2, '0')
   return `${y}-${m}-${day}`
+}
+
+/** The start of a local `YYYY-MM-DD` day, as a local `Date`. */
+export function parseLocalDate(date: string): Date {
+  const [year, month, day] = date.split('-').map(Number)
+  return new Date(year, month - 1, day)
 }
 
 /** The local YYYY-MM-DD an ISO timestamp falls on — the same day rule sessions are grouped by. */

@@ -1,10 +1,9 @@
 import type { MigrationDatabase } from './migration-types'
+import { MS_PER_DAY } from '../utils/format'
 
 // Counts over the last few days of events, for `status` and `profile`. The window starts at an ISO timestamp, the
 // same format `captured_at` is stored in: compared with SQLite's `datetime()` text ("2026-11-02 10:00:00"), every
 // event of the boundary day would pass, since 'T' sorts after ' '. `node:sqlite`-free, so tests run it in memory.
-
-const MS_PER_DAY = 24 * 60 * 60 * 1000
 
 /** The start of the last `days` days, as `captured_at` is stored. */
 export function sinceIso(days: number, now: number = Date.now()): string {

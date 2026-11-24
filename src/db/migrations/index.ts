@@ -12,6 +12,7 @@ import eventsProjectTime from './011_events_project_time'
 import agentSessions from './012_agent_sessions'
 import tickets from './013_tickets'
 import agentSessionEndings from './014_agent_session_endings'
+import summaryDay from './015_summary_day'
 import type { Migration } from '../migration-types'
 
 export type { Migration } from '../migration-types'
@@ -32,4 +33,5 @@ export const MIGRATIONS: Migration[] = [
   agentSessions,
   tickets,
   agentSessionEndings,
+  summaryDay,
 ]

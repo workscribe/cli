@@ -1,4 +1,5 @@
 import type { StoredEngine } from '../ai/engine'
+import { localDateOf } from '../utils/format'
 
 /** Engine name for summaries migrated from the 1.x `sessions.summary` column (written by a provider or Ollama). */
 export const LEGACY_ENGINE = 'legacy' satisfies StoredEngine
@@ -31,6 +32,12 @@ export function parseSessionKey(key: string): ParsedSessionKey | null {
   if (startedAt === '' || Number.isNaN(new Date(startedAt).getTime())) return null
   const repoName = key.slice(0, separator)
   return { repoName: repoName === '' ? null : repoName, startedAt }
+}
+
+/** The local day a session key's thread started on (`2026-11-23`), or null for a key that isn't one. */
+export function dayOfSessionKey(key: string): string | null {
+  const parsed = parseSessionKey(key)
+  return parsed === null ? null : localDateOf(parsed.startedAt)
 }
 
 /** What picking a summary reads from a stored one — `summary` rows fit. */

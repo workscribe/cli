@@ -19,6 +19,11 @@ vi.mock('fs', () => ({
 
 vi.mock('../../src/utils/paths')
 
+vi.mock('../../src/cli/retention', () => ({
+  currentRetentionStatus: vi.fn(() => ({ mode: 'removing' })),
+  retentionStatusLine: vi.fn(() => '  Retention    100 days'),
+}))
+
 vi.mock('../../src/db/alerts', () => ({
   getPendingAlerts: vi.fn().mockReturnValue([]),
 }))

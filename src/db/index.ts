@@ -10,10 +10,10 @@ import type { StoredEngine } from '../ai/engine'
 import { insertEventRecord, type NewEvent } from './event-writer'
 import { mergeIntoRecentEdit, type RecentEdit } from './edit-merge'
 import { saveAnchoredSummary } from './summary-store'
+import { deleteEventRows, hasOldSessionLinks, OLD_SESSION_LINKS } from './event-delete'
 import { countOtherEventsSince, countOtherEventTools, sinceIso } from './recent-events'
 import {
   agentSessionIdsOfDate,
-  agentSessionIdsOfEvents,
   deleteEmptyAgentSessions,
   recordAgentMessage,
   recordAgentSessionEnd,
@@ -150,29 +150,10 @@ export function getEventsByIds(ids: number[]): EventRow[] {
     .all(...ids) as unknown as EventRow[]
 }
 
-// The old sessions' links to events (migration 001), until the drop-old-sessions data job removes them: their foreign
-// key would refuse to delete an event they point at, so undo and clear remove those links first
-const OLD_SESSION_LINKS = 'session_events'
-
-function hasOldSessionLinks(db: DatabaseSync): boolean {
-  return (
-    db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(OLD_SESSION_LINKS) !== undefined
-  )
-}
-
 export function deleteEventsByIds(ids: number[]): void {
   if (ids.length === 0) return
   const db = getDb()
-  const placeholders = ids.map(() => '?').join(', ')
-
-  runInImmediateTransaction(() => {
-    const agentSessionIds = agentSessionIdsOfEvents(db, ids)
-    if (hasOldSessionLinks(db)) {
-      db.prepare(`DELETE FROM ${OLD_SESSION_LINKS} WHERE event_id IN (${placeholders})`).run(...ids)
-    }
-    db.prepare(`DELETE FROM events WHERE id IN (${placeholders})`).run(...ids)
-    deleteEmptyAgentSessions(db, agentSessionIds)
-  })
+  runInImmediateTransaction(() => deleteEventRows(db, ids))
 }
 
 export function deleteEventsForDate(date: string): number {

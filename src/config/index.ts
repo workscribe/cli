@@ -2,6 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import { CONFIG_PATH } from '../utils/paths'
 import { DEFAULT_TICKET_PATTERN } from '../capture/tickets'
+import { DEFAULT_RETENTION, retentionPolicyOf, type RetentionConfig, type RetentionPolicy } from './retention'
 
 /**
  * AI provider settings from Workscribe 1.x. 2.0 removed AI providers, so nothing writes these any more — they're
@@ -67,6 +68,8 @@ export interface WorkscribeConfig {
     // `workscribe config set tickets.pattern`, which also re-links the history.
     pattern: string
   }
+  // How long captured events are kept before they are removed (WOR-179); see `src/config/retention.ts`
+  retention: RetentionConfig
 }
 
 const DEFAULTS: WorkscribeConfig = {
@@ -97,6 +100,7 @@ const DEFAULTS: WorkscribeConfig = {
   tickets: {
     pattern: DEFAULT_TICKET_PATTERN,
   },
+  retention: DEFAULT_RETENTION,
 }
 
 export function readConfig(): WorkscribeConfig {
@@ -109,6 +113,20 @@ export function readConfig(): WorkscribeConfig {
     return deepMerge(DEFAULTS, parsed)
   } catch {
     return deepMerge(DEFAULTS, {})
+  }
+}
+
+/**
+ * The retention setting for the code that removes data. Unlike `readConfig`, a file that can't be read or understood is
+ * not the defaults: it is `unreadable`, and nothing is removed, so a person who chose to keep everything is never
+ * caught out by a damaged file. No file at all is a fresh install, which has the defaults.
+ */
+export function readRetentionPolicy(): RetentionPolicy {
+  if (!fs.existsSync(CONFIG_PATH)) return { status: 'ok', retention: { ...DEFAULT_RETENTION }, isDefault: true }
+  try {
+    return retentionPolicyOf(JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8')))
+  } catch {
+    return { status: 'unreadable', reason: 'the config file could not be read' }
   }
 }
 

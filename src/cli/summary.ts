@@ -12,6 +12,8 @@ import { postSummary } from '../summary/webhook'
 import { renderDay, type RenderedDay } from '../summary/day'
 import { keepsStdoutClean } from '../summary/output-format'
 import { toPlainText } from '../summary/plain-text'
+import { renderKeptDayAs } from '../summary/kept'
+import { keptSummariesOf } from './kept-day'
 import { printExcludedFooter, printSavedNote } from './day-notes'
 import { loadDayThreads, requireThreadData } from './thread-day'
 import { addSummaryFormatOption, addWeekLayoutOption, parseSummaryFormat, runWeekCommand } from './week'
@@ -105,13 +107,16 @@ export function registerSummary(program: Command): void {
     }
 
     const blocks = loadDayThreads(date)
+    const format = formatOption ?? config.summary?.format
 
     if (blocks.length === 0) {
-      log.plain(`No activity captured for ${date}`)
+      // A day whose events were removed (WOR-179) still has the summaries saved for it
+      const kept = keptSummariesOf(date)
+      if (kept.length === 0) log.plain(`No activity captured for ${date}`)
+      else log.plain(renderKeptDayAs(format, date, kept))
       return
     }
 
-    const format = formatOption ?? config.summary?.format
     const keepsStdoutToOutput = keepsStdoutClean(format)
     let day: RenderedDay
     try {

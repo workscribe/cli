@@ -5,7 +5,13 @@ import os from 'os'
 import path from 'path'
 import { applyMigrations } from '../../src/db/migrate'
 import { MIGRATIONS } from '../../src/db/migrations'
-import { ensureBackup, pruneBackups, STALE_CLAIM_MS } from '../../src/db/jobs/backup'
+import {
+  ensureBackup,
+  forgetBackups,
+  pruneBackups,
+  pruneExpiredBackups,
+  STALE_CLAIM_MS,
+} from '../../src/db/jobs/backup'
 import { getMetaValue, setMetaValue } from '../../src/db/jobs/store'
 
 vi.mock('../../src/config', () => ({ readConfig: vi.fn(() => ({ capture: { aiTools: true } })) }))
@@ -173,5 +179,87 @@ describe('pruneBackups', () => {
       'workscribe-2.3.0-d.db',
       'workscribe-2.4.0-e.db.tmp',
     ])
+  })
+})
+
+describe('pruneExpiredBackups (WOR-179)', () => {
+  const LIMIT_DAYS = 100
+  const DAY_MS = 24 * 60 * 60 * 1000
+
+  function folderWith(files: Record<string, number>): string {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'workscribe-expired-'))
+    onTestFinished(() => fs.rmSync(directory, { recursive: true, force: true }))
+    for (const [name, ageDays] of Object.entries(files)) {
+      const file = path.join(directory, name)
+      fs.writeFileSync(file, 'x')
+      const modifiedAt = new Date(NOW.getTime() - ageDays * DAY_MS)
+      fs.utimesSync(file, modifiedAt, modifiedAt)
+    }
+    return directory
+  }
+
+  it('removes the automatic backups older than the limit and keeps the others', () => {
+    const directory = folderWith({
+      'workscribe-3.2.0-old.db': 150,
+      'workscribe-3.3.0-edge.db': LIMIT_DAYS + 1,
+      'workscribe-3.5.2-recent.db': 99,
+    })
+
+    const removed = pruneExpiredBackups(directory, LIMIT_DAYS, NOW)
+
+    expect(removed.map((file) => path.basename(file)).sort()).toEqual([
+      'workscribe-3.2.0-old.db',
+      'workscribe-3.3.0-edge.db',
+    ])
+    expect(fs.readdirSync(directory)).toEqual(['workscribe-3.5.2-recent.db'])
+  })
+
+  it('never touches a file that is not an automatic backup, however old', () => {
+    const directory = folderWith({
+      'manual-repair-2026-10-30.db': 400,
+      'workscribe-3.2.0-old.db.tmp': 400,
+      'notes.txt': 400,
+      'workscribe-3.2.0-old.db': 400,
+    })
+
+    pruneExpiredBackups(directory, LIMIT_DAYS, NOW)
+
+    expect(fs.readdirSync(directory).sort()).toEqual([
+      'manual-repair-2026-10-30.db',
+      'notes.txt',
+      'workscribe-3.2.0-old.db.tmp',
+    ])
+  })
+
+  it('has nothing to do when there is no backups folder yet', () => {
+    expect(pruneExpiredBackups(path.join(os.tmpdir(), 'workscribe-no-such-folder'), LIMIT_DAYS, NOW)).toEqual([])
+  })
+
+  it('forgets the claims that name a removed backup, and only those', () => {
+    const { db, backups } = liveDatabase()
+    const old = ensureBackup(db, { cliVersion: '2.2.0', directory: backups, now: () => NOW })
+    const recent = ensureBackup(db, { cliVersion: '2.3.0', directory: backups, now: () => NOW })
+    if (old.status !== 'created' || recent.status !== 'created') throw new Error('expected two new backups')
+
+    forgetBackups(db, [old.path])
+
+    expect(getMetaValue(db, 'backup:2.2.0')).toBeNull()
+    expect(getMetaValue(db, 'backup:2.3.0')).not.toBeNull()
+  })
+
+  it('takes a new backup for a version whose backup was removed, instead of reporting the missing file', () => {
+    const { db, backups } = liveDatabase()
+    const first = ensureBackup(db, { cliVersion: '2.2.0', directory: backups, now: () => NOW })
+    if (first.status !== 'created') throw new Error('expected a new backup')
+    fs.rmSync(first.path)
+
+    const second = ensureBackup(db, {
+      cliVersion: '2.2.0',
+      directory: backups,
+      now: () => new Date(NOW.getTime() + 1000),
+    })
+
+    expect(second.status).toBe('created')
+    expect(fs.existsSync(second.status === 'created' ? second.path : '')).toBe(true)
   })
 })

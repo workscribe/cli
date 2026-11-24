@@ -16,6 +16,8 @@ vi.mock('../../src/config', () => ({
 // The db module would load node:sqlite
 vi.mock('../../src/db', () => ({}))
 
+vi.mock('../../src/cli/kept-day', () => ({ keptSummariesOf: vi.fn(() => []) }))
+
 vi.mock('../../src/summary/exclusions', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../src/summary/exclusions')>()),
   countExcludedEvents: vi.fn(() => new Map()),
@@ -39,6 +41,7 @@ vi.mock('../../src/utils/paths')
 import fs from 'fs'
 import { Command } from 'commander'
 import { loadDayThreads, requireThreadData } from '../../src/cli/thread-day'
+import { keptSummariesOf } from '../../src/cli/kept-day'
 import { block, row, thread } from '../summary/contract/fixtures'
 import { createSummaryWriter } from '../../src/summary/writer'
 import { readConfig } from '../../src/config'
@@ -106,6 +109,24 @@ describe('workscribe export', () => {
       await makeProgram().parseAsync(['export'], { from: 'user' })
 
       expect(mockLog.plain).toHaveBeenCalledWith(expect.stringContaining('No activity captured'))
+      expect(mockProvider.summarize).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('a day whose events were removed (WOR-179)', () => {
+    it('exports the summaries saved for it, with the note, and never calls the writer', async () => {
+      mockLoadDayThreads.mockReturnValue([])
+      vi.mocked(keptSummariesOf).mockReturnValue(['## api (main) — 1h\n\nFixed the refresh race.'])
+      const mockProvider = { summarize: vi.fn() }
+      mockCreateSummaryWriter.mockReturnValue(mockProvider)
+
+      await makeProgram().parseAsync(['export', '--date', '2026-08-01', '--output', '/tmp/out.md'], { from: 'user' })
+
+      const written = vi.mocked(fs.writeFileSync).mock.calls[0]
+      expect(written[0]).toBe('/tmp/out.md')
+      expect(String(written[1])).toContain('# Work Summary — 2026-08-01')
+      expect(String(written[1])).toContain('Fixed the refresh race.')
+      expect(String(written[1])).toContain('has been removed')
       expect(mockProvider.summarize).not.toHaveBeenCalled()
     })
   })

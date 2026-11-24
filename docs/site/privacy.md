@@ -14,7 +14,7 @@ Everything you capture. All captured data is stored in `~/.workscribe/` on your 
 | `~/.workscribe/workscribe.db` | SQLite database — events, work blocks and threads, summaries your coding agent saved |
 | `~/.workscribe/config.json` | Configuration, including webhook URLs |
 | `~/.workscribe/exports/` | Markdown files from `workscribe export` |
-| `~/.workscribe/backups/` | Copies of the database taken before a data upgrade — the newest 3 are kept, and secrets are removed from them once the upgrade has removed them from your database |
+| `~/.workscribe/backups/` | Copies of the database taken before a data upgrade — the newest 3 are kept, none older than your [retention limit](#how-long-data-is-kept), and secrets are removed from them once the upgrade has removed them from your database |
 
 Both the database and config file are written with `0600` permissions (owner read/write only). Backups hold the same data as the database, so they get the same protection: the folder is `0700` and each copy `0600`.
 
@@ -28,6 +28,28 @@ Both the database and config file are written with `0600` permissions (owner rea
 - **Projects, branches and files:** to tell when events belong to the same project, Workscribe also stores each repo's `origin` remote (host, owner and repo, never credentials), its root folder and git folder, and the path of each saved file relative to its repo. These come from the same folders and names already recorded with each event. To link events captured before this was recorded, a one-time upgrade asks git about each folder in your history, once, and keeps the answer.
 - **Line counts on saves:** when an editor sends them, Workscribe stores how many lines a save added and removed, and when a file's repeated saves last changed it. Never the text of the change.
 - **`git commit -F <file>`:** Workscribe reads the message file's first line (the subject) when the command is captured, redacted like the command itself. Only regular files are read, at most 4 KB, and the file's path isn't stored.
+
+---
+
+## How long data is kept
+
+Captured events are removed once they are **100 days** old. That keeps enough for a quarterly review and means anything a secret pattern missed doesn't stay forever. The limit is `retention.days` (at least 7), and `workscribe config set retention.keepForever true` turns removal off.
+
+```bash
+workscribe retention                                   # the limit, the oldest day kept, and what the next removal takes
+workscribe config set retention.days 180               # keep events longer
+workscribe config set retention.keepForever true       # never remove my data
+workscribe config set retention.summaryDays 365        # also remove summaries after a year (the default is to keep them)
+```
+
+- **It rolls.** Once removal starts, each day's run removes the one day that has just passed the limit, so about 100 days are always kept. A day is removed whole, never half: the cut is at midnight. If you don't run Workscribe for a week, the next run removes the days that expired meanwhile.
+- **You are told first.** `workscribe init` says it, and the first command that reads your data after you update prints when removal starts. Nothing is removed for 14 days after that, or until the first day has expired if that is later (for a new install, after 100 days). Reminders follow 14, 10, 5 and 1 day before, once each. `workscribe retention` shows the date any time. You are told again, with another 14 days, if you switch removal back on after keeping everything, set a shorter limit, or come back after more than 14 days away, before removal has started, to events that are already old enough to go (once). A limit you edit in config.json counts as well.
+- **Summaries stay.** A summary your agent saved is kept with the day it describes, and `workscribe summary --date` and `workscribe export --date` still show it for a day whose events were removed, with a note saying the activity is gone. Remove them separately with `retention.summaryDays`.
+- **What goes with an event:** the files and branches no remaining event refers to, the agent conversations left with no events, alerts older than the limit, and the blocks and threads built from the removed days. Project names are kept: summaries point at them.
+- **Removed text leaves the file.** The removal overwrites what it deletes, and `workscribe upgrade` rewrites the database file once the first time, so text from before also leaves it. That rewrite stops capture from writing while it runs, so run it when you aren't working: a command run in that time may not be recorded.
+- **Backups age out too.** An automatic backup (`workscribe-*.db`) is removed once the file is older than the limit. A backup taken at an upgrade still holds the events up to that day, so it keeps removed events until it is itself that old: data can be in your backups for up to about twice the limit. Files you put in the backups folder yourself are never touched.
+- **If it can't be sure, it removes nothing.** A config file that can't be read, a `retention` setting of the wrong type, or `retention.keepForever` set (also recorded in the database, so a deleted or damaged `config.json` can't undo it) all mean nothing is removed. Removal also waits for the data upgrade to finish, and `workscribe retention` says which step it is waiting for.
+- **Not touched:** markdown files from `workscribe export`, copies of the database you made yourself, and anything you sent to a webhook or pasted somewhere.
 
 ---
 
@@ -57,12 +79,12 @@ Before any event is written to disk, Workscribe strips sensitive patterns from t
 
 **Written as plain text:** a command that writes a secret, such as `echo "password: …" > values.yaml`, `printf 'token: %s\n' …`, `tee`, `awk`, a here-string, a `sed -i` replacement, a one-line `python3 -c` or `node -e` script, or `echo SECRET > ~/.vault-pass`, has the value removed, and the key, the command and the file stay. Only a writer command is read, so a commit message or a note is not changed. A value of 6 or more characters is taken for a secret, so `echo "password: required"` loses `required`. Not read: a value that is a variable (`$PASSWORD`), a placeholder (`<token>`), `true`, `false` and the like, 5 characters or fewer, anything of a value after its first space, quote or shell separator (`;` `&` `|` `)`), an INI-style `token = value` with no digit or capital letter, or a secret a script file writes. A heredoc body is never stored, so `kubectl apply -f - <<EOF` and `cat > values.yaml <<EOF` are not affected.
 
-**Backups:** before each upgrade a copy of your database is taken, and the newest 3 files named `workscribe-*.db` are kept. Once the upgrade has removed secrets from your stored events, it removes them from every `.db` copy in `~/.workscribe/backups/` too, and rewrites those files so the old text doesn't stay in them. A backup then holds what your database held, minus the removed secrets: restoring one brings your history back without them. A copy that is locked or in use is retried on a later command, one that isn't a Workscribe database is left alone, and one that can't be written is named in a message once, so you can delete it or fix its permissions. Delete `~/.workscribe/backups/` yourself if you'd rather not keep any.
+**Backups:** before each upgrade a copy of your database is taken, and the newest 3 files named `workscribe-*.db` are kept, none of them older than your [retention limit](#how-long-data-is-kept) (100 days by default). Once the upgrade has removed secrets from your stored events, it removes them from every `.db` copy in `~/.workscribe/backups/` too, and rewrites those files so the old text doesn't stay in them. A backup then holds what your database held, minus the removed secrets: restoring one brings your history back without them. A copy that is locked or in use is retried on a later command, one that isn't a Workscribe database is left alone, and one that can't be written is named in a message once, so you can delete it or fix its permissions. Delete `~/.workscribe/backups/` yourself if you'd rather not keep any.
 
 **Events already stored:** when you update, a data upgrade applies the built-in patterns to the commands and structured fields of your existing events, including notes, then rewrites the database file so the old text doesn't stay in it. Some things can still hold it:
 
 - Copies of the database you made yourself, or kept anywhere but `~/.workscribe/backups/`. The upgrade only reaches the `.db` files in that folder, and nothing prunes a copy outside it, so delete those yourself.
-- Saved summaries, which aren't rewritten. Summaries from older versions weren't always redacted when they were saved.
+- Saved summaries, which aren't rewritten and stay when their events are [removed](#how-long-data-is-kept). Summaries from older versions weren't always redacted when they were saved.
 - An Aider prompt stored by an older version, if it was cut off partway through a secret. A pattern can't recognise part of one.
 
 **Add your own patterns:**
@@ -157,7 +179,7 @@ What counts as "in" an excluded directory:
 - `workscribe note` there, which saves nothing and says so
 
 **What it doesn't do:**
-- **It doesn't delete what was already recorded.** `workscribe exclude` tells you how many earlier events were kept. They stay in your summaries until you remove them. `workscribe clear --date` removes everything recorded on a day, not just that directory's events.
+- **It doesn't delete what was already recorded.** `workscribe exclude` tells you how many earlier events were kept. They stay in your summaries until you remove them, and are removed with the rest after the [retention limit](#how-long-data-is-kept). `workscribe clear --date` removes everything recorded on a day, not just that directory's events.
 - **A relative path in a command isn't detected.** `cd client` from the parent directory looks like any other word, so run from a directory that isn't excluded, it is still recorded. Excluding the parent, or working from inside the excluded directory, avoids this.
 - **An agent's recap can mention excluded work.** With `capture.agentMessages` on (it is off by default), a recap of a session that also worked somewhere else may describe work in an excluded directory. Leave it off if that matters.
 - **It can't cover the home folder or `/`.** Both would stop all capture; use `workscribe pause` for that.

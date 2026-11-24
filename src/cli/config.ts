@@ -8,6 +8,16 @@ import { getDb } from '../db'
 import { requestTicketRelink } from '../db/jobs/ticket-refs'
 import { ticketPatternProblem } from '../capture/tickets'
 import { clearAgentMessages } from '../db/agent-sessions'
+import { applyRetentionSetting, isRetentionKey, RETENTION_KEEP_FOREVER_KEY } from '../config/retention'
+import {
+  getLimitsSnapshot,
+  isKeepForeverMirrored,
+  limitsShortened,
+  restartAnnouncement,
+  setKeepForeverMirror,
+  setLimitsSnapshot,
+} from '../db/retention-state'
+import { GRACE_DAYS } from '../db/retention-schedule'
 
 const TICKET_PATTERN_KEY = 'tickets.pattern'
 const AGENT_MESSAGES_KEY = 'capture.agentMessages'
@@ -32,6 +42,40 @@ function setTicketPattern(pattern: string): void {
       '  New captures use it now; your history is re-linked the next time a data command runs (or: workscribe upgrade).'
     )
   )
+}
+
+function restartAfterChange(db: ReturnType<typeof getDb>, reason: string): void {
+  restartAnnouncement(db)
+  log.notice(`${reason}: Workscribe announces the first removal date again, with ${GRACE_DAYS} days before it.`)
+}
+
+/**
+ * Sets one `retention.*` value, strictly: nothing is coerced, so `retention.days ""` or `retention.keepForever yes` is
+ * refused instead of becoming 0 or a string. Keeping everything is also written to the database, ahead of config.json,
+ * so a config file that is later damaged or deleted still can't lead to removal (WOR-179).
+ */
+function setRetentionSetting(key: string, value: string): void {
+  const config = readConfig()
+  const result = applyRetentionSetting(config.retention, key, value)
+  if (!result.ok) {
+    log.error(result.message)
+    process.exit(1)
+  }
+  const db = getDb()
+  if (key === RETENTION_KEEP_FOREVER_KEY) {
+    // Opting back in starts over: the date announced before is no longer one the person has been told about
+    const isOptingBackIn = isKeepForeverMirrored(db) && !result.retention.keepForever
+    setKeepForeverMirror(db, result.retention.keepForever)
+    if (isOptingBackIn) restartAfterChange(db, 'Removal was switched back on')
+  } else {
+    const before = getLimitsSnapshot(db)
+    if (before !== null && limitsShortened(before, result.retention)) {
+      restartAfterChange(db, 'The limit is shorter, so more is removed')
+    }
+    setLimitsSnapshot(db, result.retention)
+  }
+  writeConfig({ ...config, retention: result.retention })
+  log.success(`Set ${chalk.cyan(key)} = ${chalk.yellow(value)}`)
 }
 
 export function registerConfig(program: Command): void {
@@ -62,6 +106,10 @@ export function registerConfig(program: Command): void {
       }
       if (key === TICKET_PATTERN_KEY) {
         setTicketPattern(value)
+        return
+      }
+      if (isRetentionKey(key)) {
+        setRetentionSetting(key, value)
         return
       }
       const config = readConfig()

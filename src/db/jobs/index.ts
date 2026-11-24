@@ -7,6 +7,7 @@ import { ticketRefsJob } from './ticket-refs'
 import { scrubSecretsJob } from './scrub-secrets'
 import { readOnlyCommandsJob } from './read-only-commands'
 import { npxFlagCommandsJob } from './npx-flag-commands'
+import { summaryDaysJob } from './summary-days'
 
 // Ordered list — append only. Jobs run in this order and a job only starts once every job before it is done, so a
 // later job can rely on an earlier one. To change what a job does for rows it already handled, bump its version:
@@ -21,5 +22,6 @@ export const JOBS: DataJob[] = [
   scrubSecretsJob,
   readOnlyCommandsJob,
   npxFlagCommandsJob,
+  summaryDaysJob,
   dropOldSessionsJob,
 ]

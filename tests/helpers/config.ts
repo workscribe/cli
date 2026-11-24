@@ -21,6 +21,7 @@ export function createTestConfig(overrides: Partial<WorkscribeConfig> = {}): Wor
     redact: { extra: [] },
     summary: { format: 'markdown' },
     tickets: { pattern: DEFAULT_TICKET_PATTERN },
+    retention: { days: 100, keepForever: false, summaryDays: null },
     ...overrides,
   }
 }

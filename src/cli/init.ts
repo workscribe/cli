@@ -10,6 +10,7 @@ import { installProfile, cacheManifest } from '../profiles/fetcher'
 import { getDb } from '../db'
 import { log } from '../utils/logger'
 import { loadAIToolRegistry } from '../config/registry'
+import { DEFAULT_RETENTION_DAYS } from '../config/retention'
 import {
   detectShell,
   hasChronicleHook,
@@ -365,7 +366,17 @@ function printNextSteps(shell: Shell | null): void {
   log.plain(`  Check capture is working:`)
   log.plain(`    ${chalk.cyan('workscribe status')}`)
 
+  printRetentionNote()
   log.plain('')
+}
+
+/** Tells people, before anything is captured, that old data is removed, when, and how to keep it (WOR-179). */
+function printRetentionNote(): void {
+  const days = readConfig().retention?.days ?? DEFAULT_RETENTION_DAYS
+  log.plain('')
+  log.plain(`  Your data stays on this machine. Captured events are removed after ${chalk.cyan(String(days))} days;`)
+  log.plain(`  your summaries stay. ${chalk.dim('See: workscribe retention')}`)
+  log.plain(`  To keep everything instead: ${chalk.cyan('workscribe config set retention.keepForever true')}`)
 }
 
 export function registerInit(program: Command): void {

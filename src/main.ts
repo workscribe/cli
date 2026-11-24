@@ -22,6 +22,8 @@ import { registerBugReport } from './cli/bug-report'
 import { registerCompletions, shouldRunDataJobs, shouldRunStartupChecks } from './cli/completions'
 import { registerUpgrade } from './cli/upgrade'
 import { runDataJobsBeforeCommand } from './cli/data-jobs'
+import { runRetentionBeforeCommand } from './cli/retention-run'
+import { registerRetention } from './cli/retention'
 import { registerAlerts } from './cli/alerts'
 import { registerContext } from './cli/context'
 import { registerHistory } from './cli/history'
@@ -38,6 +40,8 @@ if (shouldRunStartupChecks(invokedCommand)) {
 // background capture, the editor's `context` calls or the agent skill's `sessions` calls — see shouldRunDataJobs)
 if (shouldRunDataJobs(process.argv.slice(2))) {
   runDataJobsBeforeCommand(invokedCommand, __WORKSCRIBE_VERSION__)
+  // `upgrade` runs its own jobs, and then the removal (src/cli/upgrade.ts), so the removal never gets ahead of them
+  if (invokedCommand !== 'upgrade') runRetentionBeforeCommand()
 }
 
 const program = new Command()
@@ -48,6 +52,7 @@ registerCapture(program)
 registerHook(program)
 registerInit(program)
 registerStatus(program)
+registerRetention(program)
 registerEvents(program)
 registerSessions(program)
 registerSummary(program)
