@@ -291,6 +291,8 @@ describe('runRetention: reminders before the first removal (WOR-179)', () => {
   it('never reminds again once the removal has started', () => {
     const fixture = announcedFixture()
     reminderOn(fixture, 213)
+    // Work captured today, as there would be: removal counts from the newest event, never from the clock alone
+    insertEvent(fixture.db, onDay(214))
 
     expect(run(fixture, onDay(214))).toMatchObject({ status: 'ran', events: 10 })
     expect(run(fixture, onDay(215))).toMatchObject({ status: 'ran' })
@@ -340,6 +342,7 @@ describe('runRetention: summaries have a limit of their own (WOR-179)', () => {
 
   it('removes the summaries of days older than its own limit when removal runs', () => {
     const fixture = started()
+    insertEvent(fixture.db, onDay(500))
 
     // Day 500 is 2028-04-06; 150 days before it is 2027-11-08, so all three days of summaries are older
     const outcome = run(fixture, onDay(500), withSummaryDays(150))
@@ -408,5 +411,50 @@ describe('runRetention: a config that lost the limits (WOR-179)', () => {
     const fixture = startedWith({ ...customised, retention: { ...customised.retention, summaryDays: 500 } })
 
     expect(run(fixture, onDay(400), { policy: lost })).toMatchObject({ status: 'skipped' })
+  })
+})
+
+describe('runRetention: a clock that jumps (WOR-179)', () => {
+  function startedFixture(): Setup {
+    const fixture = setup()
+    for (let day = 1; day <= 120; day++) insertEvent(fixture.db, onDay(day))
+    run(fixture, onDay(1, 10))
+    return fixture
+  }
+
+  it('removes only what was due by the last thing captured, when the clock is far ahead of it', () => {
+    const fixture = startedFixture()
+
+    // A year later by the clock, with nothing captured since day 120
+    const outcome = run(fixture, onDay(500))
+
+    expect(outcome).toMatchObject({ status: 'ran', events: 20 })
+    expect(eventCount(fixture.db)).toBe(100)
+  })
+
+  it('takes the old backups no further than that either', () => {
+    const fixture = startedFixture()
+    fs.mkdirSync(fixture.backups)
+    const recent = path.join(fixture.backups, 'workscribe-3.5.2-recent.db')
+    fs.writeFileSync(recent, 'x')
+    fs.utimesSync(recent, onDay(100), onDay(100))
+
+    run(fixture, onDay(500))
+
+    expect(fs.existsSync(recent)).toBe(true)
+  })
+
+  it('counts from the clock when work was captured today, so a normal day is not delayed', () => {
+    const fixture = startedFixture()
+    insertEvent(fixture.db, onDay(130))
+
+    expect(run(fixture, onDay(130))).toMatchObject({ status: 'ran', events: 29 })
+  })
+
+  it('does nothing for a clock that runs behind', () => {
+    const fixture = startedFixture()
+
+    expect(run(fixture, onDay(50))).toMatchObject({ status: 'waiting' })
+    expect(eventCount(fixture.db)).toBe(120)
   })
 })

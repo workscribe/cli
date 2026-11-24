@@ -162,6 +162,22 @@ function limitOrReason(
   return { days: policy.retention.days, summaryDays: policy.retention.summaryDays, isDefault: policy.isDefault }
 }
 
+/**
+ * The time removal counts from: now, but never later than the end of the day of the newest event Workscribe holds (or,
+ * with none, of the day removal was announced). A clock that jumps forward (a resumed virtual machine, a bad time
+ * server, a mistyped year) would otherwise make everything look expired at once, and nothing can undo that. This way a
+ * wrong clock can remove nothing that was not already due by the time of the last thing captured, and a day's gap in
+ * use only delays removal by that gap.
+ */
+export function referenceNowOf(db: MigrationDatabase, now: Date): Date {
+  const newest = db.prepare('SELECT MAX(captured_at) AS capturedAt FROM events').get() as { capturedAt: string | null }
+  const lastActive = newest.capturedAt ?? getMetaValue(db, ANNOUNCED_AT_KEY)
+  if (lastActive === null) return now
+  const lastDay = new Date(lastActive)
+  const endOfLastDay = new Date(lastDay.getFullYear(), lastDay.getMonth(), lastDay.getDate() + 1)
+  return endOfLastDay < now ? endOfLastDay : now
+}
+
 function runRemoval(
   db: MigrationDatabase,
   options: RetentionRunOptions,
@@ -169,14 +185,15 @@ function runRemoval(
   today: string
 ): RetentionOutcome {
   const { days, summaryDays } = limit
-  const cutoff = cutoffOf(options.now, days)
+  const referenceNow = referenceNowOf(db, options.now)
+  const cutoff = cutoffOf(referenceNow, days)
   const removal = removeExpiredEvents(db, { cutoff, isOverBudget: options.isOverBudget })
   if (removal.events > 0) requestFileCleanup(db)
   if (removal.stoppedBecause === 'finished') removeOrphans(db, cutoff)
   // Summaries have a limit of their own, none unless it is set; their text can hold what a command did
-  const summaries = summaryDays === null ? 0 : removeExpiredSummaries(db, cutoffOf(options.now, summaryDays))
+  const summaries = summaryDays === null ? 0 : removeExpiredSummaries(db, cutoffOf(referenceNow, summaryDays))
   if (summaries > 0) requestFileCleanup(db)
-  const removedBackups = pruneExpiredBackups(options.backupsDirectory, days, options.now)
+  const removedBackups = pruneExpiredBackups(options.backupsDirectory, days, referenceNow)
   forgetBackups(db, removedBackups)
   const cleanup = isFileCleanupPending(db)
     ? runFileCleanup(db, { canVacuum: options.canVacuum, beforeVacuum: options.beforeVacuum })
