@@ -2,7 +2,10 @@ import { readRetentionPolicy } from '../config'
 import { getDb } from '../db'
 import { JOBS } from '../db/jobs'
 import { isFileCleanupPending, runFileCleanup } from '../db/retention-cleanup'
-import { runRetention, type RemovalPreview, type RetentionOutcome, type SkipReason } from '../db/retention-run'
+import { runRetention, type RetentionOutcome, type SkipReason } from '../db/retention-run'
+import type { RemovalPreview } from '../db/retention-schedule'
+import { KEEP_EVERYTHING_COMMAND } from '../config/retention'
+import { removalCounts } from './retention-text'
 import { BACKUPS_DIR } from '../utils/paths'
 import { debugLog, log } from '../utils/logger'
 
@@ -10,21 +13,17 @@ import { debugLog, log } from '../utils/logger'
 // couldn't happen is tried again at the next one.
 
 // A command people typed waits at most this long for removal, between batches; the rest carries on at the next command
-export const IMPLICIT_RETENTION_BUDGET_MS = 1500
-
-const KEEP_EVERYTHING = 'workscribe config set retention.keepForever true'
+const IMPLICIT_RETENTION_BUDGET_MS = 1500
 
 function whatGoes(preview: RemovalPreview): string {
   if (preview.events === 0) return 'Nothing is old enough yet: it then removes one day at a time, the oldest first.'
-  const days = preview.eventDays === 1 ? '1 day' : `${preview.eventDays} days`
-  const events = preview.events === 1 ? '1 captured event' : `${preview.events} captured events`
-  return `That removes ${events}, from ${days}.`
+  return `That removes ${removalCounts(preview)}.`
 }
 
 function announcement(days: number, firstRemovalOn: string, preview: RemovalPreview): string {
   return (
     `Workscribe now removes captured events older than ${days} days. The first removal is on ${firstRemovalOn}. ` +
-    `${whatGoes(preview)} Your summaries stay. To keep everything instead: ${KEEP_EVERYTHING}. Details: workscribe retention`
+    `${whatGoes(preview)} Your summaries stay. To keep everything instead: ${KEEP_EVERYTHING_COMMAND}. Details: workscribe retention`
   )
 }
 
@@ -35,32 +34,40 @@ function whenText(daysUntil: number): string {
 function reminder(days: number, firstRemovalOn: string, daysUntil: number, preview: RemovalPreview): string {
   return (
     `Workscribe removes captured events older than ${days} days ${whenText(daysUntil)}, on ${firstRemovalOn}. ` +
-    `${whatGoes(preview)} To keep everything instead: ${KEEP_EVERYTHING}`
+    `${whatGoes(preview)} To keep everything instead: ${KEEP_EVERYTHING_COMMAND}`
   )
 }
 
-function pausedMessage(reason: SkipReason): string | null {
-  if (reason.kind !== 'paused') return null
-  return `Removing old data is paused until ${reason.job} has finished. Run workscribe upgrade.`
+/** Why nothing was removed, for the reasons a person can fix; the others (kept forever, already ran today) say nothing. */
+function skippedMessage(reason: SkipReason): string | null {
+  if (reason.kind === 'paused')
+    return `Removing old data is paused until ${reason.job} has finished. Run workscribe upgrade.`
+  if (reason.kind === 'unreadable') return `Nothing is removed: ${reason.reason}.`
+  return null
 }
 
 /** What a run says. Quiet unless something happened that the person should know about. */
 function report(outcome: RetentionOutcome, options: { isExplicit: boolean }): void {
-  if (outcome.status === 'announced') {
-    log.notice(announcement(outcome.days, outcome.firstRemovalOn, outcome.preview))
-  }
-  if (outcome.status === 'waiting' && outcome.reminder !== null) {
-    log.notice(reminder(outcome.days, outcome.firstRemovalOn, outcome.daysUntil, outcome.reminder))
-  }
-  if (outcome.status === 'ran' && outcome.events > 0) {
-    log.notice(`Removed ${outcome.events} captured events older than ${outcome.days} days. Your summaries stay.`)
-  }
-  if (outcome.status === 'ran' && outcome.summaries > 0) {
-    log.notice(`Removed ${outcome.summaries} saved summaries, as retention.summaryDays says.`)
-  }
-  if (outcome.status === 'skipped' && options.isExplicit) {
-    const paused = pausedMessage(outcome.reason)
-    if (paused !== null) log.notice(paused)
+  switch (outcome.status) {
+    case 'announced':
+      log.notice(announcement(outcome.days, outcome.firstRemovalOn, outcome.preview))
+      return
+    case 'waiting':
+      if (outcome.reminder !== null) {
+        log.notice(reminder(outcome.days, outcome.firstRemovalOn, outcome.daysUntil, outcome.reminder))
+      }
+      return
+    case 'ran':
+      if (outcome.events > 0) {
+        log.notice(`Removed ${outcome.events} captured events older than ${outcome.days} days. Your summaries stay.`)
+      }
+      if (outcome.summaries > 0)
+        log.notice(`Removed ${outcome.summaries} saved summaries, as retention.summaryDays says.`)
+      return
+    case 'skipped': {
+      const reason = options.isExplicit ? skippedMessage(outcome.reason) : null
+      if (reason !== null) log.notice(reason)
+    }
   }
 }
 

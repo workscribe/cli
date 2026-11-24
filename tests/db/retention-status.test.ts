@@ -1,12 +1,11 @@
-import { describe, it, expect, vi, onTestFinished } from 'vitest'
-import { DatabaseSync } from 'node:sqlite'
-import { applyMigrations } from '../../src/db/migrate'
-import { MIGRATIONS } from '../../src/db/migrations'
+import { describe, it, expect, vi } from 'vitest'
+import type { DatabaseSync } from 'node:sqlite'
 import { JOBS } from '../../src/db/jobs'
-import { GATE_JOB_NAMES, runRetention } from '../../src/db/retention-run'
+import { runRetention } from '../../src/db/retention-run'
 import { retentionStatusOf } from '../../src/db/retention-status'
 import { setKeepForeverMirror } from '../../src/db/retention-state'
 import { localDateStr } from '../../src/utils/format'
+import { insertEventAt, openTemporaryDatabase } from '../helpers/retention-db'
 
 vi.mock('../../src/config', () => ({ readConfig: vi.fn(() => ({ capture: { aiTools: true } })) }))
 vi.mock('../../src/profiles/loader', () => ({ getActiveProfileRules: vi.fn(() => []) }))
@@ -16,24 +15,10 @@ const DAY_ONE = new Date(2026, 10, 23, 9)
 const onDay = (dayNumber: number) =>
   new Date(DAY_ONE.getFullYear(), DAY_ONE.getMonth(), DAY_ONE.getDate() + dayNumber - 1, 9)
 
-function database(): DatabaseSync {
-  const db = new DatabaseSync(':memory:')
-  db.exec('PRAGMA foreign_keys = ON')
-  applyMigrations(db, MIGRATIONS)
-  for (const job of JOBS.filter((candidate) => GATE_JOB_NAMES.includes(candidate.name))) {
-    db.prepare("INSERT INTO data_jobs (name, version, cursor, status) VALUES (?, ?, 0, 'done')").run(
-      job.name,
-      job.version
-    )
-  }
-  onTestFinished(() => db.close())
-  return db
-}
+const database = (): DatabaseSync => openTemporaryDatabase({ gatesDone: true }).db
 
-function insertEvent(db: DatabaseSync, capturedAt: Date): void {
-  db.prepare("INSERT INTO events (captured_at, command, cwd, category) VALUES (?, 'npm test', '/repo', 'testing')").run(
-    capturedAt.toISOString()
-  )
+const insertEvent = (db: DatabaseSync, capturedAt: Date): void => {
+  insertEventAt(db, capturedAt)
 }
 
 const statusOn = (db: DatabaseSync, day: number, policy = POLICY) =>
@@ -109,5 +94,17 @@ describe('retentionStatusOf', () => {
 
   it('has no oldest day when nothing is stored', () => {
     expect(statusOn(database(), 1)).toMatchObject({ oldestDay: null, oldestDayRemovedOn: null })
+  })
+
+  it('says nothing is removed, and why, when the config lost limits Workscribe had seen', () => {
+    const db = database()
+    insertEvent(db, onDay(1))
+    const customised = { ...POLICY, retention: { ...POLICY.retention, days: 365 }, isDefault: false }
+    runRetention(db, { now: onDay(1), policy: customised, jobs: JOBS, backupsDirectory: '/none', canVacuum: false })
+
+    const status = statusOn(db, 50, { ...POLICY, isDefault: true })
+
+    expect(status).toMatchObject({ mode: 'unreadable', next: null })
+    expect(status.reason).toContain('workscribe config set retention.days 365')
   })
 })

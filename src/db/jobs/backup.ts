@@ -4,6 +4,7 @@ import type { MigrationDatabase } from '../migration-types'
 import { isDatabaseLocked, withImmediateTransaction } from '../transaction'
 import { debugLog } from '../../utils/logger'
 import { errorMessage } from '../../utils/error-message'
+import { MS_PER_DAY } from '../../utils/format'
 import { deleteMetaValue, getMetaValue, getMetaValuesWithPrefix, setMetaValue } from './store'
 
 export const BACKUP_KEY_PREFIX = 'backup:'
@@ -76,8 +77,6 @@ export function pruneBackups(directory: string, keep: number = BACKUPS_KEPT): vo
     .sort((first, second) => second.modifiedAt - first.modifiedAt)
   for (const backup of backups.slice(keep)) fs.rmSync(path.join(directory, backup.file), { force: true })
 }
-
-const MS_PER_DAY = 24 * 60 * 60 * 1000
 
 /**
  * Removes the automatic backups (`workscribe-*.db`, the same files `pruneBackups` counts) older than `days` by their

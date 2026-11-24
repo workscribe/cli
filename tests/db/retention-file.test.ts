@@ -1,10 +1,6 @@
 import { describe, it, expect, vi, onTestFinished } from 'vitest'
 import { DatabaseSync } from 'node:sqlite'
 import fs from 'fs'
-import os from 'os'
-import path from 'path'
-import { applyMigrations } from '../../src/db/migrate'
-import { MIGRATIONS } from '../../src/db/migrations'
 import { removeExpiredEvents } from '../../src/db/retention'
 import {
   isFileCleanupPending,
@@ -13,6 +9,7 @@ import {
   runFileCleanup,
 } from '../../src/db/retention-cleanup'
 import { CLEANUP_KEY } from '../../src/db/retention-state'
+import { openTemporaryDatabase } from '../helpers/retention-db'
 
 vi.mock('../../src/config', () => ({ readConfig: vi.fn(() => ({ capture: { aiTools: true } })) }))
 vi.mock('../../src/profiles/loader', () => ({ getActiveProfileRules: vi.fn(() => []) }))
@@ -23,19 +20,7 @@ const OLD_DAY = new Date(2026, 7, 1, 12)
 const KEPT_DAY = new Date(2026, 10, 20, 12)
 const CUTOFF = new Date(2026, 10, 1).toISOString()
 
-function openDatabase(): { db: DatabaseSync; file: string } {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'workscribe-retention-file-'))
-  const file = path.join(directory, 'workscribe.db')
-  const db = new DatabaseSync(file)
-  db.exec('PRAGMA journal_mode = WAL')
-  db.exec('PRAGMA foreign_keys = ON')
-  applyMigrations(db, MIGRATIONS)
-  onTestFinished(() => {
-    db.close()
-    fs.rmSync(directory, { recursive: true, force: true })
-  })
-  return { db, file }
-}
+const openDatabase = () => openTemporaryDatabase()
 
 /** Every byte the database holds on disk: the file, and the write-ahead log that has not been copied into it. */
 function bytesOnDisk(file: string): Buffer {

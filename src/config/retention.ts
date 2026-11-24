@@ -4,15 +4,17 @@
 
 export const DEFAULT_RETENTION_DAYS = 100
 // A shorter limit would make a typo (`retention.days 1`) remove nearly everything
-export const MIN_RETENTION_DAYS = 7
+const MIN_RETENTION_DAYS = 7
 
-export interface RetentionConfig {
-  // Events older than this many days are removed
+/** The two limits a removal counts from: events, and saved summaries (none unless set). */
+export interface RetentionLimit {
   days: number
+  summaryDays: number | null
+}
+
+export interface RetentionConfig extends RetentionLimit {
   // Remove nothing, ever
   keepForever: boolean
-  // Saved summaries older than this many days are removed too; null keeps them
-  summaryDays: number | null
 }
 
 export const DEFAULT_RETENTION: RetentionConfig = {
@@ -21,9 +23,11 @@ export const DEFAULT_RETENTION: RetentionConfig = {
   summaryDays: null,
 }
 
-export const RETENTION_DAYS_KEY = 'retention.days'
+const RETENTION_DAYS_KEY = 'retention.days'
 export const RETENTION_KEEP_FOREVER_KEY = 'retention.keepForever'
-export const RETENTION_SUMMARY_DAYS_KEY = 'retention.summaryDays'
+const RETENTION_SUMMARY_DAYS_KEY = 'retention.summaryDays'
+/** What to run to keep everything, as every message about removal says it. */
+export const KEEP_EVERYTHING_COMMAND = `workscribe config set ${RETENTION_KEEP_FOREVER_KEY} true`
 const RETENTION_KEYS = [RETENTION_DAYS_KEY, RETENTION_KEEP_FOREVER_KEY, RETENTION_SUMMARY_DAYS_KEY]
 const NO_SUMMARY_LIMIT = 'none'
 

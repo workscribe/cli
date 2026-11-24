@@ -148,6 +148,22 @@ describe('runRetentionAfterUpgrade', () => {
     expect(options.isOverBudget).toBeUndefined()
   })
 
+  it('says why nothing is removed when the config has lost the limits, so it can be put back', () => {
+    mockRun.mockReturnValue({ status: 'skipped', reason: { kind: 'unreadable', reason: 'retention is missing' } })
+
+    runRetentionAfterUpgrade()
+
+    expect(mockLog.notice).toHaveBeenCalledWith(expect.stringContaining('Nothing is removed: retention is missing'))
+  })
+
+  it('says nothing for a reason a person has no use for, such as having kept everything', () => {
+    mockRun.mockReturnValue({ status: 'skipped', reason: { kind: 'keep-forever' } })
+
+    runRetentionAfterUpgrade()
+
+    expect(mockLog.notice).not.toHaveBeenCalled()
+  })
+
   it('says why nothing is removed when a job has not finished', () => {
     mockRun.mockReturnValue({ status: 'skipped', reason: { kind: 'paused', job: 'summary-days' } })
 

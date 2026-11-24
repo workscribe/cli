@@ -1,12 +1,8 @@
 import { describe, it, expect, vi, onTestFinished } from 'vitest'
 import { DatabaseSync } from 'node:sqlite'
-import fs from 'fs'
-import os from 'os'
-import path from 'path'
-import { applyMigrations } from '../../src/db/migrate'
-import { MIGRATIONS } from '../../src/db/migrations'
 import { cutoffOf, removeExpiredEvents, removeExpiredSummaries, removeOrphans } from '../../src/db/retention'
 import { localDateOf } from '../../src/utils/format'
+import { countRows, insertEventAt, openTemporaryDatabase } from '../helpers/retention-db'
 
 vi.mock('../../src/config', () => ({ readConfig: vi.fn(() => ({ capture: { aiTools: true } })) }))
 vi.mock('../../src/profiles/loader', () => ({ getActiveProfileRules: vi.fn(() => []) }))
@@ -18,34 +14,15 @@ const DAY_ONE = noon(2026, 11, 23)
 const dayAfterStart = (dayNumber: number, hour = 12) =>
   new Date(DAY_ONE.getFullYear(), DAY_ONE.getMonth(), DAY_ONE.getDate() + dayNumber - 1, hour)
 
-function openDatabase(): { db: DatabaseSync; file: string } {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'workscribe-retention-'))
-  const file = path.join(directory, 'workscribe.db')
-  const db = new DatabaseSync(file)
-  db.exec('PRAGMA journal_mode = WAL')
-  db.exec('PRAGMA foreign_keys = ON')
-  applyMigrations(db, MIGRATIONS)
-  onTestFinished(() => {
-    db.close()
-    fs.rmSync(directory, { recursive: true, force: true })
-  })
-  return { db, file }
-}
-
-function insertEvent(db: DatabaseSync, capturedAt: Date, command = 'npm test'): number {
-  const result = db
-    .prepare("INSERT INTO events (captured_at, command, cwd, category) VALUES (?, ?, '/repo', 'testing')")
-    .run(capturedAt.toISOString(), command)
-  return Number(result.lastInsertRowid)
-}
+const openDatabase = () => openTemporaryDatabase()
+const insertEvent = insertEventAt
 
 function eventDays(db: DatabaseSync): string[] {
   const rows = db.prepare('SELECT captured_at FROM events ORDER BY captured_at').all() as { captured_at: string }[]
   return rows.map((row) => localDateOf(row.captured_at))
 }
 
-const count = (db: DatabaseSync, table: string): number =>
-  (db.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get() as { count: number }).count
+const count = countRows
 
 describe('cutoffOf', () => {
   it('is the start of the local day the limit ago, so the whole of that day is kept', () => {

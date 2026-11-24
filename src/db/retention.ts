@@ -7,7 +7,7 @@ import { localDateOf } from '../utils/format'
 // from `_capture`, `_hook`, `context` or `sessions`. A run is a series of short transactions, so the write lock is held
 // for one batch at a time and a capture that arrives between two batches gets in. `node:sqlite`-free.
 
-export const REMOVAL_BATCH_SIZE = 500
+const REMOVAL_BATCH_SIZE = 500
 // A batch waits this long for the write lock, well under the 5 s a capture waits for it, and gives up the run when it
 // doesn't get it: a capture that is writing always goes first
 const BATCH_LOCK_WAIT_MS = 1000

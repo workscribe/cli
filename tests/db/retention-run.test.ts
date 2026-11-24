@@ -1,16 +1,15 @@
-import { describe, it, expect, vi, onTestFinished } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { DatabaseSync } from 'node:sqlite'
 import fs from 'fs'
-import os from 'os'
 import path from 'path'
-import { applyMigrations } from '../../src/db/migrate'
-import { MIGRATIONS } from '../../src/db/migrations'
 import { JOBS } from '../../src/db/jobs'
-import { GATE_JOB_NAMES, GRACE_DAYS, addDays, daysBetween, runRetention } from '../../src/db/retention-run'
+import { GATE_JOB_NAMES, runRetention } from '../../src/db/retention-run'
+import { GRACE_DAYS, addDays, daysBetween } from '../../src/db/retention-schedule'
 import type { RetentionRunOptions } from '../../src/db/retention-run'
 import { getMetaValue, setMetaValue } from '../../src/db/jobs/store'
 import { setKeepForeverMirror } from '../../src/db/retention-state'
 import { localDateStr } from '../../src/utils/format'
+import { countRows, insertEventAt, openTemporaryDatabase } from '../helpers/retention-db'
 
 vi.mock('../../src/config', () => ({ readConfig: vi.fn(() => ({ capture: { aiTools: true } })) }))
 vi.mock('../../src/profiles/loader', () => ({ getActiveProfileRules: vi.fn(() => []) }))
@@ -31,34 +30,15 @@ interface Setup {
 }
 
 function setup(options: { gatesDone?: boolean } = {}): Setup {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'workscribe-retention-run-'))
-  const db = new DatabaseSync(path.join(directory, 'workscribe.db'))
-  db.exec('PRAGMA journal_mode = WAL')
-  db.exec('PRAGMA foreign_keys = ON')
-  applyMigrations(db, MIGRATIONS)
-  onTestFinished(() => {
-    db.close()
-    fs.rmSync(directory, { recursive: true, force: true })
-  })
-  if (options.gatesDone !== false) {
-    for (const job of JOBS.filter((candidate) => GATE_JOB_NAMES.includes(candidate.name))) {
-      db.prepare("INSERT INTO data_jobs (name, version, cursor, status) VALUES (?, ?, 0, 'done')").run(
-        job.name,
-        job.version
-      )
-    }
-  }
+  const { db, directory } = openTemporaryDatabase({ gatesDone: options.gatesDone !== false })
   return { db, backups: path.join(directory, 'backups') }
 }
 
-function insertEvent(db: DatabaseSync, capturedAt: Date): void {
-  db.prepare("INSERT INTO events (captured_at, command, cwd, category) VALUES (?, 'npm test', '/repo', 'testing')").run(
-    capturedAt.toISOString()
-  )
+const insertEvent = (db: DatabaseSync, capturedAt: Date): void => {
+  insertEventAt(db, capturedAt)
 }
 
-const eventCount = (db: DatabaseSync): number =>
-  (db.prepare('SELECT COUNT(*) AS count FROM events').get() as { count: number }).count
+const eventCount = (db: DatabaseSync): number => countRows(db, 'events')
 
 function run(fixture: Setup, now: Date, overrides: Partial<RetentionRunOptions> = {}) {
   return runRetention(fixture.db, {

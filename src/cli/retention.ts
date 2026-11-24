@@ -1,6 +1,8 @@
 import { Command } from 'commander'
 import chalk from 'chalk'
 import { readRetentionPolicy } from '../config'
+import { KEEP_EVERYTHING_COMMAND } from '../config/retention'
+import { removalCounts } from './retention-text'
 import { getDb } from '../db'
 import { JOBS } from '../db/jobs'
 import { isFileCleanupPending } from '../db/retention-cleanup'
@@ -12,8 +14,7 @@ import { log } from '../utils/logger'
 // `workscribe retention` (WOR-179): what is kept and for how long, the oldest day kept and when it goes, and what the
 // next removal takes. `retention run` does the removal now, with no time limit.
 
-const KEEP_EVERYTHING_COMMAND = 'workscribe config set retention.keepForever true'
-const LABEL_WIDTH = 14
+const LABEL_WIDTH = 13
 
 const labelled = (label: string, value: string): string => `  ${label.padEnd(LABEL_WIDTH)}${value}`
 
@@ -32,10 +33,8 @@ function summariesLine(status: RetentionStatus): string {
 
 function nextLine(status: RetentionStatus): string | null {
   if (status.next === null) return null
-  const { on, events, eventDays } = status.next
-  if (events === 0) return `${on}: nothing is old enough yet`
-  const days = eventDays === 1 ? '1 day' : `${eventDays} days`
-  return `${on}: ${events} captured ${events === 1 ? 'event' : 'events'}, from ${days}`
+  const { on, ...preview } = status.next
+  return preview.events === 0 ? `${on}: nothing is old enough yet` : `${on}: ${removalCounts(preview)}`
 }
 
 /** The whole picture, for `workscribe retention`. */
@@ -54,17 +53,19 @@ export function retentionLines(status: RetentionStatus): string[] {
   return lines
 }
 
-/** One line for `status`. */
-export function retentionStatusLine(status: RetentionStatus): string {
-  const label = '  Retention    '
-  if (status.mode === 'keep-forever') return `${label}${chalk.cyan('kept forever')}`
-  if (status.mode === 'unreadable')
-    return `${label}${chalk.yellow('nothing is removed')} ${chalk.dim('(config unreadable)')}`
+function statusLineValue(status: RetentionStatus): string {
+  if (status.mode === 'keep-forever') return chalk.cyan('kept forever')
+  if (status.mode === 'unreadable') return `${chalk.yellow('nothing is removed')} ${chalk.dim('(config unreadable)')}`
   if (status.mode === 'paused') {
-    return `${label}${chalk.yellow('paused')} ${chalk.dim(`(until ${status.pausedBy} finishes: workscribe upgrade)`)}`
+    return `${chalk.yellow('paused')} ${chalk.dim(`(until ${status.pausedBy} finishes: workscribe upgrade)`)}`
   }
   const oldest = status.oldestDayRemovedOn === null ? '' : ` · oldest day goes ${status.oldestDayRemovedOn}`
-  return `${label}${chalk.cyan(String(status.days))} days${chalk.dim(oldest)}`
+  return `${chalk.cyan(String(status.days))} days${chalk.dim(oldest)}`
+}
+
+/** One line for `status`. */
+export function retentionStatusLine(status: RetentionStatus): string {
+  return labelled('Retention', statusLineValue(status))
 }
 
 export function currentRetentionStatus(): RetentionStatus {

@@ -1,9 +1,10 @@
 import type { MigrationDatabase } from './migration-types'
 import type { DataJob } from './jobs/types'
 import { getMetaValue } from './jobs/store'
-import { addDays, firstRemovalDay, oldestEventDay, pausedBy, previewOf, type RemovalPreview } from './retention-run'
+import { lostLimitsProblem, pausedBy } from './retention-run'
+import { addDays, firstRemovalDay, oldestEventDay, previewOf, type RemovalPreview } from './retention-schedule'
 import { ANNOUNCED_AT_KEY, FIRST_REMOVAL_KEY, LAST_RUN_KEY, isKeepForeverMirrored } from './retention-state'
-import type { RetentionPolicy } from '../config/retention'
+import type { RetentionLimit, RetentionPolicy } from '../config/retention'
 import { localDateStr } from '../utils/format'
 
 // What `status` and `workscribe retention` say about the removal of old data (WOR-179): the policy, the oldest day that
@@ -13,7 +14,8 @@ export type RetentionMode = 'keep-forever' | 'unreadable' | 'paused' | 'waiting'
 
 export interface RetentionStatus {
   mode: RetentionMode
-  days: number
+  /** How many days events are kept; null when the config can't be read, so there is no limit to name */
+  days: number | null
   summaryDays: number | null
   /** Why the config can't be used (`unreadable`) */
   reason: string | null
@@ -35,11 +37,7 @@ interface StatusOptions {
   jobs: DataJob[]
 }
 
-function daysOf(policy: RetentionPolicy): { days: number; summaryDays: number | null } {
-  return policy.status === 'ok'
-    ? { days: policy.retention.days, summaryDays: policy.retention.summaryDays }
-    : { days: 0, summaryDays: null }
-}
+const COUNTING_MODES: RetentionMode[] = ['waiting', 'removing', 'paused']
 
 function modeOf(db: MigrationDatabase, options: StatusOptions, startsOn: string, today: string): RetentionMode {
   const { policy } = options
@@ -49,27 +47,58 @@ function modeOf(db: MigrationDatabase, options: StatusOptions, startsOn: string,
   return today < startsOn ? 'waiting' : 'removing'
 }
 
+/** The day the next removal happens: today if it has not run yet, tomorrow if it has, else the day removal starts. */
+function nextRemovalDay(db: MigrationDatabase, mode: RetentionMode, startsOn: string, today: string): string {
+  if (mode !== 'removing') return startsOn
+  return getMetaValue(db, LAST_RUN_KEY) === today ? addDays(today, 1) : today
+}
+
+/** The day the oldest event goes: its own, but never before removal starts. */
+function oldestDayRemovedOn(oldestDay: string | null, days: number, startsOn: string): string | null {
+  if (oldestDay === null) return null
+  const expiresOn = addDays(oldestDay, days + 1)
+  return expiresOn > startsOn ? expiresOn : startsOn
+}
+
+function unreadableStatus(db: MigrationDatabase, reason: string): RetentionStatus {
+  return {
+    mode: 'unreadable',
+    days: null,
+    summaryDays: null,
+    reason,
+    pausedBy: null,
+    oldestDay: oldestEventDay(db),
+    oldestDayRemovedOn: null,
+    startsOn: null,
+    next: null,
+  }
+}
+
 export function retentionStatusOf(db: MigrationDatabase, options: StatusOptions): RetentionStatus {
-  const { days, summaryDays } = daysOf(options.policy)
+  const { policy } = options
+  if (policy.status === 'unreadable') return unreadableStatus(db, policy.reason)
+  const { days, summaryDays }: RetentionLimit = policy.retention
+  const lost = lostLimitsProblem(db, { days, summaryDays, isDefault: policy.isDefault })
+  if (lost !== null) return unreadableStatus(db, lost)
   const today = localDateStr(options.now)
-  const announced = getMetaValue(db, ANNOUNCED_AT_KEY) !== null
   const stored = getMetaValue(db, FIRST_REMOVAL_KEY)
-  const startsOn = announced && stored !== null ? stored : firstRemovalDay(db, today, days)
+  const startsOn =
+    getMetaValue(db, ANNOUNCED_AT_KEY) !== null && stored !== null ? stored : firstRemovalDay(db, today, days)
   const mode = modeOf(db, options, startsOn, today)
   const oldestDay = oldestEventDay(db)
-  const isCounting = mode === 'waiting' || mode === 'removing' || mode === 'paused'
-  const expiresOn = oldestDay === null ? null : addDays(oldestDay, days + 1)
-  const ranToday = getMetaValue(db, LAST_RUN_KEY) === today
-  const nextDay = mode === 'removing' ? (ranToday ? addDays(today, 1) : today) : startsOn
+  if (!COUNTING_MODES.includes(mode)) {
+    return { ...unreadableStatus(db, ''), mode, days, summaryDays, reason: null, oldestDay }
+  }
+  const nextDay = nextRemovalDay(db, mode, startsOn, today)
   return {
     mode,
     days,
     summaryDays,
-    reason: options.policy.status === 'unreadable' ? options.policy.reason : null,
+    reason: null,
     pausedBy: mode === 'paused' ? pausedBy(db, options.jobs) : null,
     oldestDay,
-    oldestDayRemovedOn: expiresOn === null || !isCounting ? null : expiresOn > startsOn ? expiresOn : startsOn,
-    startsOn: isCounting ? startsOn : null,
-    next: isCounting ? { on: nextDay, ...previewOf(db, nextDay, days) } : null,
+    oldestDayRemovedOn: oldestDayRemovedOn(oldestDay, days, startsOn),
+    startsOn,
+    next: { on: nextDay, ...previewOf(db, nextDay, days) },
   }
 }
