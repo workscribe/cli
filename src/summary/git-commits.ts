@@ -50,6 +50,49 @@ export function getRepoRoot(cwd: string, timeoutMs?: number): string | null {
   return runGit(cwd, ['rev-parse', '--show-toplevel'], timeoutMs) || null
 }
 
+/**
+ * The repository `cwd` is in, spelled the way `cwd` is — git's own `--show-toplevel` answers with symlinks resolved
+ * (`/private/tmp` for `/tmp`), which wouldn't match the folders events were captured in. Null outside a repository, for
+ * a folder that is gone, or when git fails.
+ */
+export function getRepoRootOf(cwd: string, timeoutMs?: number): string | null {
+  const upToRoot = runGit(cwd, ['rev-parse', '--show-cdup'], timeoutMs)
+  return upToRoot === null ? null : path.resolve(cwd, upToRoot === '' ? '.' : upToRoot)
+}
+
+// `git check-ignore` exits with 1 when it looked and none of the paths is ignored
+const NONE_IGNORED_STATUS = 1
+
+/** Whether a process failed by exiting with this status (Node puts it on the error it throws). */
+function hasExitStatus(error: unknown, status: number): boolean {
+  return typeof error === 'object' && error !== null && 'status' in error && error.status === status
+}
+
+/**
+ * The paths among these that git ignores in the repository, or null when git couldn't say (no git, a folder that is
+ * gone, a timeout). The paths go in on stdin, NUL-separated, never in arguments: a path can't be read as an option, and
+ * a long list can't overflow the command line.
+ */
+export function getIgnoredPaths(repoRoot: string, paths: string[], timeoutMs = GIT_TIMEOUT_MS): Set<string> | null {
+  if (paths.length === 0) return new Set()
+  try {
+    const output = execFileSync('git', ['check-ignore', '-z', '--stdin'], {
+      cwd: repoRoot,
+      timeout: timeoutMs,
+      input: paths.join('\0'),
+      stdio: ['pipe', 'pipe', 'ignore'],
+    })
+    return new Set(
+      output
+        .toString()
+        .split('\0')
+        .filter((ignored) => ignored !== '')
+    )
+  } catch (error) {
+    return hasExitStatus(error, NONE_IGNORED_STATUS) ? new Set() : null
+  }
+}
+
 /** `timeoutMs`: this call's git timeout (default GIT_TIMEOUT_MS). */
 export function getUserEmail(repoRoot: string, timeoutMs?: number): string | null {
   return runGit(repoRoot, ['config', 'user.email'], timeoutMs) || null
