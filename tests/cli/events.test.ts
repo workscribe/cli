@@ -152,6 +152,29 @@ describe('workscribe events --json', () => {
     return JSON.parse(printed as string)
   }
 
+  describe('what the agent said a command is for (metadata.intent)', () => {
+    const DESCRIBED = { ...SAMPLE_EVENTS[1], metadata: '{"tool":"vitest","intent":"Run the tests"}' }
+    const intentWith = async (agentMessages: boolean, includeAgentMessages: boolean) => {
+      vi.mocked(readConfig).mockReturnValue(
+        createTestConfig({
+          capture: { ...createTestConfig().capture, agentMessages },
+          skill: { includeAgentMessages },
+        } as never)
+      )
+      mockGetEvents.mockReturnValue([DESCRIBED])
+      mockLog.plain.mockClear()
+      await makeProgram().parseAsync(['events', '--json'], { from: 'user' })
+      return printedJson().events[0].metadata.intent
+    }
+
+    it('goes out only with the agent messages stored and given to the skill', async () => {
+      expect(await intentWith(true, true)).toBe('Run the tests')
+      expect(await intentWith(true, false)).toBeUndefined()
+      expect(await intentWith(false, true)).toBeUndefined()
+      expect(await intentWith(false, false)).toBeUndefined()
+    })
+  })
+
   it('prints one line of JSON with structured events and no command text', async () => {
     mockGetEvents.mockReturnValue(SAMPLE_EVENTS)
 

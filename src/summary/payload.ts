@@ -1,7 +1,7 @@
 import os from 'os'
 import path from 'path'
 import { formatDate } from '../utils/format'
-import { parseMetadata } from './event-metadata'
+import { parseMetadata, withoutIntent } from './event-metadata'
 import { storyCommitsOf } from './story-commits'
 import { readsOfRows, type ReadPathResolver } from './event-reads'
 import { isFailedCommand } from './commits'
@@ -197,6 +197,17 @@ export interface SessionPayloadOptions {
   readPaths?: ReadPathResolver
 }
 
+/** The payload without `metadata.intent`: the agent's own words appear only where its recaps do. */
+function withoutIntentOf(payload: EventPayload): EventPayload {
+  const metadata = withoutIntent(payload.metadata)
+  return metadata === payload.metadata ? payload : { ...payload, metadata }
+}
+
+/** The events as the story may tell them: with the agent's descriptions only where its recaps are shown. */
+function eventsShownIn(context: LocationContext, events: EventPayload[]): EventPayload[] {
+  return context.showAgentRecaps === true ? events : events.map(withoutIntentOf)
+}
+
 /** The rows as payloads, the `exploring` ones carrying what they read when the caller can say which paths git ignores. */
 function eventPayloadsOf(rows: EventRow[], readPaths: ReadPathResolver | undefined): EventPayload[] {
   const payloads = rows.map(eventRowToPayload)
@@ -234,7 +245,7 @@ export function spanToPayload(
     startTime: formatDate(span.startedAt),
     endTime: formatDate(span.endedAt),
     durationMinutes: span.durationMinutes,
-    events: eventPayloadsOf(span.events, readPaths),
+    events: eventsShownIn(context, eventPayloadsOf(span.events, readPaths)),
     ...(agentSessions.length > 0 ? { agentSessions: toAgentSessionPayloads(agentSessions, context) } : {}),
     commits: storyCommitsOf(span.events, gitCommits),
   }

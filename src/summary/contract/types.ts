@@ -114,6 +114,8 @@ export interface SessionJsonOptions {
 export interface EventsJsonOptions {
   limit?: number
   includeCategories: string[]
+  /** Whether what the agent said each command is for (`metadata.intent`) goes out, as agent recaps do */
+  includeIntent?: boolean
 }
 
 /** One command in a repo's history. No command text, folder or file path: the JSON is read by other tools. */

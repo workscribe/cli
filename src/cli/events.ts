@@ -5,6 +5,7 @@ import { log } from '../utils/logger'
 import { todayDate, parseDate, formatDate } from '../utils/format'
 import { loadAIToolRegistry } from '../config/registry'
 import { readConfig } from '../config'
+import { mayShareAgentWords } from '../config/agent-words'
 import { exitBadge } from './exit-badge'
 import { buildEventsJson } from '../summary/contract/build'
 
@@ -59,8 +60,13 @@ export function registerEvents(program: Command): void {
           log.error('--limit must be a positive whole number')
           process.exit(1)
         }
-        const includeCategories = readConfig().summary?.includeCategories ?? []
-        log.plain(JSON.stringify(buildEventsJson(date, events, { limit: options.limit, includeCategories })))
+        const config = readConfig()
+        const includeCategories = config.summary?.includeCategories ?? []
+        // What the agent said a command is for is free text: it goes out only when stored and asked for, like a recap
+        const includeIntent = mayShareAgentWords(config)
+        log.plain(
+          JSON.stringify(buildEventsJson(date, events, { limit: options.limit, includeCategories, includeIntent }))
+        )
         return
       }
 

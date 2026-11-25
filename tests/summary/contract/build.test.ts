@@ -137,6 +137,48 @@ describe('eventToJson', () => {
   })
 })
 
+describe('what the agent said a command is for (metadata.intent)', () => {
+  const described = (overrides = {}) =>
+    row({ category: 'running', metadata: '{"tool":"vitest","intent":"Run the tests"}', ...overrides })
+
+  it('is left out of an event unless the caller says it may be sent', () => {
+    expect(eventToJson(described()).metadata).toEqual({ tool: 'vitest' })
+    expect(eventToJson(described(), { includeIntent: false }).metadata).toEqual({ tool: 'vitest' })
+  })
+
+  it('is kept when it may be sent, and the event keeps the same keys either way', () => {
+    const json = eventToJson(described(), { includeIntent: true })
+
+    expect(json.metadata).toEqual({ tool: 'vitest', intent: 'Run the tests' })
+    expect(Object.keys(json).sort()).toEqual(EVENT_KEYS)
+  })
+
+  it('leaves the metadata of an event with no intent as it was', () => {
+    const plain = row({ category: 'testing', metadata: '{"tool":"vitest"}' })
+
+    expect(eventToJson(plain, { includeIntent: true })).toEqual(eventToJson(plain))
+  })
+
+  it('reaches the sessions JSON only when the recaps do', () => {
+    const member = thread([described()])
+    const metadataIn = (includeAgentRecaps: boolean | undefined) =>
+      threadToJson(member, block([member]), { ...OPTIONS, includeAgentRecaps }).events[0].metadata
+
+    expect(metadataIn(true)).toEqual({ tool: 'vitest', intent: 'Run the tests' })
+    expect(metadataIn(false)).toEqual({ tool: 'vitest' })
+    expect(metadataIn(undefined)).toEqual({ tool: 'vitest' })
+  })
+
+  it('reaches the events JSON only when asked', () => {
+    const intents = (includeIntent: boolean | undefined) =>
+      buildEventsJson('2026-10-28', [described()], { includeCategories: [], includeIntent }).events[0].metadata
+
+    expect(intents(true)).toEqual({ tool: 'vitest', intent: 'Run the tests' })
+    expect(intents(false)).toEqual({ tool: 'vitest' })
+    expect(intents(undefined)).toEqual({ tool: 'vitest' })
+  })
+})
+
 describe('threadToJson', () => {
   it('describes the thread with the documented keys', () => {
     const json = soloThreadToJson([capturedRow('npm test')])
