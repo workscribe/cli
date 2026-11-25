@@ -71,7 +71,7 @@ describe('normalizeCommand — compound commands', () => {
     ['git log 2>&1 | head -5', 'exploring'],
     ['git -C ../web status', 'exploring'],
     ['cat f | sort | uniq', 'exploring'],
-    ["python3 - <<'EOF'\nprint(1)\nEOF", 'exploring'],
+    ['python3 -c "print(1)"', 'exploring'],
     ['node -e "console.log(1)"', 'exploring'],
     ['npx eslint . && ./deploy.sh', 'linting'],
   ])('%s → %s', (command, expected) => {

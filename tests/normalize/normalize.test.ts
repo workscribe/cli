@@ -576,6 +576,42 @@ describe('normalizeCommand', () => {
       expect(category('python3 scripts/seed.py')).toBe('running')
     })
 
+    describe('a script read from standard input (WOR-215)', () => {
+      it.each([
+        ["python3 - <<'EOF'\nprint(1)\nEOF", 'python'],
+        ['python -u -', 'python'],
+        ['cat a.py | python3 -', 'python'],
+        ["node - <<'EOF'\nEOF", 'node'],
+        ['ruby -', 'ruby'],
+        ['perl -', 'perl'],
+        ["python3 <<'EOF'\nEOF", 'python'],
+        ['python3 < script.py', 'python'],
+        ['python3 -I -', 'python'],
+        ["python3 -W ignore - <<'EOF'\nEOF", 'python'],
+        ["node --no-warnings - <<'EOF'\nEOF", 'node'],
+      ])('runs it: %s', (command, runtime) => {
+        expect(normalize(command)).toMatchObject({ category: 'running', metadata: { runtime, source: 'stdin' } })
+      })
+
+      it('is a run, not a read, even next to a read', () => {
+        expect(category("python3 - <<'EOF'\nEOF\ngrep -n x src/a.ts")).toBe('running')
+      })
+
+      it('leaves the category of a test or build next to it', () => {
+        expect(category("python3 - <<'EOF'\nEOF\nnpx vitest run")).toBe('testing')
+        expect(category("python3 - <<'EOF'\nEOF\nnpx tsc --noEmit")).toBe('building')
+      })
+
+      it('is a run next to a lint step, which ranks below it as an excluded category', () => {
+        expect(category("python3 - <<'EOF'\nEOF\nnpx prettier --write src")).toBe('running')
+      })
+
+      it('leaves code on the command line a read', () => {
+        expect(category('python3 -c "print(1)"')).toBe('exploring')
+        expect(category('node -e "console.log(1)"')).toBe('exploring')
+      })
+    })
+
     it('classifies generic npm run scripts', () => {
       const result = normalize('npm run lint')
       expect(result.category).toBe('running')

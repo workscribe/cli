@@ -7,6 +7,7 @@ import { dependencyMetadata, extractPackages, INSTALL_WORDS, REMOVE_WORDS } from
 import { withoutGitGlobalOptions } from './git-invocation'
 import { withoutNpxBooleanFlags } from './npx-invocation'
 import { isReadOnlyCommand, READ_ONLY_CATEGORY, readOnlyMetadata } from './read-only'
+import { SCRIPT_SHELLS, stdinScriptInterpreters } from './stdin-scripts'
 
 export interface NormalizedEvent {
   category: string
@@ -75,8 +76,19 @@ const readOnlyRule: Rule = {
   },
 }
 
+// A script read from standard input (`python3 - <<'EOF'`, `cat a.py | python3 -`) is a run: its body isn't stored, so
+// nothing shows that it only reads (WOR-215). Reads the step as written, for the pipe. A shell (`bash -s`) keeps the
+// rule below, which files it by its own name.
+const stdinScriptRule: Rule = {
+  match(_cmd, { raw }) {
+    const runtime = stdinScriptInterpreters(raw).find((name) => !SCRIPT_SHELLS.has(name))
+    return runtime === undefined ? null : { category: 'running', metadata: { runtime, source: 'stdin' } }
+  },
+}
+
 const BASE_RULES: Rule[] = [
   readOnlyRule,
+  stdinScriptRule,
 
   // ─── Git operations ───────────────────────────────────────────────────────
   makeRule(/^git\s+commit\b/, 'shipping', (_m, _cmd, { raw, original }) => {
