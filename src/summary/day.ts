@@ -3,6 +3,7 @@
 // commits looked up just for those — each followed by the projects worked alongside it, then the day's time worked.
 import { DAY_GIT_BUDGET_MS, lookupDayCommits } from './day-commits'
 import { locationContextFrom, threadRepoCwd, threadToPayload } from './payload'
+import { createReadResolver } from './read-resolver'
 import { pickSavedSummary, type SavedSummary } from './store'
 import { summariesOfThread, type BlockEvent } from './anchors'
 import { toActiveMinutes } from '../sessions/blocks'
@@ -97,8 +98,15 @@ export async function renderDay({
     saved
   )
   const context = locationContextFrom(config)
+  // One budget covers the day's questions to git about what was read. Only a thread whose story is told needs them: a
+  // saved summary is shown as it is. The week and `context` leave reads out.
+  const readPaths = createReadResolver()
   const sessionPayloads = threads.map(({ thread, block }, index) =>
-    threadToPayload(thread, block, { context, gitCommits: gitCommits[index] })
+    threadToPayload(thread, block, {
+      context,
+      gitCommits: gitCommits[index],
+      ...(saved[index] === null ? { readPaths } : {}),
+    })
   )
 
   const summaries: string[] = []

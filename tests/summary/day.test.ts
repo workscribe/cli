@@ -5,7 +5,12 @@ vi.mock('../../src/summary/day-commits', () => ({
   lookupDayCommits: vi.fn((windows: unknown[]) => windows.map(() => null)),
 }))
 
+vi.mock('../../src/summary/read-resolver', () => ({
+  createReadResolver: vi.fn(() => ({ repoRootOf: vi.fn(() => null), ignoredAmong: vi.fn(() => null) })),
+}))
+
 import { lookupDayCommits } from '../../src/summary/day-commits'
+import { createReadResolver } from '../../src/summary/read-resolver'
 import { renderDay } from '../../src/summary/day'
 import { block, row, thread } from './contract/fixtures'
 import type { SummaryRow } from '../../src/db/summary-store'
@@ -71,6 +76,39 @@ function templateProvider() {
     validate: vi.fn(),
   }
 }
+
+describe('renderDay: what was read', () => {
+  const reading = (id: number, minute: number, repo: string) => ({
+    ...event(id, minute, repo),
+    category: 'exploring',
+    command: 'cat a.ts',
+  })
+
+  it('asks git about what was read only for threads whose story is told, never for one with a saved summary', async () => {
+    const cliThread = thread([reading(1, 0, 'cli'), reading(5, 50, 'cli')], {
+      id: 10,
+      projectId: CLI,
+      repoName: 'cli',
+      startedAt: '2026-10-28T12:09:00.000Z',
+      endedAt: '2026-10-28T13:48:00.000Z',
+      activeSlots: 16,
+    })
+    const siteThread = thread([reading(4, 21, 'landing-page'), reading(6, 91, 'landing-page')], {
+      id: 12,
+      projectId: SITE,
+      repoName: 'landing-page',
+      activeSlots: 1,
+    })
+    const blocks = [block([cliThread, siteThread], { id: 5, activeSlots: 17, summaries: [summaryRow({})] })]
+
+    await renderDay({ date: '2026-10-28', blocks, config: CONFIG, provider: templateProvider() })
+
+    const resolver = vi.mocked(createReadResolver).mock.results.at(-1)?.value
+    const folders = resolver.repoRootOf.mock.calls.map(([folder]: [string]) => folder)
+    expect(folders).toContain('/Users/dev/cli')
+    expect(folders).not.toContain('/Users/dev/landing-page')
+  })
+})
 
 describe('renderDay', () => {
   it('tells each thread in its own section, with its own active time and the projects alongside it', async () => {

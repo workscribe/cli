@@ -9,6 +9,12 @@ export interface EventPayload {
   source?: string
   /** The file a `code_edit` changed. Local only: the story counts files by it and never prints it. */
   filePath?: string
+  /**
+   * The files and folders an `exploring` command looked at, relative to its repository. Local only, like `filePath`:
+   * the story names areas from them and never prints one raw, and no contract carries them. Set only when the caller
+   * of `spanToPayload` can tell which paths git ignores.
+   */
+  reads?: string[]
   /** The agent session the event belongs to (`agent_sessions.id`, so only meaningful within one database), if any */
   agentSessionId?: number
   exitCode: number | null

@@ -5,6 +5,8 @@ vi.mock('child_process', () => ({ execFileSync: vi.fn() }))
 import { execFileSync } from 'child_process'
 import {
   getRepoRoot,
+  getRepoRootOf,
+  getIgnoredPaths,
   getUserEmail,
   getCommitsInWindow,
   findCommitsInWindow,
@@ -208,5 +210,64 @@ describe('getFileCommits — timeouts handed to git', () => {
 
     expect(result).toEqual({ repoRoot: '/Users/dev/api', commits: [] })
     expect(mockExecFileSync).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('getRepoRootOf', () => {
+  it('walks up from the folder as it was given, not to the symlink-resolved toplevel', () => {
+    gitOutput('../../\n')
+
+    expect(getRepoRootOf('/tmp/app/src/db')).toBe('/tmp/app')
+    expect(mockExecFileSync).toHaveBeenCalledWith(
+      'git',
+      ['rev-parse', '--show-cdup'],
+      expect.objectContaining({ cwd: '/tmp/app/src/db' })
+    )
+  })
+
+  it('is the folder itself at the top of the repository', () => {
+    gitOutput('\n')
+
+    expect(getRepoRootOf('/tmp/app')).toBe('/tmp/app')
+  })
+
+  it('is null outside a repository, for a folder that is gone, or without git', () => {
+    gitFails()
+
+    expect(getRepoRootOf('/tmp/gone')).toBeNull()
+  })
+})
+
+describe('getIgnoredPaths', () => {
+  it('sends the paths on stdin, NUL-separated, and never in the arguments', () => {
+    gitOutput('a.log\0dir\0')
+
+    expect(getIgnoredPaths('/repo', ['a.log', '-rf', 'dir'], 500)).toEqual(new Set(['a.log', 'dir']))
+    expect(mockExecFileSync).toHaveBeenCalledWith(
+      'git',
+      ['check-ignore', '-z', '--stdin'],
+      expect.objectContaining({ cwd: '/repo', timeout: 500, input: 'a.log\0-rf\0dir' })
+    )
+  })
+
+  it('asks git nothing when there are no paths', () => {
+    expect(getIgnoredPaths('/repo', [])).toEqual(new Set())
+    expect(mockExecFileSync).not.toHaveBeenCalled()
+  })
+
+  it('says none is ignored when git exits with status 1', () => {
+    mockExecFileSync.mockImplementation(() => {
+      throw Object.assign(new Error('exit 1'), { status: 1 })
+    })
+
+    expect(getIgnoredPaths('/repo', ['a.ts'])).toEqual(new Set())
+  })
+
+  it('says it cannot tell when git fails any other way', () => {
+    mockExecFileSync.mockImplementation(() => {
+      throw Object.assign(new Error('fatal'), { status: 128 })
+    })
+
+    expect(getIgnoredPaths('/repo', ['a.ts'])).toBeNull()
   })
 })

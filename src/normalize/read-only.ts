@@ -47,7 +47,7 @@ function runsInlineCode(args: string[], inlineFlags: string[]): boolean {
   )
 }
 
-interface SedArguments {
+export interface SedArguments {
   isQuiet: boolean
   isSafe: boolean
   scripts: string[]
@@ -65,7 +65,8 @@ function readSedShortOptions(option: string, nextArg: string | undefined, parsed
   return 1
 }
 
-function readSedArguments(args: string[]): SedArguments & { positional: string[] } {
+/** What a sed command line holds: its script options, and every other word (the script itself when no `-e` gave one). */
+export function readSedArguments(args: string[]): SedArguments & { positional: string[] } {
   const parsed: SedArguments = { isQuiet: false, isSafe: true, scripts: [] }
   const positional: string[] = []
   for (let index = 0; index < args.length; index++) {

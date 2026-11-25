@@ -427,3 +427,40 @@ describe('threadRepoCwd', () => {
     expect(threadRepoCwd([])).toBeNull()
   })
 })
+
+describe('spanToPayload: what was read', () => {
+  const exploring = makeEvent({
+    id: 2,
+    category: 'exploring',
+    command: 'cat src/a.ts',
+    cwd: '/repo',
+    metadata: '{"tool":"cat"}',
+  })
+  const resolver = { repoRootOf: () => '/repo', ignoredAmong: () => new Set<string>() }
+
+  it('gives no event a read list unless the caller can tell which paths git ignores', () => {
+    const payload = spanToPayload(makeSpan({ events: [makeEvent(), exploring] }), '2026-08-17')
+
+    expect(payload.events.some((event) => 'reads' in event)).toBe(false)
+  })
+
+  it('gives the exploring events what they read, and no other event', () => {
+    const span = makeSpan({ events: [makeEvent(), exploring] })
+
+    const payload = spanToPayload(span, '2026-08-17', { readPaths: resolver })
+
+    expect(payload.events.map((event) => event.reads)).toEqual([undefined, ['src/a.ts']])
+  })
+
+  it('gives an event no reads in a repository git cannot check', () => {
+    const unverifiable = { repoRootOf: () => '/repo', ignoredAmong: () => null }
+
+    const payload = spanToPayload(makeSpan({ events: [exploring] }), '2026-08-17', { readPaths: unverifiable })
+
+    expect(payload.events[0]).not.toHaveProperty('reads')
+  })
+
+  it('never puts reads on a payload built from a row alone, which is what the contracts use', () => {
+    expect(eventRowToPayload(exploring)).not.toHaveProperty('reads')
+  })
+})
