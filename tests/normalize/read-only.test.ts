@@ -20,7 +20,6 @@ describe('isReadOnlyCommand', () => {
     "sed -n '1p;3p' f",
     'python3 -c "print(1)"',
     'python -c "print(1)"',
-    "python3 - <<'EOF'\nprint(1)\nEOF",
     'python3 -u -c "print(1)"',
     'node -e "console.log(1)"',
     'node --eval "console.log(1)"',
@@ -71,6 +70,15 @@ describe('isReadOnlyCommand', () => {
     'python3 x.py',
     'python3 -m http.server',
     'python3',
+    // a script from standard input: its body isn't stored, so nothing shows that it doesn't write files (WOR-215)
+    "python3 - <<'EOF'\nprint(1)\nEOF",
+    "python - <<'EOF'\nprint(1)\nEOF",
+    "python3 <<'EOF'\nprint(1)\nEOF",
+    'python3 < script.py',
+    'python3 -I -',
+    'python3 -u -',
+    'cat a.py | python3 -',
+    "python3 - <<'EOF'\nEOF\ngrep -n x f && ./deploy.sh",
     'node x.js',
     'node',
     'rg --pre ./x y',
@@ -207,7 +215,7 @@ describe('readOnlyMetadata', () => {
     ['cat f', { tool: 'cat' }],
     ['cd app && grep x f | wc -l', { tool: 'grep' }],
     ['f=$(find . -name x)', { tool: 'find' }],
-    ["python3 - <<'EOF'\nprint(1)\nEOF", { tool: 'python3' }],
+    ['python3 -c "print(1)"', { tool: 'python3' }],
   ])('%s', (command, expected) => {
     expect(readOnlyMetadata(command)).toEqual(expected)
   })

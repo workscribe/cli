@@ -2,6 +2,7 @@
 // changed them — the editor, or a coding agent by name. Counts, never text. Pure.
 import { agentNameOf } from './agents'
 import { pluralize } from './utils'
+import type { CommitSize } from '../../../summary/git-commits'
 import type { EventPayload } from '../../types'
 
 const EDITOR_LABEL = 'in the editor'
@@ -92,6 +93,11 @@ function describeLines({ linesAdded, linesRemoved }: ChangeTotals): string | nul
   const parts = [linesAdded === null ? null : `+${linesAdded}`, linesRemoved === null ? null : `−${linesRemoved}`]
   const known = parts.filter((part): part is string => part !== null)
   return known.length > 0 ? known.join(' ') : null
+}
+
+/** "5 files, +86 −31" — what a commit changed, for the line that tells it. */
+export function describeCommitSize({ files, added, removed }: CommitSize): string {
+  return `${pluralize(files, 'file')}, ${describeLines({ files, linesAdded: added, linesRemoved: removed })}`
 }
 
 function withLines(text: string, totals: ChangeTotals): string {

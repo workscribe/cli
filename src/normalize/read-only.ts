@@ -112,8 +112,10 @@ const READERS: Record<string, ArgumentCheck> = {
   ripgrep: (args) => hasNoOption(args, ['--pre']),
   find: (args) => !args.some((arg) => FIND_UNSAFE_ACTION.test(arg)),
   sed: sedOnlyPrints,
-  python: (args) => runsInlineCode(args, ['-c', '-']),
-  python3: (args) => runsInlineCode(args, ['-c', '-']),
+  // `-c` is code on the command line, stored with the command. `-` is a script from standard input, whose body isn't
+  // stored: it may write files, so it isn't a read (src/normalize/stdin-scripts.ts)
+  python: (args) => runsInlineCode(args, ['-c']),
+  python3: (args) => runsInlineCode(args, ['-c']),
   node: (args) => runsInlineCode(args, ['-e', '--eval']),
 }
 

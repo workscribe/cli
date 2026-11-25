@@ -3,7 +3,7 @@ import { collectCapturedCommits, isFailedCommand, isSameCommit, mergeCommits } f
 import { parseMetadata } from './event-metadata'
 import { WINDOW_LEAD_MS, WINDOW_TRAIL_MS } from './git-commits'
 import type { EventRow } from '../db/types'
-import type { GitCommit } from './git-commits'
+import type { CommitSize, GitCommit } from './git-commits'
 
 /** A commit as the story shows it: under the branch it was made on. */
 export interface StoryCommit {
@@ -11,6 +11,8 @@ export interface StoryCommit {
   hash: string | null
   committedAt: string | null
   branch: string | null
+  /** What git says it changed, for a commit git returned and could size */
+  size?: CommitSize
 }
 
 type TimedBranch = Pick<EventRow, 'branch' | 'captured_at'>
@@ -71,6 +73,7 @@ export function storyCommitsOf(events: EventRow[], gitCommits: GitCommit[] | nul
       subject,
       committedAt,
       branch: gitCommit ? gitBranchOf(gitCommit) : (capturedBranches.get(subject) ?? null),
+      ...(gitCommit?.size === undefined ? {} : { size: gitCommit.size }),
     }
   })
 }

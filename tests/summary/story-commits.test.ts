@@ -35,6 +35,28 @@ describe('branchAt', () => {
   })
 })
 
+describe('storyCommitsOf: what a commit changed', () => {
+  const size = { files: 5, added: 86, removed: 31 }
+
+  it('carries the size git gave a commit', () => {
+    const events = [at('09:00', 'main')]
+
+    const [story] = storyCommitsOf(events, [{ ...gitCommit('feat: x', '09:10'), size }])
+
+    expect(story.size).toEqual(size)
+  })
+
+  it('has no size for a git commit that was not sized, or a captured commit', () => {
+    const events = [capturedRow('git commit -m "fix: token"', { branch: 'main' })]
+
+    const [captured] = storyCommitsOf(events, [])
+    const [unsized] = storyCommitsOf([at('09:00', 'main')], [gitCommit('feat: x', '09:10')])
+
+    expect(captured).not.toHaveProperty('size')
+    expect(unsized).not.toHaveProperty('size')
+  })
+})
+
 describe('storyCommitsOf', () => {
   it('puts a captured commit under the branch it was captured on', () => {
     const events = [capturedRow('git commit -m "fix: token"', { branch: 'feat/auth' })]

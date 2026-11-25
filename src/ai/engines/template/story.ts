@@ -3,7 +3,7 @@
 // cut or folded: every commit and every move is told, so the story is a full record you can retrace. Pure.
 import { formatSessionHeading } from '../../../summary/heading'
 import { agentWorkOf, editorSavesOf, isAgentEvent } from './agents'
-import { changedFilesOf, describeChangedFiles } from './changes'
+import { changedFilesOf, describeChangedFiles, describeCommitSize } from './changes'
 import { latestRecapOf, shortRecap } from './recap'
 import { STORY_BUILD_WORDING, STORY_TEST_WORDING } from './constants'
 import {
@@ -16,6 +16,7 @@ import {
 } from './describe'
 import { describeBranchMoves } from './branch-moves'
 import { describeReads } from './reads'
+import { describeScripts } from './scripts'
 import { topicOf } from './topic'
 import { eventsOf, pluralize, toBulletList } from './utils'
 import type { AgentSessionPayload, EventPayload, SessionPayload } from '../../types'
@@ -73,10 +74,19 @@ function describeResult(events: EventPayload[], wording: OutcomeWording): string
   return outcome === null ? null : wording[outcome]
 }
 
-/** What was done on one branch, most telling first: commits, outcomes, releases and pushes, then branch moves. */
-function branchBullets(group: BranchGroup): string[] {
+/** "Committed: fix(db): keep a day (5 files, +86 −31)"; the size only when git told it. */
+function describeCommit(commit: StoryCommit): string {
+  return `Committed: ${commit.subject}${commit.size === undefined ? '' : ` (${describeCommitSize(commit.size)})`}`
+}
+
+/**
+ * What was done on one branch, most telling first: commits, then scripts that ran after them (the day's story tells
+ * them, the week doesn't), outcomes, releases and pushes, then branch moves.
+ */
+function branchBullets(group: BranchGroup, scriptsLine: string | null = null): string[] {
   return [
-    ...group.commits.map((commit) => `Committed: ${commit.subject}`),
+    ...group.commits.map(describeCommit),
+    scriptsLine,
     describeChangedFiles(group.events),
     describeResult(group.events, STORY_TEST_WORDING),
     describeResult(group.events, STORY_BUILD_WORDING),
@@ -134,17 +144,31 @@ function branchLines(groups: BranchBullets[], isMultiBranch: boolean): string[] 
   })
 }
 
-/** What each branch's events read, from every event: reads are `exploring`, which the story otherwise leaves out. */
-function readsByBranch(session: SessionPayload): Map<string | null, string | null> {
-  return new Map(branchGroupsOf(session).map((group) => [group.branch, describeReads(group.events)]))
+/** What a branch's every event says that its included events don't: what was read, and the scripts that ran. */
+interface BranchContext {
+  reads: string | null
+  scripts: string | null
+}
+
+/**
+ * What each branch read and what scripts ran on it, from every event: reads are `exploring` and a script may be filed
+ * under a category the story leaves out, so neither is in the included events.
+ */
+function contextByBranch(session: SessionPayload): Map<string | null, BranchContext> {
+  return new Map(
+    branchGroupsOf(session).map((group) => [
+      group.branch,
+      { reads: describeReads(group.events), scripts: describeScripts(group.events, group.commits) },
+    ])
+  )
 }
 
 /**
  * A branch's bullets with what it was about and what it read in front: the topic from its ticket and slug, but only for
  * a branch no commit names the work of and that has something else to tell — it never stands alone.
  */
-function bulletsWithContext(group: BranchGroup, readLine: string | null | undefined): string[] {
-  const bullets = [...(readLine ? [readLine] : []), ...branchBullets(group)]
+function bulletsWithContext(group: BranchGroup, context: BranchContext | undefined): string[] {
+  const bullets = [...(context?.reads ? [context.reads] : []), ...branchBullets(group, context?.scripts ?? null)]
   const topic = group.commits.length === 0 && bullets.length > 0 ? topicOf(group.branch) : null
   return topic === null ? bullets : [topic, ...bullets]
 }
@@ -153,9 +177,9 @@ function bulletsWithContext(group: BranchGroup, readLine: string | null | undefi
 export function storyLines(session: SessionPayload, includeCategories: string[] = []): string[] {
   const events = includedEvents(session.events, includeCategories)
   const notes = describeNotes(events)
-  const reads = readsByBranch(session)
+  const contexts = contextByBranch(session)
   const groups = groupByBranch(session, events)
-    .map((group) => ({ branch: group.branch, bullets: bulletsWithContext(group, reads.get(group.branch)) }))
+    .map((group) => ({ branch: group.branch, bullets: bulletsWithContext(group, contexts.get(group.branch)) }))
     .filter((group) => group.bullets.length > 0)
   const activityLine = describeActivityLine(session.events, events, session.agentSessions ?? [])
   const closing = activityLine === null ? [] : [activityLine]

@@ -8,6 +8,7 @@ import { isFailedCommand } from './commits'
 import { isShellExpansion, withoutShellExpansions } from '../normalize/dependency-metadata'
 import { reportedExitCode } from '../normalize/exit-evidence'
 import { gitMovesOf, type GitMove } from '../normalize/git-move'
+import { mentionsStdinInterpreter, stdinScriptCount } from '../normalize/stdin-scripts'
 import type { AgentSessionPayload, EventPayload, SessionPayload } from '../ai/types'
 import type { AgentSessionInfo } from '../db/agent-sessions'
 import type { EventRow } from '../db/types'
@@ -77,6 +78,16 @@ function gitMovesField(row: EventRow): Pick<EventPayload, 'gitMoves'> {
   return gitMoves.length > 0 ? { gitMoves } : {}
 }
 
+/**
+ * How many scripts the command ran from standard input (`python3 - <<EOF`): their bodies aren't stored, so the story can
+ * only say they ran. Read from the command, whatever step set the event's category.
+ */
+function scriptsField(row: EventRow): Pick<EventPayload, 'scripts'> {
+  if (!mentionsStdinInterpreter(row.command)) return {}
+  const scripts = stdinScriptCount(row.command)
+  return scripts > 0 ? { scripts } : {}
+}
+
 /** Package names stored before WOR-196 can hold shell expansions (`$(cat list.txt)` stored as two words). */
 function metadataOf(row: EventRow): Record<string, unknown> {
   const metadata = parseMetadata(row.metadata)
@@ -103,6 +114,7 @@ export function eventRowToPayload(row: EventRow): EventPayload {
     ...(row.agent_session_id == null ? {} : { agentSessionId: row.agent_session_id }),
     ...(row.category === 'code_edit' && row.file_path ? { filePath: row.file_path } : {}),
     ...gitMovesField(row),
+    ...scriptsField(row),
   }
   if (row.category !== 'other' || typeof metadata.hint !== 'string') return payload
 

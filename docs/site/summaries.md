@@ -62,11 +62,17 @@ Coding agents often run compound commands like `cd app && pnpm nx test shell 2>&
 
 A session with nothing to tell but activity says so in one line, "Explored and ran commands", under its heading. The week (`summary --week`, `week`) is laid out project by project, then branch by branch, with the days each branch was worked on. Each branch is told like a day's story, using git's commits for the whole week, with up to 6 bullets and then "…plus N more". `--by day` gives the day-by-day digest instead: up to 5 bullets per day, taking the top bullet of every project before the second, so one busy repo can't fill the day.
 
-Lint runs and commands that only read are left out by default: `cat`, `grep`, `find`, `ls`, `wc`, `sed -n`, `git status`, `git log`, `git diff`, `git show`, plain `git branch`, and inline scripts (`python3 -c`, `python3 -`, `node -e`). A compound command is only left out when everything in it reads, so `grep x f && ./deploy.sh` stays in. An inline script can't be told apart from a read, so its changes only appear through the commits and file saves they lead to. To include a category, add it to [`summary.includeCategories`](/configuration#summary):
+Lint runs and commands that only read are left out by default: `cat`, `grep`, `find`, `ls`, `wc`, `sed -n`, `git status`, `git log`, `git diff`, `git show`, plain `git branch`, and code given on the command line (`python3 -c "…"`, `node -e "…"`). A compound command is only left out when everything in it reads, so `grep x f && ./deploy.sh` stays in. A script read from standard input (`python3 - <<'EOF' … EOF`, `cat a.py | python3 -`) is a run, not a read: Workscribe never stores its body, so nothing shows whether it wrote files. See [Scripts and commit sizes](#scripts-and-commit-sizes). To include a category, add it to [`summary.includeCategories`](/configuration#summary):
 
 ```bash
 workscribe config set summary.includeCategories '["linting"]'
 ```
+
+### Scripts and commit sizes
+
+A commit says how much it changed when git can tell: `Committed: fix: token refresh race (5 files, +86 −31)`. Workscribe asks git for each day's commits once per repository, within the same time budget as the commits themselves, and tells a commit it can't size, like a merge, by its subject alone. The week's commit lines carry sizes too.
+
+A script that changes files, but whose body Workscribe doesn't keep, can't be listed as edits. After the commits of a branch, the story says how many such scripts ran since the branch's last commit, or in all when it has none: `Ran 4 scripts that may have changed files (contents not captured)`. It never says that a script changed something, which file, or who ran it; what a committed script changed is in its commit's size. Scripts show in the day's story, not in the week. Past days show them too, and a data job (`workscribe upgrade`, or the next `summary`) files the stored scripts as runs instead of reads.
 
 ### What was read
 

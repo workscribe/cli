@@ -335,3 +335,94 @@ describe('storyLines: what a branch was about', () => {
     expect(storyLines(session([event('testing')]))).toEqual(['- Tests passing'])
   })
 })
+
+describe('storyLines: what a commit changed', () => {
+  const sized = (subject: string, size: { files: number; added: number; removed: number }) => ({
+    ...commit(subject),
+    size,
+  })
+
+  it('tells the size of a commit after its subject', () => {
+    const commits = [sized('fix(db): keep a day', { files: 5, added: 86, removed: 31 })]
+
+    expect(storyLines(session([], { commits }))).toEqual(['- Committed: fix(db): keep a day (5 files, +86 −31)'])
+  })
+
+  it('says one file in the singular, and keeps a size of no lines', () => {
+    const commits = [
+      sized('docs: one', { files: 1, added: 3, removed: 0 }),
+      sized('feat: binary', { files: 2, added: 0, removed: 0 }),
+    ]
+
+    expect(storyLines(session([], { commits }))).toEqual([
+      '- Committed: docs: one (1 file, +3 −0)',
+      '- Committed: feat: binary (2 files, +0 −0)',
+    ])
+  })
+
+  it('tells a commit git did not size by its subject alone', () => {
+    expect(storyLines(session([], { commits: [commit('fix: x')] }))).toEqual(['- Committed: fix: x'])
+  })
+})
+
+describe('storyLines: scripts whose body is not stored', () => {
+  const LINE = 'may have changed files (contents not captured)'
+  const ranScript = (count: number, capturedAt: string, category = 'running') => ({
+    ...event(category),
+    capturedAt,
+    scripts: count,
+  })
+
+  it('says scripts ran, when no commit speaks for them', () => {
+    expect(storyLines(session([ranScript(4, '2026-10-20T10:00:00.000Z')]))).toEqual([`- Ran 4 scripts that ${LINE}`])
+  })
+
+  it('tells the scripts after the last commit, right after the commits, and never a file count', () => {
+    const events = [
+      ranScript(2, '2026-10-20T09:00:00.000Z'),
+      ranScript(1, '2026-10-20T11:00:00.000Z'),
+      event('testing'),
+    ]
+    const commits = [{ ...commit('fix: x'), committedAt: '2026-10-20T10:00:00.000Z' }]
+
+    expect(storyLines(session(events, { commits }))).toEqual([
+      '- Committed: fix: x',
+      `- Ran 1 script that ${LINE}`,
+      '- Tests passing',
+    ])
+  })
+
+  it('leaves them out when a commit came after them all', () => {
+    const commits = [{ ...commit('fix: x'), committedAt: '2026-10-20T12:00:00.000Z' }]
+
+    expect(storyLines(session([ranScript(3, '2026-10-20T10:00:00.000Z')], { commits }))).toEqual([
+      '- Committed: fix: x',
+    ])
+  })
+
+  it('counts a script filed under a category the story leaves out, and instead of the quiet line', () => {
+    const lines = storyLines(session([ranScript(1, '2026-10-20T10:00:00.000Z', 'linting')]))
+
+    expect(lines).toEqual([`- Ran 1 script that ${LINE}`])
+  })
+
+  it('tells each branch its own scripts', () => {
+    const events = [
+      onBranch('feature/auth', ranScript(1, '2026-10-20T10:00:00.000Z')),
+      onBranch('main', ranScript(2, '2026-10-20T10:05:00.000Z')),
+    ]
+
+    expect(storyLines(session(events, { branches: ['feature/auth', 'main'], branch: 'main' }))).toEqual([
+      'On feature/auth:',
+      `- Ran 1 script that ${LINE}`,
+      'On main:',
+      `- Ran 2 scripts that ${LINE}`,
+    ])
+  })
+
+  it('does not tell the week about them: the week keeps to what it always told', () => {
+    const [group] = branchGroupsOf(session([ranScript(2, '2026-10-20T10:00:00.000Z'), event('testing')]))
+
+    expect(storyOfBranch(group).bullets).toEqual(['Tests passing'])
+  })
+})

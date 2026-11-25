@@ -1,10 +1,11 @@
 // The day's commits from git for the threads `summary` and `export` render. One `git log` per repo covers all of
 // its threads, and every git call shares one budget, so a slow repo can't hold the summary up.
-import { findCommitsInWindow, getRepoRoot, getUserEmail } from './git-commits'
+import { findCommitsInWindow, getCommitSizes, getRepoRoot, getUserEmail } from './git-commits'
 import { assignCommitsToSessions } from './story-commits'
 import type { GitCommit } from './git-commits'
 
 export const DAY_GIT_BUDGET_MS = 3000
+const SIZE_BUDGET_DIVISOR = 2
 
 export interface DayCommitOptions {
   /** All of the run's git calls together get at most this long */
@@ -42,6 +43,28 @@ function groupByRepo(windows: CommitWindow[], timeLeft: () => number | null): Re
   return [...byRoot].map(([repoRoot, indexes]) => ({ repoRoot, indexes }))
 }
 
+/**
+ * The commits with what each changed, from one more git call inside what is left of the budget. Without time, or when git
+ * can't say, the commits are told as they were: a size is a detail, never a reason to lose a commit.
+ */
+function withSizes(commits: GitCommit[], repoRoot: string, timeLeft: () => number | null): GitCommit[] {
+  if (commits.length === 0) return commits
+  const timeout = timeLeft()
+  if (timeout === null) return commits
+  // At most half of what is left: a size is a detail, so a slow `git show` can't take the next repository's commits
+  // with it
+  const sizes = getCommitSizes(
+    repoRoot,
+    commits.map((commit) => commit.hash),
+    Math.ceil(timeout / SIZE_BUDGET_DIVISOR)
+  )
+  if (sizes === null) return commits
+  return commits.map((commit) => {
+    const size = sizes.get(commit.hash)
+    return size === undefined ? commit : { ...commit, size }
+  })
+}
+
 /** One `git log` for the repo, from its windows' earliest start to their latest end — null past the budget, or if git can't answer. */
 function repoCommits(repo: RepoWindows, windows: CommitWindow[], timeLeft: () => number | null): GitCommit[] | null {
   const emailTimeout = timeLeft()
@@ -55,7 +78,7 @@ function repoCommits(repo: RepoWindows, windows: CommitWindow[], timeLeft: () =>
   const byTime = (first: string, second: string): number => Date.parse(first) - Date.parse(second)
   const startTimes = repoWindows.map((window) => window.startedAt).sort(byTime)
   const endTimes = repoWindows.map((window) => window.endedAt).sort(byTime)
-  return findCommitsInWindow({
+  const commits = findCommitsInWindow({
     repoRoot: repo.repoRoot,
     since: startTimes[0],
     until: endTimes[endTimes.length - 1],
@@ -63,6 +86,7 @@ function repoCommits(repo: RepoWindows, windows: CommitWindow[], timeLeft: () =>
     timeoutMs: logTimeout,
     allBranches: true,
   })
+  return commits === null ? null : withSizes(commits, repo.repoRoot, timeLeft)
 }
 
 /**
