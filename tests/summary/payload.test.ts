@@ -13,6 +13,7 @@ import {
   threadRepoCwd,
   type PayloadSpan,
 } from '../../src/summary/payload'
+import { eventToJson } from '../../src/summary/contract/build'
 import type { EventRow } from '../../src/db/types'
 
 function makeEvent(overrides: Partial<EventRow> = {}): EventRow {
@@ -462,5 +463,34 @@ describe('spanToPayload: what was read', () => {
 
   it('never puts reads on a payload built from a row alone, which is what the contracts use', () => {
     expect(eventRowToPayload(exploring)).not.toHaveProperty('reads')
+  })
+})
+
+describe('eventRowToPayload: scripts from standard input', () => {
+  const script = (command: string) => eventRowToPayload(makeEvent({ category: 'running', command }))
+
+  it('counts the scripts a command ran, whatever step set its category', () => {
+    expect(script("python3 - <<'EOF'\nEOF").scripts).toBe(1)
+    expect(
+      eventRowToPayload(makeEvent({ category: 'linting', command: "python3 - <<'EOF'\nEOF\nnpx prettier --write src" }))
+        .scripts
+    ).toBe(1)
+    expect(script("python3 - <<'A'\nA\npython3 - <<'B'\nB").scripts).toBe(2)
+    expect(script('cat a.py | python3 -').scripts).toBe(1)
+    expect(script("python3 <<'EOF'\nEOF").scripts).toBe(1)
+    expect(script('python3 -I -').scripts).toBe(1)
+  })
+
+  it('has none for a command that runs no script from standard input', () => {
+    expect(script('python3 -c "print(1)"')).not.toHaveProperty('scripts')
+    expect(script('python3 x.py')).not.toHaveProperty('scripts')
+    expect(script('npm test')).not.toHaveProperty('scripts')
+  })
+
+  it('never reaches a contract: the count is not one of the fields they copy', () => {
+    const payload = script("python3 - <<'EOF'\nEOF")
+
+    expect(payload.scripts).toBe(1)
+    expect(Object.keys(eventToJson(makeEvent({ command: "python3 - <<'EOF'\nEOF" })))).not.toContain('scripts')
   })
 })

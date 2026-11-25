@@ -22,6 +22,8 @@ export interface EventPayload {
   /** The branch the event happened on (read just after the command ran), or null outside a repo */
   branch: string | null
   capturedAt: string
+  /** How many scripts the command ran from standard input (`python3 - <<EOF`), whose bodies aren't stored — only when it ran any */
+  scripts?: number
   /** Branch-moving git work the command did (a branch created, a stash, a rebase, a discard) — only when it succeeded */
   gitMoves?: GitMove[]
 }

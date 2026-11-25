@@ -11,6 +11,24 @@ function week(days: { date: string; sessions: SessionPayload[] }[]) {
   return { by: 'project' as const, weekStart: '2026-11-02', weekEnd: '2026-11-04', days }
 }
 
+describe('weekByProject: what a commit changed', () => {
+  it('tells the size of a commit like the day does, since the commit line is shared', () => {
+    const sized = { ...commit('fix: token', 'main'), size: { files: 3, added: 20, removed: 4 } }
+    const day = session([at(event('testing'), '2026-11-02T09:00:00.000Z', 'main')], {
+      project: 'cli',
+      projectId: 1,
+      branches: ['main'],
+      commits: [sized, commit('docs: notes', 'main')],
+    })
+
+    const [project] = weekByProject(week([{ date: '2026-11-02', sessions: [day] }]))
+
+    expect(project.branches[0].bullets).toEqual(
+      expect.arrayContaining(['Committed: fix: token (3 files, +20 −4)', 'Committed: docs: notes'])
+    )
+  })
+})
+
 describe('weekByProject', () => {
   it("keeps an agent's recap when a branch's days are merged", () => {
     const agentEvent = (capturedAt: string, agentSessionId: number) => ({
