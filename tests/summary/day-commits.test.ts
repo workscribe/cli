@@ -5,14 +5,16 @@ vi.mock('../../src/summary/git-commits', async (importOriginal) => ({
   getRepoRoot: vi.fn(),
   getUserEmail: vi.fn(),
   findCommitsInWindow: vi.fn(),
+  getCommitSizes: vi.fn(() => null),
 }))
 
-import { findCommitsInWindow, getRepoRoot, getUserEmail } from '../../src/summary/git-commits'
+import { findCommitsInWindow, getCommitSizes, getRepoRoot, getUserEmail } from '../../src/summary/git-commits'
 import { lookupDayCommits } from '../../src/summary/day-commits'
 
 const mockGetRepoRoot = vi.mocked(getRepoRoot)
 const mockGetUserEmail = vi.mocked(getUserEmail)
 const mockFindCommitsInWindow = vi.mocked(findCommitsInWindow)
+const mockGetCommitSizes = vi.mocked(getCommitSizes)
 
 function windowIn(repo: string, startedAt: string, endedAt: string) {
   return { cwd: `/Users/dev/${repo}`, startedAt, endedAt }
@@ -134,5 +136,72 @@ describe('lookupDayCommits', () => {
     mockFindCommitsInWindow.mockReturnValue(null)
 
     expect(lookupDayCommits([MORNING, AFTERNOON], { budgetMs: 3000 })).toEqual([null, null])
+  })
+})
+
+describe('lookupDayCommits: what each commit changed', () => {
+  const COMMITS = [
+    { hash: 'a1b2c3d', subject: 'morning fix', committedAt: '2026-10-25T09:30:00.000Z' },
+    { hash: 'e4f5a6b', subject: 'morning merge', committedAt: '2026-10-25T09:40:00.000Z' },
+  ]
+
+  it('tells each commit what it changed, from one more call for the whole repo', () => {
+    gitRepos()
+    mockFindCommitsInWindow.mockReturnValue(COMMITS)
+    mockGetCommitSizes.mockReturnValue(new Map([['a1b2c3d', { files: 5, added: 86, removed: 31 }]]))
+
+    const [morning] = lookupDayCommits([MORNING], { budgetMs: 3000 })
+
+    expect(mockGetCommitSizes).toHaveBeenCalledTimes(1)
+    expect(mockGetCommitSizes).toHaveBeenCalledWith('/Users/dev/api', ['a1b2c3d', 'e4f5a6b'], expect.any(Number))
+    expect(morning).toEqual([{ ...COMMITS[0], size: { files: 5, added: 86, removed: 31 } }, COMMITS[1]])
+  })
+
+  it('tells the commits as they were when git cannot size them', () => {
+    gitRepos()
+    mockFindCommitsInWindow.mockReturnValue(COMMITS)
+    mockGetCommitSizes.mockReturnValue(null)
+
+    expect(lookupDayCommits([MORNING], { budgetMs: 3000 })).toEqual([COMMITS])
+  })
+
+  it('asks for no sizes when there are no commits, or the budget is spent', () => {
+    gitRepos()
+    mockFindCommitsInWindow.mockReturnValue([])
+    lookupDayCommits([MORNING], { budgetMs: 3000 })
+    expect(mockGetCommitSizes).not.toHaveBeenCalled()
+
+    mockFindCommitsInWindow.mockReturnValue(COMMITS)
+    const clock = [0, 0, 1000, 2000, 3000]
+    const result = lookupDayCommits([MORNING], { budgetMs: 3000, now: () => clock.shift() ?? 9000 })
+
+    expect(mockGetCommitSizes).not.toHaveBeenCalled()
+    expect(result).toEqual([COMMITS])
+  })
+
+  it('gives the sizes at most half of the time left, so a slow one cannot take the next repository with it', () => {
+    gitRepos()
+    mockFindCommitsInWindow.mockReturnValue(COMMITS)
+    mockGetCommitSizes.mockReturnValue(new Map())
+    // Deadline at 3000; the git log calls take nothing, and 2000 are left when the sizes are asked for
+    const clock = [0, 0, 0, 0, 1000]
+    const now = () => clock.shift() ?? 9000
+
+    lookupDayCommits([MORNING], { budgetMs: 3000, now })
+
+    expect(mockGetCommitSizes).toHaveBeenCalledWith('/Users/dev/api', expect.any(Array), 1000)
+  })
+
+  it('gives git the time left for the sizes, never 0', () => {
+    gitRepos()
+    mockFindCommitsInWindow.mockReturnValue(COMMITS)
+    mockGetCommitSizes.mockReturnValue(new Map())
+    // Deadline at 3000; the clock ticks past each call, ending 1 ms short of it
+    const clock = [0, 0, 1000, 2000, 2999]
+    const now = () => clock.shift() ?? 9000
+
+    lookupDayCommits([MORNING], { budgetMs: 3000, now })
+
+    expect(mockGetCommitSizes).toHaveBeenCalledWith('/Users/dev/api', expect.any(Array), 1)
   })
 })

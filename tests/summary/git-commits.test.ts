@@ -7,6 +7,7 @@ import {
   getRepoRoot,
   getRepoRootOf,
   getIgnoredPaths,
+  getCommitSizes,
   getUserEmail,
   getCommitsInWindow,
   findCommitsInWindow,
@@ -269,5 +270,73 @@ describe('getIgnoredPaths', () => {
     })
 
     expect(getIgnoredPaths('/repo', ['a.ts'])).toBeNull()
+  })
+})
+
+describe('getCommitSizes', () => {
+  const MARKER = '\u0001'
+  const shown = (hash: string, parents: string, numstat: string) => `${MARKER}${hash}\t${parents}\n\n${numstat}\n`
+  const hashes = (count: number) =>
+    Array.from({ length: count }, (_unused, index) => `abc${index.toString(16).padStart(4, '0')}`)
+
+  it('passes only hashes to git, as arguments ending with --, with room for a large answer', () => {
+    gitOutput(shown('a1b2c3d', 'p1', '1\t0\ta.ts'))
+
+    getCommitSizes('/repo', ['a1b2c3d', '--output=x', 'HEAD', 'e4f5a6b'], 500)
+
+    expect(mockExecFileSync).toHaveBeenCalledWith(
+      'git',
+      ['show', '--numstat', `--format=${MARKER}%h%x09%P`, 'a1b2c3d', 'e4f5a6b', '--'],
+      expect.objectContaining({ cwd: '/repo', timeout: 500, maxBuffer: 16 * 1024 * 1024 })
+    )
+  })
+
+  it('counts a commit by its numstat lines, and leaves out a merge and a commit with no changed file', () => {
+    gitOutput(
+      [
+        shown('a1b2c3d', 'p1', '2\t1\ta.ts\n-\t-\tbin.dat'),
+        shown('e4f5a6b', 'p1 p2', '9\t9\tmerged.ts'),
+        `${MARKER}0a0a0a0\tp1\n`,
+      ].join('')
+    )
+
+    const sizes = getCommitSizes('/repo', ['a1b2c3d', 'e4f5a6b', '0a0a0a0'])
+
+    expect(sizes).toEqual(new Map([['a1b2c3d', { files: 2, added: 2, removed: 1 }]]))
+  })
+
+  it('asks in batches of 100 and puts the answers together', () => {
+    mockExecFileSync.mockReturnValueOnce(Buffer.from(shown('abc0000', 'p', '1\t0\ta.ts')))
+    mockExecFileSync.mockReturnValueOnce(Buffer.from(shown('abc0064', 'p', '3\t2\tb.ts')))
+    mockExecFileSync.mockReturnValueOnce(Buffer.from(''))
+
+    const sizes = getCommitSizes('/repo', hashes(250))
+
+    expect(mockExecFileSync).toHaveBeenCalledTimes(3)
+    expect([...(sizes?.keys() ?? [])]).toEqual(['abc0000', 'abc0064'])
+  })
+
+  it('keeps what the earlier batches answered when a later one fails, and is null when the first fails', () => {
+    mockExecFileSync.mockReturnValueOnce(Buffer.from(shown('abc0000', 'p', '1\t0\ta.ts')))
+    mockExecFileSync.mockImplementationOnce(() => {
+      throw new Error('timed out')
+    })
+    expect([...(getCommitSizes('/repo', hashes(150))?.keys() ?? [])]).toEqual(['abc0000'])
+
+    gitFails()
+    expect(getCommitSizes('/repo', hashes(150))).toBeNull()
+  })
+
+  it('leaves the commits of a batch the budget does not reach unsized, and asks git nothing more', () => {
+    mockExecFileSync.mockReturnValueOnce(Buffer.from(shown('abc0000', 'p', '1\t0\ta.ts')))
+    // The deadline is set at 0 + 100; the first batch starts at 0, the second at 200
+    const clock = [0, 0, 200]
+    const now = vi.spyOn(Date, 'now').mockImplementation(() => clock.shift() ?? 9000)
+
+    const sizes = getCommitSizes('/repo', hashes(150), 100)
+    now.mockRestore()
+
+    expect(mockExecFileSync).toHaveBeenCalledTimes(1)
+    expect([...(sizes?.keys() ?? [])]).toEqual(['abc0000'])
   })
 })

@@ -10,11 +10,20 @@ export const WINDOW_TRAIL_MS = 60_000
 // How far back to look when checking who made a captured commit (pulled commits can be old)
 const AUTHORSHIP_HISTORY_DEPTH = 500
 
+/** What a commit changed, from `git show --numstat`: files, and lines added and removed (a binary file adds none). */
+export interface CommitSize {
+  files: number
+  added: number
+  removed: number
+}
+
 export interface GitCommit {
   hash: string
   subject: string
   /** When it was committed (ISO 8601, committer date) — to place it on the session's branch timeline */
   committedAt: string
+  /** What it changed; only when `getCommitSizes` was asked, and never for a merge or a commit with no changed file */
+  size?: CommitSize
 }
 
 interface CommitWindow {
@@ -91,6 +100,98 @@ export function getIgnoredPaths(repoRoot: string, paths: string[], timeoutMs = G
   } catch (error) {
     return hasExitStatus(error, NONE_IGNORED_STATUS) ? new Set() : null
   }
+}
+
+const COMMIT_MARKER = '\u0001'
+const HASH_PATTERN = /^[0-9a-f]{4,64}$/i
+const NUMSTAT_LINE = /^(\d+|-)\t(\d+|-)\t/
+// A whole day's commits fit in a few batches; the `git show` output of a very large commit needs room
+const SIZE_BATCH = 100
+const SIZE_MAX_BUFFER = 16 * 1024 * 1024
+const MERGE_PARENTS = 2
+const MIN_TIMEOUT_MS = 1
+
+function lineCount(count: string): number {
+  return count === '-' ? 0 : Number(count)
+}
+
+/** One commit of a `git show --numstat` output: its hash, whether it has several parents, and its numstat lines. */
+interface ShownCommit {
+  hash: string
+  isMerge: boolean
+  numstat: string[]
+}
+
+/** The output split at the marker line that starts each commit. */
+function shownCommitsOf(output: string): ShownCommit[] {
+  const commits: ShownCommit[] = []
+  for (const line of output.split('\n')) {
+    if (line.startsWith(COMMIT_MARKER)) {
+      const [hash, parents = ''] = line.slice(COMMIT_MARKER.length).split('\t')
+      commits.push({ hash, isMerge: parents.split(' ').length >= MERGE_PARENTS, numstat: [] })
+    } else if (NUMSTAT_LINE.test(line)) {
+      commits.at(-1)?.numstat.push(line)
+    }
+  }
+  return commits
+}
+
+/** The files and lines of a commit's numstat lines: a rename is one line, and `-` (a binary file) adds no lines. */
+function sizeOfNumstat(numstat: string[]): CommitSize {
+  return numstat.reduce<CommitSize>(
+    (size, line) => {
+      const [added, removed] = line.split('\t')
+      return { files: size.files + 1, added: size.added + lineCount(added), removed: size.removed + lineCount(removed) }
+    },
+    { files: 0, added: 0, removed: 0 }
+  )
+}
+
+/** One `git show --numstat` output as sizes by hash. A merge, or a commit that changed no file, has none. */
+function parseSizes(output: string): Map<string, CommitSize> {
+  const shown = shownCommitsOf(output).filter((commit) => !commit.isMerge && commit.numstat.length > 0)
+  return new Map(shown.map((commit) => [commit.hash, sizeOfNumstat(commit.numstat)]))
+}
+
+/**
+ * The output of `git show --numstat` for these hashes, or null when git couldn't answer within `timeoutMs`. The hashes
+ * end with `--`, so a short hash that is also a file or branch name is still read as a commit.
+ */
+function showNumstat(repoRoot: string, hashes: string[], timeoutMs: number): string | null {
+  try {
+    return execFileSync('git', ['show', '--numstat', `--format=${COMMIT_MARKER}%h%x09%P`, ...hashes, '--'], {
+      cwd: repoRoot,
+      timeout: timeoutMs,
+      maxBuffer: SIZE_MAX_BUFFER,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).toString()
+  } catch {
+    return null
+  }
+}
+
+/**
+ * How much each of these commits changed, by hash: its files and lines, a rename as one file and a binary file as a file
+ * with no lines. A merge is left out — against its first parent it would be everything merged in — and so is a commit
+ * that changed no file. Everything must fit in `timeoutMs`: batches that don't are left unsized, and null means git
+ * answered nothing. Only hashes are passed to git, and as arguments, never through a shell.
+ */
+export function getCommitSizes(
+  repoRoot: string,
+  hashes: string[],
+  timeoutMs = GIT_TIMEOUT_MS
+): Map<string, CommitSize> | null {
+  const valid = hashes.filter((hash) => HASH_PATTERN.test(hash))
+  const deadline = Date.now() + timeoutMs
+  const sizes = new Map<string, CommitSize>()
+  for (let start = 0; start < valid.length; start += SIZE_BATCH) {
+    const timeLeft = Math.ceil(deadline - Date.now())
+    if (timeLeft < MIN_TIMEOUT_MS) break
+    const output = showNumstat(repoRoot, valid.slice(start, start + SIZE_BATCH), timeLeft)
+    if (output === null) return sizes.size > 0 ? sizes : null
+    for (const [hash, size] of parseSizes(output)) sizes.set(hash, size)
+  }
+  return sizes
 }
 
 /** `timeoutMs`: this call's git timeout (default GIT_TIMEOUT_MS). */
