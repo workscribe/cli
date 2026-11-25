@@ -504,6 +504,8 @@ Event = {
   category: string                 // testing, building, shipping, dependencies, ai_session, other, …
   metadata: Record<string, unknown> // structured fields the normaliser extracted (tool, packages, message, …); on
                                    // code_edit: linesAdded, linesRemoved (null when unknown), lastEditAt
+                                   // intent: what the agent said the command is for (Claude Code's description).
+                                   // Only with skill.includeAgentMessages and capture.agentMessages both on
   hint?: string                    // only on unclassified ("other") events: redacted, ≤120-char command prefix
   exitCode: number | null          // 0 passed; another code failed; -1 failed, no code known; null unknown (agent hooks that report none, interrupts, and runs whose 0 isn't their own; see below)
   durationMs: number | null

@@ -15,6 +15,7 @@ import {
   outcomeOf,
 } from './describe'
 import { describeBranchMoves } from './branch-moves'
+import { describeIntents } from './intents'
 import { describeReads } from './reads'
 import { describeScripts } from './scripts'
 import { topicOf } from './topic'
@@ -130,11 +131,15 @@ function describeActivityLine(
   return parts.length > 0 ? parts.join(' · ') : null
 }
 
-/** A session with nothing to tell but activity says so plainly — the heading already says where and how long. */
+/**
+ * A session with nothing to tell but activity says so plainly — the heading already says where and how long — or, when
+ * the agent said what its commands were for, what it said it was doing. Every event counts, the categories the story
+ * leaves out by default (`exploring`, `linting`) too: a block that has nothing else to tell is made of exactly those.
+ */
 function describeQuietSession(session: SessionPayload, events: EventPayload[]): string {
   const ranCommands = session.events.some((event) => event.category !== 'code_edit' && event.category !== 'note')
   const hasOnlySaves = !ranCommands && eventsOf(events, 'code_edit').length > 0
-  return hasOnlySaves ? 'Edited files' : 'Explored and ran commands'
+  return hasOnlySaves ? 'Edited files' : (describeIntents(session.events) ?? 'Explored and ran commands')
 }
 
 function branchLines(groups: BranchBullets[], isMultiBranch: boolean): string[] {
