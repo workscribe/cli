@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { renderSessionStory, storyLines } from '../../../../src/ai/engines/template/story'
+import {
+  branchGroupsOf,
+  renderSessionStory,
+  storyLines,
+  storyOfBranch,
+} from '../../../../src/ai/engines/template/story'
 import { commit, event, onBranch, session } from './fixtures'
 
 const byAgent = (category: string, exitCode: number | null = null) => ({
@@ -219,5 +224,114 @@ describe('renderSessionStory', () => {
     const events = [event('testing', {}, 1), event('testing', {}, 0)]
 
     expect(renderSessionStory(session(events))).toBe(renderSessionStory(session(events)))
+  })
+})
+
+const reading = (...reads: string[]) => ({ ...event('exploring'), reads })
+const PLAN = 'docs/plan/WOR-179-remove-old-data-after-100-days.md'
+const TICKET_BRANCH = 'feat/WOR-179-remove-old-data-after-100-days'
+const TICKET_TOPIC = '- WOR-179: remove old data after 100 days'
+
+describe('storyLines: what was read', () => {
+  it('tells what was read first, before the commits and outcomes', () => {
+    const events = [reading(PLAN), event('testing')]
+
+    expect(storyLines(session(events, { commits: [commit('fix: token validation')] }))).toEqual([
+      '- Read the WOR-179 plan',
+      '- Committed: fix: token validation',
+      '- Tests passing',
+    ])
+  })
+
+  it('keeps a branch that only read, and drops the quiet line for it', () => {
+    expect(storyLines(session([reading('src/db/x.ts')]))).toEqual(['- Read src/db/x.ts'])
+  })
+
+  it('keeps the quiet line for exploring that read nothing it can name', () => {
+    expect(storyLines(session([event('exploring')]))).toEqual(['- Explored and ran commands'])
+  })
+
+  it('tells each branch what it read', () => {
+    const events = [
+      onBranch('feature/auth', reading('src/db/x.ts')),
+      onBranch('main', reading('docs/site/a.md')),
+      onBranch('main', event('testing')),
+    ]
+
+    expect(storyLines(session(events, { branches: ['feature/auth', 'main'], branch: 'main' }))).toEqual([
+      'On feature/auth:',
+      '- Read src/db/x.ts',
+      'On main:',
+      '- Read docs/site/a.md',
+      '- Tests passing',
+    ])
+  })
+
+  it('keeps a read with no branch with the branch before it, as the rest of the story does', () => {
+    const events = [
+      onBranch('feature/auth', event('testing')),
+      onBranch('main', event('testing')),
+      onBranch(null, reading('src/db/x.ts')),
+    ]
+
+    expect(storyLines(session(events, { branches: ['feature/auth', 'main'], branch: 'main' }))).toEqual([
+      'On feature/auth:',
+      '- Tests passing',
+      'On main:',
+      '- Read src/db/x.ts',
+      '- Tests passing',
+    ])
+  })
+
+  it('tells reads of a session with no branch at all', () => {
+    const events = [onBranch(null, reading('src/db/x.ts')), onBranch(null, event('testing'))]
+
+    expect(storyLines(session(events, { branches: [], branch: null }))).toEqual([
+      '- Read src/db/x.ts',
+      '- Tests passing',
+    ])
+  })
+
+  it('is not changed by asking for exploring events to be included', () => {
+    const events = [reading(PLAN), event('testing')]
+
+    expect(storyLines(session(events), ['exploring'])).toEqual(storyLines(session(events)))
+  })
+
+  it('leaves what the week tells about a branch as it was', () => {
+    const [group] = branchGroupsOf(session([reading(PLAN), event('testing')]))
+
+    expect(storyOfBranch(group).bullets).toEqual(['Tests passing'])
+  })
+})
+
+describe('storyLines: what a branch was about', () => {
+  const onTicket = (base = event('testing')) => onBranch(TICKET_BRANCH, base)
+  const ticketSession = (events: ReturnType<typeof event>[], commits: ReturnType<typeof commit>[] = []) =>
+    session(events, { branches: [TICKET_BRANCH], branch: TICKET_BRANCH, commits })
+
+  it('leads with the topic of a branch no commit speaks for', () => {
+    expect(storyLines(ticketSession([onTicket()]))).toEqual([TICKET_TOPIC, '- Tests passing'])
+  })
+
+  it('puts the topic before what was read', () => {
+    const events = [onTicket(reading(PLAN)), onTicket()]
+
+    expect(storyLines(ticketSession(events))).toEqual([TICKET_TOPIC, '- Read the WOR-179 plan', '- Tests passing'])
+  })
+
+  it('leaves the topic out when a commit says what the work was', () => {
+    expect(storyLines(ticketSession([onTicket()], [commit('fix: x', TICKET_BRANCH)]))).toEqual([
+      '- Committed: fix: x',
+      '- Tests passing',
+    ])
+  })
+
+  it('never lets the topic stand alone', () => {
+    expect(storyLines(ticketSession([onTicket(event('exploring'))]))).toEqual(['- Explored and ran commands'])
+  })
+
+  it('says nothing of the topic of a branch with no ticket key', () => {
+    expect(storyLines(session([event('testing')]))).toEqual(['- Tests passing'])
   })
 })

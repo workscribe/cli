@@ -68,6 +68,18 @@ Lint runs and commands that only read are left out by default: `cat`, `grep`, `f
 workscribe config set summary.includeCategories '["linting"]'
 ```
 
+### What was read
+
+Left-out reads still tell where your time went, so `summary` and `export` add one line per branch, first among its bullets, saying what was read: `Read the WOR-179 plan, the retention modules and tests in tests/db`. It names:
+
+- a plan under `docs/plan/` or `plan/` by its ticket (`the WOR-179 plan`);
+- source files that share a word in their names as `the retention modules` (at least three files), and the rest of that folder as `21 other files in src/db`, or a single file by its path;
+- tests by folder (`tests in tests/db`), and docs by path or count.
+
+It never lists a command or shows a file's contents, names at most four things (the rest are folded into `N other files`), and uses paths relative to the repository. It comes from commands already stored, so past days show it too, and nothing new is stored. A path git ignores (`.gitignore`) is never named, and neither is anything under `node_modules`, `dist`, `build`, `coverage`, `.git`, `.next` or `__pycache__`, nor a file or folder that looks like it holds credentials: `.env*`, `.npmrc`, `.netrc`, SSH, cloud and Kubernetes config (`.ssh`, `.aws`, `.kube`, `kubeconfig`), key and certificate files (`*.pem`, `*.key`, `*.p12`, `id_rsa*`, `id_ed25519*`), Terraform variables and state, and any name with `credential`, `secret`, `token`, `passw`, `api key` or `service account` in it. A command with an option Workscribe doesn't know leaves that command out, so a search pattern is never mistaken for a path. When git can't say which paths a repository ignores — its folder is gone, or git is slow — that repository's blocks have no Read line. An inline script (`python3 -`) has none either: what it read is in its script, which isn't stored. The week, `context` and `--json` output don't show it.
+
+A branch named for a ticket (`feat/WOR-179-remove-old-data-after-100-days`) with no commit of its own to say what the work was gets a line first with its ticket and the words of its name: `WOR-179: remove old data after 100 days`.
+
 `workscribe summary --verbose` shows every captured event, marking the ones left out. That's where to look for run counts, which the summary no longer shows.
 
 ---

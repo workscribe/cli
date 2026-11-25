@@ -15,6 +15,8 @@ import {
   outcomeOf,
 } from './describe'
 import { describeBranchMoves } from './branch-moves'
+import { describeReads } from './reads'
+import { topicOf } from './topic'
 import { eventsOf, pluralize, toBulletList } from './utils'
 import type { AgentSessionPayload, EventPayload, SessionPayload } from '../../types'
 import type { StoryCommit } from '../../../summary/story-commits'
@@ -132,12 +134,28 @@ function branchLines(groups: BranchBullets[], isMultiBranch: boolean): string[] 
   })
 }
 
+/** What each branch's events read, from every event: reads are `exploring`, which the story otherwise leaves out. */
+function readsByBranch(session: SessionPayload): Map<string | null, string | null> {
+  return new Map(branchGroupsOf(session).map((group) => [group.branch, describeReads(group.events)]))
+}
+
+/**
+ * A branch's bullets with what it was about and what it read in front: the topic from its ticket and slug, but only for
+ * a branch no commit names the work of and that has something else to tell — it never stands alone.
+ */
+function bulletsWithContext(group: BranchGroup, readLine: string | null | undefined): string[] {
+  const bullets = [...(readLine ? [readLine] : []), ...branchBullets(group)]
+  const topic = group.commits.length === 0 && bullets.length > 0 ? topicOf(group.branch) : null
+  return topic === null ? bullets : [topic, ...bullets]
+}
+
 /** The story's lines under the heading: `- ` bullets, plain `On <branch>:` lines and a plain activity line. */
 export function storyLines(session: SessionPayload, includeCategories: string[] = []): string[] {
   const events = includedEvents(session.events, includeCategories)
   const notes = describeNotes(events)
+  const reads = readsByBranch(session)
   const groups = groupByBranch(session, events)
-    .map((group) => ({ branch: group.branch, bullets: branchBullets(group) }))
+    .map((group) => ({ branch: group.branch, bullets: bulletsWithContext(group, reads.get(group.branch)) }))
     .filter((group) => group.bullets.length > 0)
   const activityLine = describeActivityLine(session.events, events, session.agentSessions ?? [])
   const closing = activityLine === null ? [] : [activityLine]

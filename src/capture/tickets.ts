@@ -4,6 +4,8 @@ import { collectCapturedCommits, type CommitSource } from '../summary/commits'
 import type { TicketKeys } from '../db/tickets'
 
 export const DEFAULT_TICKET_PATTERN = '[A-Z][A-Z0-9]+-\\d+'
+/** The default pattern as a matcher, for the template, which doesn't read the config. */
+export const DEFAULT_TICKET_KEY = new RegExp(DEFAULT_TICKET_PATTERN)
 
 /** Only the start of a long text is searched: ticket keys sit at the start of branch names and subjects. */
 const MAX_SEARCHED_CHARACTERS = 200

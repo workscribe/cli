@@ -3,6 +3,7 @@ import path from 'path'
 import { formatDate } from '../utils/format'
 import { parseMetadata } from './event-metadata'
 import { storyCommitsOf } from './story-commits'
+import { readsOfRows, type ReadPathResolver } from './event-reads'
 import { isFailedCommand } from './commits'
 import { isShellExpansion, withoutShellExpansions } from '../normalize/dependency-metadata'
 import { reportedExitCode } from '../normalize/exit-evidence'
@@ -180,6 +181,16 @@ export interface SessionPayloadOptions {
   gitCommits?: GitCommit[] | null
   /** The agent conversations the events came from */
   agentSessions?: AgentSessionInfo[]
+  /** What names the paths `exploring` commands read, for the story's Read line; without it no event has `reads` */
+  readPaths?: ReadPathResolver
+}
+
+/** The rows as payloads, the `exploring` ones carrying what they read when the caller can say which paths git ignores. */
+function eventPayloadsOf(rows: EventRow[], readPaths: ReadPathResolver | undefined): EventPayload[] {
+  const payloads = rows.map(eventRowToPayload)
+  if (readPaths === undefined) return payloads
+  const reads = readsOfRows(rows, readPaths)
+  return payloads.map((payload, index) => (reads.has(index) ? { ...payload, reads: reads.get(index) } : payload))
 }
 
 function toAgentSessionPayloads(sessions: AgentSessionInfo[], context: LocationContext): AgentSessionPayload[] {
@@ -201,7 +212,7 @@ export interface PayloadSpan extends WorkEvents {
 export function spanToPayload(
   span: PayloadSpan,
   date: string,
-  { context = DEFAULT_LOCATION_CONTEXT, gitCommits = null, agentSessions = [] }: SessionPayloadOptions = {}
+  { context = DEFAULT_LOCATION_CONTEXT, gitCommits = null, agentSessions = [], readPaths }: SessionPayloadOptions = {}
 ): SessionPayload {
   return {
     date,
@@ -211,7 +222,7 @@ export function spanToPayload(
     startTime: formatDate(span.startedAt),
     endTime: formatDate(span.endedAt),
     durationMinutes: span.durationMinutes,
-    events: span.events.map(eventRowToPayload),
+    events: eventPayloadsOf(span.events, readPaths),
     ...(agentSessions.length > 0 ? { agentSessions: toAgentSessionPayloads(agentSessions, context) } : {}),
     commits: storyCommitsOf(span.events, gitCommits),
   }
