@@ -43,6 +43,24 @@ describe('parseClaudeHook over the recorded payloads', () => {
     }
   })
 
+  it('carries the description Claude Code gave each recorded Bash command, success and failure alike', () => {
+    expect(parseClaudeHook(read(BASH, 'post-tool-use-success.json'), 'PostToolUse')).toMatchObject({
+      kind: 'command',
+      intent: 'Run true',
+    })
+    expect(parseClaudeHook(read(BASH, 'post-tool-use-failure-exit-3.json'), 'PostToolUseFailure')).toMatchObject({
+      kind: 'command',
+      intent: 'Exit with status 3',
+    })
+  })
+
+  it('has no intent for a command whose payload has no description', () => {
+    const payload = JSON.stringify({ tool_name: 'Bash', tool_input: { command: 'ls' }, cwd: '/app', session_id: 's' })
+
+    expect(parseClaudeHook(payload, 'PostToolUse')).toMatchObject({ kind: 'command' })
+    expect(parseClaudeHook(payload, 'PostToolUse')).not.toHaveProperty('intent')
+  })
+
   it.each([
     ['post-tool-use-failure-exit-1.json', 1],
     ['post-tool-use-failure-exit-3.json', 3],

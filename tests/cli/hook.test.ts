@@ -40,7 +40,17 @@ describe('parseHookPayload', () => {
       exitCode: 0,
       durationMs: null,
       sessionId: null,
+      description: null,
     })
+  })
+
+  it("reads the description Claude Code gives a command, and null when it isn't a string", () => {
+    const withDescription = (description: unknown) =>
+      JSON.stringify({ tool_input: { command: 'npm test', description }, cwd: '/app' })
+
+    expect(parseHookPayload(withDescription('Run the tests'))?.description).toBe('Run the tests')
+    expect(parseHookPayload(withDescription(42))?.description).toBeNull()
+    expect(parseHookPayload(withDescription(undefined))?.description).toBeNull()
   })
 
   it('returns null for empty string', () => {
@@ -89,6 +99,7 @@ describe('parseHookPayload', () => {
       exitCode: 0,
       durationMs: null,
       sessionId: 'abc-123',
+      description: null,
     })
   })
 })
@@ -227,6 +238,8 @@ describe('parseHookPayload — recorded Claude Code payloads', () => {
       exitCode: 0,
       durationMs: 1381,
       sessionId: '<session_id>',
+      // As Claude Code recorded it: it describes each command it runs
+      description: 'Run true',
     })
   })
 

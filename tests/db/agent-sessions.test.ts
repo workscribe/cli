@@ -190,6 +190,31 @@ describe('how agent sessions end, and their messages', () => {
     expect(endings(db)).toEqual([expect.objectContaining({ recap: null, compact_summary: null })])
   })
 
+  it("forgets the descriptions kept of the agent's commands, and only those", () => {
+    const db = database()
+    const metadataOf = (id: number) => db.prepare('SELECT metadata FROM events WHERE id = ?').get(id)?.metadata
+    insertEventRecord(db, event({ metadata: JSON.stringify({ tool: 'vitest', intent: 'Run the tests' }) }))
+    insertEventRecord(db, event({ metadata: JSON.stringify({ intent: 'Commit it', message: 'fix: x' }) }))
+    insertEventRecord(db, event({ metadata: JSON.stringify({ tool: 'npm' }) }))
+    insertEventRecord(db, event({ metadata: null }))
+    insertEventRecord(db, event({ metadata: 'not json' }))
+    insertEventRecord(db, event({ metadata: '[1]' }))
+    insertEventRecord(db, event({ metadata: '"intent"' }))
+    insertEventRecord(db, event({ metadata: JSON.stringify({ intent: 42, tool: 'x' }) }))
+
+    clearAgentMessages(db)
+
+    expect(JSON.parse(String(metadataOf(1)))).toEqual({ tool: 'vitest' })
+    expect(JSON.parse(String(metadataOf(2)))).toEqual({ message: 'fix: x' })
+    expect(metadataOf(3)).toBe('{"tool":"npm"}')
+    expect(metadataOf(4)).toBeNull()
+    expect(metadataOf(5)).toBe('not json')
+    // JSON that isn't an object, and an intent that isn't text, can't make the opt-out fail
+    expect(metadataOf(6)).toBe('[1]')
+    expect(metadataOf(7)).toBe('"intent"')
+    expect(JSON.parse(String(metadataOf(8)))).toEqual({ tool: 'x' })
+  })
+
   it('lists the session with its id, ending and recap for the events it came from', () => {
     const db = database()
     insertEventRecord(db, event({ agentSession: CONVERSATION }))

@@ -85,9 +85,16 @@ export function recordAgentMessage(
   })
 }
 
-/** Forgets every stored recap and compaction summary — when the agent's words are no longer kept. */
+/**
+ * Forgets every stored recap and compaction summary, and the description kept of each command (`intent`, in its
+ * event's metadata) — when the agent's words are no longer kept. Metadata that isn't JSON is left as it is.
+ */
 export function clearAgentMessages(db: MigrationDatabase): void {
   db.prepare('UPDATE agent_sessions SET recap = NULL, compact_summary = NULL').run()
+  db.prepare(
+    `UPDATE events SET metadata = json_remove(metadata, '$.intent')
+     WHERE json_valid(metadata) AND json_extract(metadata, '$.intent') IS NOT NULL`
+  ).run()
 }
 
 /** What `sessions --json` says about an agent session: never its working folder. */

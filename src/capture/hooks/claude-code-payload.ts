@@ -147,6 +147,8 @@ export interface HookCommand {
   durationMs: number | null
   /** The agent conversation the command ran in — the same across every folder it worked in. Null if not sent */
   sessionId: string | null
+  /** The description Claude Code writes for the command ("Run the retention tests"). Null if not sent or not text */
+  description: string | null
 }
 
 // PostToolUseFailure's `error` starts with this for a Bash command that ran and exited
@@ -176,7 +178,8 @@ export function parseHookPayload(raw: string, event: ToolEvent = 'PostToolUse'):
   if (!command || !cwd) return null
   const durationMs = typeof payload.duration_ms === 'number' ? payload.duration_ms : null
   const sessionId = typeof payload.session_id === 'string' && payload.session_id !== '' ? payload.session_id : null
-  return { command, cwd, exitCode: exitCodeOfToolEvent(event, payload), durationMs, sessionId }
+  const description = typeof toolInput?.description === 'string' ? toolInput.description : null
+  return { command, cwd, exitCode: exitCodeOfToolEvent(event, payload), durationMs, sessionId, description }
 }
 
 interface UserPromptPayload {
@@ -211,8 +214,13 @@ function parseToolEvent(raw: string, event: ToolEvent): HookEvent | null {
   }
   const command = parseHookPayload(raw, event)
   if (!command) return null
-  const { exitCode, ...rest } = command
-  return { kind: 'command', ...rest, outcome: outcomeOfExitCode(exitCode) }
+  const { exitCode, description, ...rest } = command
+  return {
+    kind: 'command',
+    ...rest,
+    ...(description === null ? {} : { intent: description }),
+    outcome: outcomeOfExitCode(exitCode),
+  }
 }
 
 function parseSessionEvent(raw: string, event: SessionEvent): HookEvent | null {

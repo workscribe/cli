@@ -47,6 +47,60 @@ beforeEach(() => {
   vi.mocked(containsSecrets).mockReturnValue(false)
 })
 
+describe('dispatchHook: what the agent said a command is for', () => {
+  const withIntent = (intent: string | undefined): HookEvent => ({ ...COMMAND, intent })
+  const passedIntent = () => vi.mocked(captureCommand).mock.calls[0][0].intent
+
+  it('stores the description with capture.agentMessages on', () => {
+    config({ agentMessages: true })
+    parse('stub').mockReturnValue(withIntent('Run the tests'))
+
+    dispatchHook('{}', 'PostToolUse', 'stub')
+
+    expect(passedIntent()).toBe('Run the tests')
+  })
+
+  it('stores nothing of it with the setting off, or not set', () => {
+    parse('stub').mockReturnValue(withIntent('Run the tests'))
+    config({ agentMessages: false })
+    dispatchHook('{}', 'PostToolUse', 'stub')
+    config()
+    dispatchHook('{}', 'PostToolUse', 'stub')
+
+    expect(vi.mocked(captureCommand).mock.calls.map(([call]) => 'intent' in call)).toEqual([false, false])
+  })
+
+  it('still stores the command when the description is dropped or there is none', () => {
+    config({ agentMessages: true })
+    vi.mocked(containsSecrets).mockReturnValue(true)
+    parse('stub').mockReturnValueOnce(withIntent('Set the token'))
+    dispatchHook('{}', 'PostToolUse', 'stub')
+    vi.mocked(containsSecrets).mockReturnValue(false)
+    parse('stub').mockReturnValueOnce(withIntent(undefined))
+    dispatchHook('{}', 'PostToolUse', 'stub')
+    parse('stub').mockReturnValueOnce(withIntent('   '))
+    dispatchHook('{}', 'PostToolUse', 'stub')
+
+    const calls = vi.mocked(captureCommand).mock.calls.map(([call]) => call)
+    expect(calls).toHaveLength(3)
+    expect(calls.map((call) => 'intent' in call)).toEqual([false, false, false])
+  })
+
+  it("redacts with the user's patterns, collapses whitespace and keeps at most 200 characters", () => {
+    vi.mocked(readConfig).mockReturnValue({
+      capture: { aiTools: true, agentMessages: true },
+      redact: { extra: ['internal-[a-z]+'] },
+    } as never)
+    parse('stub').mockReturnValueOnce(withIntent(`Deploy to internal-staging\n${'x'.repeat(300)}`))
+
+    dispatchHook('{}', 'PostToolUse', 'stub')
+
+    const intent = passedIntent() ?? ''
+    expect(intent.startsWith('Deploy to [REDACTED] xxx')).toBe(true)
+    expect(Array.from(intent)).toHaveLength(200)
+  })
+})
+
 describe('dispatchHook', () => {
   it("stores a command the agent's parser read, under its source and conversation", () => {
     parse('stub').mockReturnValue(COMMAND)

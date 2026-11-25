@@ -25,6 +25,8 @@ export type HookEvent =
       durationMs: number | null
       /** The agent conversation the command ran in. Null if not sent */
       sessionId: string | null
+      /** What the agent said the command is for, where its payload says (Claude Code's `description`); not redacted yet */
+      intent?: string
     }
   | {
       kind: 'edit'

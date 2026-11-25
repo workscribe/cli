@@ -76,6 +76,8 @@ export function captureCommand(opts: {
   verifyCommit?: boolean
   /** Given by every agent hook event (empty when it overlaps with nothing): what else records the same action */
   overlaps?: HookOverlaps
+  /** What the agent said the command is for, already redacted and cut (`storableIntent`); stored as `metadata.intent` */
+  intent?: string
 }): void {
   // Check pause flag before any I/O
   if (fs.existsSync(PAUSE_FLAG_PATH)) return
@@ -178,7 +180,10 @@ export function captureCommand(opts: {
   if (workDirectory !== cwd && isExcluded({ cwd: workDirectory }, config.capture.excludePaths)) return
   const context = getRepoContext(workDirectory, config)
   const { repoName, branch } = context
-  const metadata = withMessageFromFile(normalizedMetadata, workDirectory, config.redact.extra)
+  const metadata: Record<string, unknown> = {
+    ...withMessageFromFile(normalizedMetadata, workDirectory, config.redact.extra),
+    ...(opts.intent ? { intent: opts.intent } : {}),
+  }
 
   // Hint passthrough: preserve context for unrecognised commands so the AI can describe them
   if (category === 'other') {

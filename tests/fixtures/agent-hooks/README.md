@@ -101,6 +101,7 @@ Bash payloads are in `tests/fixtures/claude-code-hooks/` (2.1.311, WOR-127). Thi
 | Line counts | `Edit` and `Write` send `tool_response.structuredPatch`, unified-diff hunks whose `+`/`-` lines give exact counts, a replace-all included. A `Write` of a new file sends `type: "create"` and an empty patch, so its lines come from `content`. `NotebookEdit` sends the cell's `old_source` and `new_source`, and no patch |
 | Text to never store | `old_string`, `new_string`, `content`, `originalFile`, the patch's lines, and the notebook's `original_file`/`updated_file` |
 | Failed edit | An `Edit` whose text wasn't found fired neither `PostToolUse` nor `PostToolUseFailure` |
+| Bash `description` | Every Bash payload in `tests/fixtures/claude-code-hooks/` (2.1.311, `PostToolUse` and `PostToolUseFailure`) has `tool_input.description`, the agent's one-line account of the command ("Run true"). Stored as `intent` only with `capture.agentMessages` on (WOR-214) |
 | `Stop` | `last_assistant_message`, the turn's final reply, plus `stop_hook_active`, `background_tasks` and `session_crons` |
 | `PostCompact` | `trigger` (`manual` for `/compact`) and `compact_summary`, about 3,000 characters with `<analysis>` and `<summary>` blocks. Recorded by resuming the session with `claude -p --resume <id> "/compact"` |
 | `SessionEnd` | `reason`: `other` for both `-p` runs. An async `SessionEnd` hook that slept 2 s before recording still wrote its recording, about 2 s after the synchronous one, so it ran to the end. Interactive exits weren't tried |
