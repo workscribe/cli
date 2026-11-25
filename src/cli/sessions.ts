@@ -6,6 +6,7 @@ import { registerSummarySet } from './session-summary'
 import { loadDayThreads, requireThreadData } from './thread-day'
 import { fail } from './fail'
 import { readConfig } from '../config'
+import { mayShareAgentWords } from '../config/agent-words'
 import { locationContextFrom, sessionLocation, threadRepoCwd, type LocationContext } from '../summary/payload'
 import { blockToJson, buildSessionsJson, threadToJson } from '../summary/contract/build'
 import { collectNotes } from '../summary/contract/utils'
@@ -39,7 +40,7 @@ function printSessionsJson(date: string, blocks: DayBlock[]): void {
     location: locationContextFrom(config),
     includeCategories: config.summary?.includeCategories ?? [],
     // Recaps are free text: the skill gets them only when stored and asked for
-    includeAgentRecaps: config.capture.agentMessages === true && config.skill.includeAgentMessages === true,
+    includeAgentRecaps: mayShareAgentWords(config),
   }
   const lookupGit = createThreadGitLookup()
   const sessionJsons = blocks.flatMap((block) =>

@@ -494,3 +494,44 @@ describe('eventRowToPayload: scripts from standard input', () => {
     expect(Object.keys(eventToJson(makeEvent({ command: "python3 - <<'EOF'\nEOF" })))).not.toContain('scripts')
   })
 })
+
+describe('spanToPayload: what the agent said a command is for', () => {
+  const described = makeEvent({
+    category: 'running',
+    command: 'npx vitest run',
+    metadata: '{"tool":"vitest","intent":"Run the tests"}',
+  })
+  const contextWith = (showAgentRecaps: boolean | undefined) => ({
+    projects: {},
+    homeDir: '/home/dev',
+    ...(showAgentRecaps === undefined ? {} : { showAgentRecaps }),
+  })
+
+  it('keeps the intent where recaps are shown: with capture.agentMessages on', () => {
+    const payload = spanToPayload(makeSpan({ events: [described] }), '2026-08-17', { context: contextWith(true) })
+
+    expect(payload.events[0].metadata).toEqual({ tool: 'vitest', intent: 'Run the tests' })
+  })
+
+  it('leaves it out otherwise, and everything else of the metadata in', () => {
+    for (const showAgentRecaps of [false, undefined]) {
+      const payload = spanToPayload(makeSpan({ events: [described] }), '2026-08-17', {
+        context: contextWith(showAgentRecaps),
+      })
+
+      expect(payload.events[0].metadata).toEqual({ tool: 'vitest' })
+    }
+  })
+
+  it('is the same payload for an event that has none', () => {
+    const plain = makeEvent({ metadata: '{"message":"fix: bug"}' })
+
+    const payload = spanToPayload(makeSpan({ events: [plain] }), '2026-08-17')
+
+    expect(payload.events[0]).toEqual(eventRowToPayload(plain))
+  })
+
+  it('leaves the payload built from a row alone as it was: contracts decide for themselves', () => {
+    expect(eventRowToPayload(described).metadata).toEqual({ tool: 'vitest', intent: 'Run the tests' })
+  })
+})

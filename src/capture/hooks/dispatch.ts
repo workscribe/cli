@@ -7,7 +7,7 @@ import { readConfig } from '../../config'
 import { debugLog } from '../../utils/logger'
 import { PAUSE_FLAG_PATH } from '../../utils/paths'
 import { containsSecrets } from '../detect-secrets'
-import { storableAgentMessage, storableEndReason } from '../agent-messages'
+import { storableAgentMessage, storableEndReason, storableIntent } from '../agent-messages'
 import { insertAlert } from '../../db/alerts'
 import { recordAgentSessionEnding, recordAgentSessionMessage } from '../../db'
 import type { AgentSessionRef } from '../../db/agent-sessions'
@@ -55,7 +55,20 @@ function handleEdit(event: Of<'edit'>, source: string | undefined, integration: 
   })
 }
 
+/**
+ * What the agent said the command is for, as it may be stored: only with `capture.agentMessages` on (it is the agent's
+ * own words, like a recap), redacted and cut. Null stores nothing. A command that later merges into an earlier row
+ * (`event-merge.ts`, only when an agent sets `overlaps`, which none does yet) leaves the survivor's metadata, so its
+ * intent is lost there.
+ */
+function storableIntentOf(event: Of<'command'>): string | null {
+  if (!event.intent) return null
+  const config = readConfig()
+  return config.capture.agentMessages === true ? storableIntent(event.intent, config.redact.extra) : null
+}
+
 function handleCommand(event: Of<'command'>, source: string | undefined, integration: AIHookIntegration): void {
+  const intent = storableIntentOf(event)
   captureCommand({
     command: event.command,
     cwd: event.cwd,
@@ -65,6 +78,7 @@ function handleCommand(event: Of<'command'>, source: string | undefined, integra
     agentSession: agentSessionOf(event.sessionId, source),
     overlaps: integration.overlaps ?? {},
     ...(integration.checksCommits ? { verifyCommit: true } : {}),
+    ...(intent === null ? {} : { intent }),
   })
 }
 

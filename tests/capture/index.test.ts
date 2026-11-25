@@ -170,6 +170,37 @@ describe('captureCommand — Aider prompt enrichment', () => {
   })
 })
 
+describe('captureCommand — what the agent said a command is for', () => {
+  const stored = () => JSON.parse(mockInsertEvent.mock.calls[0][0].metadata)
+
+  it('stores the intent it is given as metadata.intent', () => {
+    mockNormalize.mockReturnValue({ category: 'testing', metadata: { tool: 'vitest' } })
+
+    captureCommand({ command: 'npx vitest run', cwd: '/repo', exitCode: 0, durationMs: 50, intent: 'Run the tests' })
+
+    expect(stored()).toEqual({ tool: 'vitest', intent: 'Run the tests' })
+  })
+
+  it('keeps the intent beside a commit message and an unclassified command hint', () => {
+    mockNormalize.mockReturnValue({ category: 'shipping', metadata: { message: 'fix: x' } })
+    captureCommand({ command: 'git commit -m "fix: x"', cwd: '/repo', exitCode: 0, durationMs: 5, intent: 'Commit it' })
+    expect(stored()).toEqual({ message: 'fix: x', intent: 'Commit it' })
+
+    mockInsertEvent.mockClear()
+    mockNormalize.mockReturnValue({ category: 'other', metadata: {} })
+    captureCommand({ command: 'make deploy', cwd: '/repo', exitCode: 0, durationMs: 5, intent: 'Deploy it' })
+    expect(stored()).toMatchObject({ tool: 'make', hint: 'make deploy', intent: 'Deploy it' })
+  })
+
+  it('stores no intent key when none is given', () => {
+    mockNormalize.mockReturnValue({ category: 'testing', metadata: { tool: 'vitest' } })
+
+    captureCommand({ command: 'npx vitest run', cwd: '/repo', exitCode: 0, durationMs: 50 })
+
+    expect(stored()).toEqual({ tool: 'vitest' })
+  })
+})
+
 describe('captureCommand — hint passthrough for other events', () => {
   it('sets metadata.tool to the first token of the command', () => {
     mockNormalize.mockReturnValue({ category: 'other', metadata: {} })

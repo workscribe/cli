@@ -5,7 +5,7 @@ import { collectCapturedCommits, mergeCommits } from '../commits'
 import { minutesBetween } from '../../sessions/grouper'
 import { toActiveMinutes } from '../../sessions/blocks'
 import { knownCount, sumKnown } from '../../ai/engines/template/changes'
-import { parseMetadata } from '../event-metadata'
+import { parseMetadata, withoutIntent } from '../event-metadata'
 import type { History, HistoryEntry } from '../history'
 import type { EventRow } from '../../db/types'
 import type { AgentSessionInfo } from '../../db/agent-sessions'
@@ -23,9 +23,14 @@ import type {
   HistoryJson,
 } from './types'
 
-/** Never includes the full command, the event's cwd or an IDE file path. */
-export function eventToJson(row: EventRow): EventJson {
-  const { category, metadata, hint, exitCode, durationMs } = eventRowToPayload(row)
+/**
+ * Never includes the full command, the event's cwd or an IDE file path. What the agent said the command is for
+ * (`metadata.intent`) is free text of the agent's: it goes out only when `includeIntent` says it may, like a recap.
+ */
+export function eventToJson(row: EventRow, { includeIntent = false }: { includeIntent?: boolean } = {}): EventJson {
+  const { category, metadata: storedMetadata, hint, exitCode, durationMs } = eventRowToPayload(row)
+  const metadata =
+    includeIntent && typeof storedMetadata.intent === 'string' ? storedMetadata : withoutIntent(storedMetadata)
   return {
     capturedAt: row.captured_at,
     category,
@@ -97,7 +102,9 @@ export function threadToJson(
     tickets: thread.tickets,
     notes: collectNotes(thread.events),
     commits: mergeCommits(collectCapturedCommits(thread.events), git.commits, git.othersSubjects),
-    events: contractEvents(thread.events, includeCategories).map(eventToJson),
+    events: contractEvents(thread.events, includeCategories).map((row) =>
+      eventToJson(row, { includeIntent: includeAgentRecaps === true })
+    ),
   }
 }
 
@@ -119,14 +126,14 @@ export function buildSessionsJson(date: string, blocks: BlockJson[], sessions: S
 export function buildEventsJson(
   date: string,
   rows: EventRow[],
-  { limit, includeCategories }: EventsJsonOptions
+  { limit, includeCategories, includeIntent }: EventsJsonOptions
 ): EventsJson {
   const events = contractEvents(rows, includeCategories)
   return {
     schemaVersion: EVENTS_SCHEMA_VERSION,
     date,
     total: events.length,
-    events: events.slice(0, limit).map(eventToJson),
+    events: events.slice(0, limit).map((row) => eventToJson(row, { includeIntent })),
   }
 }
 

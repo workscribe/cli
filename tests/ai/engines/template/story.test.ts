@@ -426,3 +426,48 @@ describe('storyLines: scripts whose body is not stored', () => {
     expect(storyOfBranch(group).bullets).toEqual(['Tests passing'])
   })
 })
+
+describe('storyLines: what the agent said it was doing', () => {
+  const byAgent = (intent: string | undefined, category = 'running') => ({
+    ...event(category, intent === undefined ? {} : { intent }),
+    source: 'claude-code',
+    agentSessionId: 1,
+  })
+  const agentSession = [{ id: 1, source: 'claude-code', lastSeenAt: '2026-10-20T10:00:00.000Z', recap: null }]
+
+  it('replaces the quiet line with what the agent said, when there is nothing else to tell', () => {
+    const events = [byAgent('Check the plan', 'exploring'), byAgent('Show recent commits', 'other')]
+
+    expect(storyLines(session(events, { agentSessions: agentSession }))).toEqual([
+      '- Claude Code: Check the plan; Show recent commits',
+      'With Claude Code (1 session)',
+    ])
+  })
+
+  it('keeps the quiet line when the commands were not described', () => {
+    expect(storyLines(session([byAgent(undefined, 'running')]))).toEqual([
+      '- Explored and ran commands',
+      'With Claude Code (1 session)',
+    ])
+  })
+
+  it('tells the intents of the categories the story leaves out by default, whether or not they are asked for', () => {
+    const events = [byAgent('Check the plan', 'exploring'), byAgent('Run prettier', 'linting')]
+    const told = ['- Claude Code: Check the plan; Run prettier', 'With Claude Code']
+
+    expect(storyLines(session(events)).slice(0, 1)).toEqual([told[0]])
+    expect(storyLines(session(events), ['exploring', 'linting']).slice(0, 1)).toEqual([told[0]])
+  })
+
+  it('says nothing of it in a block that has other lines to tell', () => {
+    const events = [byAgent('Run the tests', 'running'), event('testing')]
+
+    expect(storyLines(session(events))).toEqual(['- Tests passing', 'With Claude Code (1 session)'])
+  })
+
+  it('comes before the reads and the scripts when they have something to tell: those say more', () => {
+    const reading = { ...byAgent('Look at the docs', 'exploring'), reads: ['src/db/x.ts'] }
+
+    expect(storyLines(session([reading]))).toEqual(['- Read src/db/x.ts', 'With Claude Code (1 session)'])
+  })
+})
